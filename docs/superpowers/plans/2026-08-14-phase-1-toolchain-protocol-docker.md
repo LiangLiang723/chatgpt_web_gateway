@@ -328,7 +328,7 @@ Keep all transformation pure and reuse common helpers; do not copy browser or ex
 Run: `corepack pnpm vitest run tests/unit/*normalizer*.test.ts tests/unit/normalized-common.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 Commit message: `✨ 增加 Responses 请求标准化与语义对齐`
 
@@ -341,6 +341,7 @@ Commit message: `✨ 增加 Responses 请求标准化与语义对齐`
 - Modify: `src/api/server.ts`
 - Create: `src/api/routes/chat-completions.ts`
 - Create: `src/api/routes/responses.ts`
+- Create: `src/api/request-meta.ts`
 - Create: `tests/integration/post-routes.test.ts`
 
 **Interfaces:**
@@ -348,7 +349,7 @@ Commit message: `✨ 增加 Responses 请求标准化与语义对齐`
 - Produces: POST routes that pass only validated `NormalizedRequest` objects to `NormalizedExecutionHandler`.
 - Default production execution handler returns a stable “backend not implemented in Phase 1” error; tests inject a fake handler to inspect normalized input.
 
-- [ ] **Step 1: Write failing HTTP integration tests**
+- [x] **Step 1: Write failing HTTP integration tests**
 
 Assert:
 
@@ -359,16 +360,16 @@ Assert:
 - unsupported parameters produce stable unsupported errors;
 - default production handler does not fabricate assistant output.
 
-- [ ] **Step 2: Run integration test and verify red**
+- [x] **Step 2: Run integration test and verify red**
 
 Run: `corepack pnpm vitest run tests/integration/post-routes.test.ts`
 Expected: FAIL because POST routes are not registered.
 
-- [ ] **Step 3: Implement routes and execution boundary**
+- [x] **Step 3: Implement routes and execution boundary**
 
 Keep route handlers thin: request metadata → normalizer → injected execution. Do not import Playwright or future persistence code.
 
-- [ ] **Step 4: Run API unit/integration suite and architecture check**
+- [x] **Step 4: Run API unit/integration suite and architecture check**
 
 Run: `corepack pnpm test && corepack pnpm check:architecture`
 Expected: PASS.

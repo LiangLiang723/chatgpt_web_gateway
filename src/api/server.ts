@@ -4,9 +4,11 @@ import type { FastifyError } from 'fastify';
 import type { AppConfig } from '../config/index.js';
 import { authenticateBearer } from './auth.js';
 import { GatewayError, ValidationError, toOpenAIErrorBody } from './errors.js';
-import type { NormalizedExecutionHandler } from './execution.js';
+import { backendNotImplementedExecution, type NormalizedExecutionHandler } from './execution.js';
+import { registerChatCompletionsRoute } from './routes/chat-completions.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerModelsRoute } from './routes/models.js';
+import { registerResponsesRoute } from './routes/responses.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -49,8 +51,12 @@ export function buildServer(options: BuildServerOptions) {
     });
   });
 
+  const execute = options.execute ?? backendNotImplementedExecution;
+
   registerHealthRoute(app);
   registerModelsRoute(app);
+  registerChatCompletionsRoute(app, execute);
+  registerResponsesRoute(app, execute);
 
   return app;
 }
