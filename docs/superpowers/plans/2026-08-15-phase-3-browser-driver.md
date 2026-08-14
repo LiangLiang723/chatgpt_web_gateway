@@ -351,7 +351,7 @@ Commit:
 - Produces: `ChatGptDriver.sendText(page, { prompt }): Promise<{ text; conversationUrl }>`.
 - Consumes: Task 2 selectors/registry/auth.
 
-- [ ] **Step 1: Write failing completion-observer tests using scripted DOM snapshots**
+- [x] **Step 1: Write failing completion-observer tests using scripted DOM snapshots**
 
 Define an injectable observation clock so unit tests do not really wait 250ms:
 
@@ -379,7 +379,7 @@ Also prove:
 - timeout throws `chatgpt_generation_timeout`;
 - missing target turn throws `chatgpt_response_missing`.
 
-- [ ] **Step 2: Run completion tests and verify red**
+- [x] **Step 2: Run completion tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-completion.test.ts
@@ -387,7 +387,7 @@ corepack pnpm vitest run tests/unit/chatgpt-completion.test.ts
 
 Expected: FAIL because completion observer does not exist.
 
-- [ ] **Step 3: Implement completion observer**
+- [x] **Step 3: Implement completion observer**
 
 Defaults:
 
@@ -399,7 +399,7 @@ timeoutMs: 120_000
 
 Every loop reads real state; `sleep()` is only polling cadence. Completion requires `!generating && text.length > 0 && consecutiveStable >= stableSamples`.
 
-- [ ] **Step 4: Write failing ChatGPTDriver orchestration tests**
+- [x] **Step 4: Write failing ChatGPTDriver orchestration tests**
 
 Use fakes for `probeAuth`, registry, composer, send button, assistant collection, and completion observer.
 
@@ -420,7 +420,7 @@ Also prove:
 - final result uses final completion text and `page.url()`;
 - no `networkidle` wait is used.
 
-- [ ] **Step 5: Run Driver tests and verify red**
+- [x] **Step 5: Run Driver tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-driver.test.ts
@@ -428,7 +428,7 @@ corepack pnpm vitest run tests/unit/chatgpt-driver.test.ts
 
 Expected: FAIL because Driver does not exist.
 
-- [ ] **Step 6: Implement Fresh text Driver**
+- [x] **Step 6: Implement Fresh text Driver**
 
 Core shape:
 
@@ -452,7 +452,7 @@ async sendText(page, request) {
 
 Do not add upload/tool/streaming behavior.
 
-- [ ] **Step 7: Run Task 3 verification**
+- [x] **Step 7: Run Task 3 verification**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-completion.test.ts tests/unit/chatgpt-driver.test.ts
@@ -463,7 +463,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 8: Update plan/state and commit Task 3**
+- [x] **Step 8: Update plan/state and commit Task 3**
 
 Commit:
 
