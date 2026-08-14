@@ -1,0 +1,24 @@
+services:
+  gateway:
+    image: ${IMAGE_NAME:-chatgpt-web-gateway:phase1}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    environment:
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-3000}
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY in .env}
+      DATA_DIR: /data
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      UI_MODE: headless
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
+      MAINTENANCE_URL: ${MAINTENANCE_URL:-https://chatgpt.com/}
+    ports:
+      - '${GATEWAY_BIND:-0.0.0.0}:${PORT:-3000}:${PORT:-3000}'
+    volumes:
+      - '${DATA_PATH:-./data}:/data'
+    shm_size: 1gb

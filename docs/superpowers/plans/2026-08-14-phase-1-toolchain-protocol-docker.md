@@ -374,7 +374,7 @@ Keep route handlers thin: request metadata → normalizer → injected execution
 Run: `corepack pnpm test && corepack pnpm check:architecture`
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 6**
+- [x] **Step 5: Commit Task 6**
 
 Commit message: `✨ 接通 OpenAI POST 协议验证链`
 
@@ -389,6 +389,7 @@ Commit message: `✨ 接通 OpenAI POST 协议验证链`
 - Create: `compose.novnc.yaml`
 - Create: `docker/entrypoint.sh`
 - Create: `docker/start-novnc.sh`
+- Create: `docker/maintenance-browser.mjs`
 - Create: `scripts/docker-smoke.mjs`
 - Modify: `package.json`
 - Modify: `.env.example`
@@ -398,11 +399,11 @@ Commit message: `✨ 接通 OpenAI POST 协议验证链`
 - Maintenance mode: same image/data with `UI_MODE=novnc`; Xvfb + lightweight window manager + x11vnc + websockify/noVNC start before the Gateway and maintenance port is published only by overlay.
 - Entrypoint prepares `/data`, aligns the runtime user to `PUID/PGID`, then execs long-running processes as non-root.
 
-- [ ] **Step 1: Confirm the pinned Playwright image exists and inspect its runtime**
+- [x] **Step 1: Confirm the pinned Playwright image exists and inspect its runtime**
 
-Run `docker manifest inspect mcr.microsoft.com/playwright:v1.62.1-noble` and a disposable `node --version` check. The manifest is already confirmed to exist; record the image runtime Node version during this task. If the image Node is not the approved 24.x baseline, install the current approved Node 24 LTS patch in the derived image rather than changing the project baseline silently.
+Run `docker manifest inspect mcr.microsoft.com/playwright:v1.62.1-noble` and a disposable `node --version` check. The inspected image is `linux/amd64` and reports Node `v24.18.1`, so no derived-image Node replacement is required. The runtime keeps the image-provided `/ms-playwright` browser bundle and the project pins `playwright@1.62.1`.
 
-- [ ] **Step 2: Write the Docker smoke harness before the image implementation**
+- [x] **Step 2: Write the Docker smoke harness before the image implementation**
 
 `scripts/docker-smoke.mjs` must fail unless all of these hold:
 
@@ -416,31 +417,31 @@ Run `docker manifest inspect mcr.microsoft.com/playwright:v1.62.1-noble` and a d
 - base Compose does not publish the noVNC port;
 - overlay config publishes only the configured noVNC port and starts maintenance mode.
 
-- [ ] **Step 3: Run smoke harness and verify red**
+- [x] **Step 3: Run smoke harness and verify red**
 
 Run: `corepack pnpm docker:smoke`
 Expected: FAIL because Docker/Compose files do not exist yet.
 
-- [ ] **Step 4: Implement the multi-stage Docker image**
+- [x] **Step 4: Implement the multi-stage Docker image**
 
-Build app dependencies/artifacts in a builder stage. Runtime stage starts from the pinned official Playwright Noble image, installs only maintenance/runtime OS packages required for Xvfb/x11vnc/noVNC/websockify/lightweight WM and privilege drop, copies production artifacts and the matching Playwright package, and includes no secret/runtime data.
+Build app dependencies/artifacts in a builder stage. Runtime stage starts from the pinned official Playwright Noble image, installs the maintenance/runtime packages `x11vnc`, `novnc`, `websockify`, `fluxbox`, `x11-utils`, and `gosu`, copies production artifacts and the matching Playwright package, and includes no secret/runtime data. The image switches the base image's Azure Ubuntu mirror entry to the standard Ubuntu archive mirror to avoid the observed Docker DNS failure against `azure.archive.ubuntu.com`.
 
-- [ ] **Step 5: Implement dynamic non-root entrypoint**
+- [x] **Step 5: Implement dynamic non-root entrypoint**
 
 At startup as root, validate numeric `PUID/PGID`, adjust the dedicated runtime user/group, create/chown only required `/data` paths, optionally start the maintenance stack, then drop privileges for the Gateway. Do not recursively chown arbitrary host paths outside `/data`.
 
-- [ ] **Step 6: Implement maintenance stack with password protection**
+- [x] **Step 6: Implement maintenance stack with password protection**
 
 Require `NOVNC_PASSWORD` only when `UI_MODE=novnc`; generate a restrictive temporary x11vnc password file, start Xvfb + WM + x11vnc + websockify/noVNC bound to the container maintenance port, and avoid echoing the password.
 
-- [ ] **Step 7: Implement base Compose and overlay**
+- [x] **Step 7: Implement base Compose and overlay**
 
-Base Compose uses the bind mount `${DATA_PATH:-./data}:/data`, Gateway port variables, `UI_MODE=headless`, and no maintenance port mapping. Overlay sets `UI_MODE=novnc` and adds `${NOVNC_PORT:-6080}:6080` only for explicit maintenance use.
+Base Compose uses the bind mount `${DATA_PATH:-./data}:/data`, Gateway port variables, `UI_MODE=headless`, and no maintenance port mapping. Overlay sets `UI_MODE=novnc` and publishes `${NOVNC_BIND:-127.0.0.1}:${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}` only for explicit maintenance use; loopback binding is the safe default.
 
-- [ ] **Step 8: Run fresh Docker build and smoke verification**
+- [x] **Step 8: Run fresh Docker build and smoke verification**
 
 Run: `corepack pnpm docker:build && corepack pnpm docker:smoke`
-Expected: PASS for all deterministic checks. Do not test real ChatGPT login in this task.
+Expected: PASS for all deterministic checks. The final smoke also verifies the noVNC HTML endpoint, maintenance process UID/GID, password absence from process arguments, and that the maintenance browser remains alive against `about:blank`. Real ChatGPT login is intentionally not exercised.
 
 - [ ] **Step 9: Commit Task 7**
 

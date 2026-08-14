@@ -1,0 +1,7 @@
+services:
+  gateway:
+    environment:
+      UI_MODE: novnc
+      NOVNC_PASSWORD: ${NOVNC_PASSWORD:?Set NOVNC_PASSWORD before enabling maintenance mode}
+    ports:
+      - '${NOVNC_BIND:-127.0.0.1}:${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}'
