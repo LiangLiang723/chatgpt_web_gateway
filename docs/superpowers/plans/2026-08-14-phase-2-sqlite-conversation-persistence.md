@@ -462,7 +462,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 Commit message:
 
@@ -485,7 +485,7 @@ Commit message:
 - Produces: `ConversationStore.save(aggregate): void`, `loadById(id)`, `loadByKey(key)`.
 - Produces: `createPersistenceContext({ databasePath, migrationsDir? }): PersistenceContext` and idempotent `context.close()`.
 
-- [ ] **Step 1: Write failing close/reopen aggregate recovery test**
+- [x] **Step 1: Write failing close/reopen aggregate recovery test**
 
 Build a complete semantic fixture:
 
@@ -515,13 +515,13 @@ expect(second.files.getById(file.id)).toEqual(file);
 second.close();
 ```
 
-- [ ] **Step 2: Write failing atomic replacement test**
+- [x] **Step 2: Write failing atomic replacement test**
 
 Save a valid aggregate, then attempt a replacement aggregate containing a Tool Result whose `toolCallId` is missing. Assert `save()` throws and reopening/loading still returns the original aggregate unchanged.
 
 Also assert duplicate message sequences and attachment references to messages outside the aggregate are rejected before destructive child replacement begins.
 
-- [ ] **Step 3: Run recovery tests and verify red**
+- [x] **Step 3: Run recovery tests and verify red**
 
 Run:
 
@@ -531,7 +531,7 @@ corepack pnpm vitest run tests/integration/persistence-recovery.test.ts
 
 Expected: FAIL because `ConversationStore` / persistence context do not exist.
 
-- [ ] **Step 4: Implement aggregate validation**
+- [x] **Step 4: Implement aggregate validation**
 
 Before opening the replacement transaction validate in memory:
 
@@ -544,7 +544,7 @@ Before opening the replacement transaction validate in memory:
 
 Throw `DataIntegrityError` without deleting current rows if validation fails.
 
-- [ ] **Step 5: Implement atomic snapshot save**
+- [x] **Step 5: Implement atomic snapshot save**
 
 Inside one `transaction`:
 
@@ -558,11 +558,11 @@ Inside one `transaction`:
 
 Do not mutate shared File rows.
 
-- [ ] **Step 6: Implement aggregate load**
+- [x] **Step 6: Implement aggregate load**
 
 `loadById` / `loadByKey` first load the Conversation, then child repositories in stable order. Missing Conversation returns `undefined`; child corruption throws rather than returning partial data.
 
-- [ ] **Step 7: Implement persistence context**
+- [x] **Step 7: Implement persistence context**
 
 ```ts
 export interface PersistenceContext {
@@ -582,7 +582,7 @@ export interface PersistenceContext {
 
 Default migrations directory must resolve correctly both from `tsx src/...` and compiled `dist/...` against repository/runtime root `migrations/`.
 
-- [ ] **Step 8: Run recovery, full tests, and static checks**
+- [x] **Step 8: Run recovery, full tests, and static checks**
 
 Run:
 
