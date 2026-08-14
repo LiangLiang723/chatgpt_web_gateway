@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-2-implementation
-STATUS=active
+PHASE=phase-2-complete
+STATUS=ready-for-phase-3-design
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-2-sqlite-conversation-persistence-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-14-phase-2-sqlite-conversation-persistence.md
-NEXT_TASK=execute-phase-2-task-7-acceptance-writeback
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
+ACTIVE_PLAN=none
+NEXT_TASK=write-phase-3-browser-driver-spec
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）实施中。
-- **当前状态：** `active`
-- **活动计划：** [`2026-08-14-phase-2-sqlite-conversation-persistence.md`](superpowers/plans/2026-08-14-phase-2-sqlite-conversation-persistence.md)。
-- **下一个可执行任务：** 执行 Phase 2 Task 7：架构约束、完整验收与项目记忆回写。
-- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 Browser / Driver Phase 和显式 E2E（端到端）验证。
+- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）已完成。
+- **当前状态：** `ready-for-phase-3-design`
+- **活动计划：** 无；Phase 2 实施计划已完成。
+- **下一个可执行任务：** 为 Phase 3“Playwright Chromium + 最小 ChatGPT Driver”编写并批准 spec。
+- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要 Phase 3 Browser / Driver 实现和显式 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
 
@@ -35,7 +35,7 @@ UPDATED_AT=2026-08-14
 - ✅ 架构、API 兼容、测试、Git、Roadmap（路线图）文档。
 - ✅ `docs/superpowers/specs/` / `plans/` 工作流目录。
 - ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计与实施计划。
-- ✅ Phase 2 `node:sqlite`、Migration、Repository 与 Conversation aggregate 持久化设计规格。
+- ✅ Phase 2 `node:sqlite`、Migration、Repository 与 Conversation aggregate 持久化设计规格和实施计划。
 - ✅ 文档链接、项目记忆、架构和版本一致性检查。
 - ✅ TypeScript / Vitest 产品代码与测试基础。
 
@@ -51,7 +51,12 @@ UPDATED_AT=2026-08-14
 - ✅ 两个 POST 路由完成 HTTP → Schema → Normalizer → injected execution boundary；默认生产执行器明确返回 `501 backend_not_implemented`，不伪造 ChatGPT 回答。
 - ✅ 完整 `linux/amd64` Docker 运行基础：Playwright Chromium 镜像、Compose、`/data` Bind Mount、动态非 root `PUID/PGID`。
 - ✅ 按需 noVNC maintenance overlay；默认 headless Compose 不启动维护进程、不发布 noVNC 端口。
-- ❌ SQLite 持久化。
+- ✅ Node 24 内置 `node:sqlite` 单连接持久化；`${DATA_DIR}/gateway.db` 在 Gateway listen 前创建并完成 migration。
+- ✅ `foreign_keys=ON`、WAL、5000ms busy timeout，以及 checksum migration history / 篡改检测。
+- ✅ Conversation / Message / Tool Call / Attachment / File / Generated Image Repository。
+- ✅ `ConversationStore` 单事务完整 aggregate 保存/加载；invalid replacement rollback 后旧快照保持不变。
+- ✅ 真实文件 SQLite close → reopen 后 Conversation aggregate 与独立 File metadata 恢复。
+- ✅ Docker 镜像包含 migrations；smoke 验证数据库 `PUID/PGID` owner、migration history 和 Bind Mount restart 持久性。
 - ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
@@ -99,6 +104,9 @@ UPDATED_AT=2026-08-14
 - API Adapter（适配器）共享统一内部请求模型，不允许各自实现浏览器逻辑。
 - `NormalizedRequest` 当前包含 `toolChoice` 与 `diagnostics.ignoredParameters`，用于保留协议策略和明确记录网页无法真实执行的 ignored 参数。
 - 配置集中在 `src/config/`；架构检查禁止其他 `src/` 模块直接读取 `process.env`。
+- SQLite 访问集中在 `src/persistence/`；架构检查禁止其他产品模块导入 `node:sqlite`，并识别 side-effect import。
+- Persistence 业务实体使用 UUID v4 主键、Unix 毫秒时间；复杂 payload 使用受 JSON 校验保护的 `TEXT`。
+- `ConversationStore` 是 Phase 2 的恢复聚合边界；同步事务拒绝 async callback。
 - Docker 从 Phase 1 起是正式运行边界；目标平台先锁定 `linux/amd64`。
 - Phase 1 普通 Compose 当前只启动 Gateway；产品级 headless Browser Manager 属于 Phase 3。
 - noVNC 只通过维护 overlay 按需启用，默认宿主机绑定 `127.0.0.1`，正常运行不启动也不发布 noVNC。
@@ -111,6 +119,8 @@ UPDATED_AT=2026-08-14
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-14：完成 Phase 2 SQLite / Conversation persistence 实施：单 `DatabaseSync`、checksum migration、六类业务 Repository、原子 aggregate save/load、真实文件 DB close/reopen 恢复和 Gateway/Docker 生命周期接入。
+- 2026-08-14：Phase 2 最终确定性验证通过 15 个测试文件 / 67 个测试；Docker smoke 验证 `/data/gateway.db`、`001_initial`、非 root owner 和 restart 持久性。
 - 2026-08-14：批准 Phase 2 SQLite / Conversation persistence 设计：`node:sqlite`、单向 checksum migration、UUID v4、Unix 毫秒、关系型核心 + JSON payload、单 `DatabaseSync` 与 aggregate transaction。
 - 2026-08-14：完成 Phase 1 实施：TypeScript/Fastify/TypeBox 工具链、认证、统一 Chat Completions / Responses Normalizer、基础 GET/POST 路由和 40 个确定性测试。
 - 2026-08-14：完成正式 `linux/amd64` Docker 运行基础与 noVNC maintenance overlay；Docker smoke 验证 Node 24、HTTP 认证、Bind Mount、非 root `PUID/PGID`、维护进程/端口隔离和 noVNC 页面。
@@ -120,17 +130,16 @@ UPDATED_AT=2026-08-14
 
 ## Next Steps（下一步）
 
-1. Phase 2 plan：把已批准的 SQLite / Repository / Conversation aggregate spec 拆成可测试任务。
-2. 实现数据库打开、PRAGMA、checksum migration 和 `001_initial.sql`。
-3. 实现各 Repository 与 `ConversationStore`，证明 close → reopen 后完整结构化状态恢复。
-4. 把数据库生命周期接入 Gateway startup/shutdown，并扩展 Docker smoke 验证 `/data/gateway.db`。
-5. Phase 3 再实现正常运行的 Playwright Browser Manager、登录脚本、Selector Registry、ChatGPT Driver 与真实文本 E2E。
+1. Phase 3 spec：Persistent BrowserContext、Browser Manager、手动登录流程、Page Pool、Selector Registry、`inspect:chatgpt` 和最小非流式文本 Driver。
+2. Phase 3 plan：把 Browser / Driver spec 拆成确定性测试与显式真实 E2E 任务。
+3. 实现正常 headless Browser Manager，并与现有 `/data/browser-profile/` 和 maintenance noVNC Profile 边界复用。
+4. 只有显式真实 E2E 通过后，才把 ChatGPT 当前登录、Selector 和文本问答标记为已验证。
 
 ## Known Risks（已知风险）
 
 - **真实 ChatGPT Web E2E 尚未运行。** 当前不能证明 ChatGPT Selector、真实登录、实际文件上传或图片生成可用。
 - maintenance browser 已在 `about:blank` 下通过 Docker smoke，但尚未用真实 ChatGPT 账号完成首次登录流程验证。
-- Phase 1 POST 端点只有协议闭环，默认生产执行器返回 `501 backend_not_implemented`，在 Phase 3/4 前不能用于真实聊天。
+- 当前 POST 端点仍只有协议闭环，默认生产执行器返回 `501 backend_not_implemented`；Phase 2 Persistence 尚未接入 Conversation Engine，在 Phase 3/4 前不能用于真实聊天。
 - 当前 Docker 验收矩阵只有 `linux/amd64`，未验证 ARM64。
 - ChatGPT 网页 DOM 会变化；后续 Selector 必须集中并有诊断工具。
 - Tool Calling 是 Gateway 的 Prompt + Parser 模拟层，不应伪装成 ChatGPT Web 原生工具协议。

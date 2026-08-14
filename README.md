@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前已实现：Phase 1
+## 当前已实现：Phase 2
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界；Phase 2 在此基础上完成 SQLite 结构化持久化：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -20,10 +20,16 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界：
 - `/data` Bind Mount、动态 `PUID/PGID` 非 root 运行。
 - 默认 headless Compose 与按需 noVNC maintenance overlay。
 - Docker build / smoke 自动验证。
+- Node 24 内置 `node:sqlite`，单 `DatabaseSync` 连接，`foreign_keys=ON`、WAL、5000ms busy timeout。
+- `${DATA_DIR}/gateway.db` 在 Gateway 启动前自动创建并执行 checksum migration。
+- Conversation / Message / Tool Call / Attachment / File / Generated Image Repository。
+- `ConversationStore` 在单事务内保存完整 Conversation aggregate；失败会 rollback，不留下半状态。
+- 真实文件数据库已通过 save → close → reopen → load 恢复测试。
+- Docker smoke 已验证 `/data/gateway.db`、migration history、`PUID/PGID` owner 和容器 restart 后持续可用。
 
-**Phase 1 还没有 ChatGPT 执行后端。** 两个 POST 接口会完成协议解析，但默认执行边界明确返回 HTTP `501` / `backend_not_implemented`；不会伪造 Assistant 回答。
+**当前仍没有 ChatGPT 执行后端。** 两个 POST 接口会完成协议解析，但默认执行边界明确返回 HTTP `501` / `backend_not_implemented`；Phase 2 的 Repository 尚未接入 Conversation Engine，因此不会伪造 Assistant 回答。
 
-尚未实现的核心能力包括 SQLite、Conversation Engine、正常模式 Browser Manager、ChatGPT DOM Driver、真实 Streaming、附件上传、Tool Calling 执行闭环和图片生成。真实 ChatGPT 页面也尚未做 E2E 验证。
+尚未实现的核心能力包括 Conversation Engine / Context Sync、正常模式 Browser Manager、ChatGPT DOM Driver、真实 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。真实 ChatGPT 页面也尚未做 E2E 验证。
 
 ## V1 批准范围
 
@@ -82,7 +88,7 @@ docker compose up -d
 - 默认 `UI_MODE=headless`。
 - **不会启动 noVNC / Xvfb / x11vnc / maintenance browser。**
 - **不会发布 noVNC 端口。**
-- 当前 Phase 1 的普通 Gateway 也不会启动产品级 Chromium Driver；该能力属于后续 Browser Phase。
+- 当前 Phase 2 的普通 Gateway 也不会启动产品级 Chromium Driver；该能力属于 Phase 3。
 
 健康检查：
 
@@ -118,7 +124,9 @@ ${DATA_PATH:-./data} → /data
 └── logs/
 ```
 
-Phase 1 已验证 Bind Mount 可由指定 `PUID/PGID` 非 root 进程写入。SQLite 和真实业务文件会在后续 Phase 实现。
+Phase 2 启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 `migrations/*.sql`。当前数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`；它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
+
+Docker smoke 已验证数据库由指定 `PUID/PGID` 非 root 进程创建、migration 只记录一次，并在同一 Bind Mount 下重启容器后继续可用。`/data/files/` 和 `/data/generated/` 目前只有 metadata Repository 边界，真实业务字节写入仍属于后续 Phase。
 
 ## noVNC 维护模式
 
@@ -246,7 +254,7 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-本次 Phase 1 实现本身不创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
+当前 Phase 2 开发实现不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
 
 ## 开源协议
 

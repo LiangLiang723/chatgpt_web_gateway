@@ -24,7 +24,7 @@
 | `POST /v1/images/generations` | ✅ |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ |
 
-## Current Phase 1 Implementation（当前 Phase 1 实现）
+## Current Phase 2 Implementation（当前 Phase 2 实现）
 
 当前已经真实实现：
 
@@ -33,7 +33,9 @@
 - `POST /v1/chat/completions` / `POST /v1/responses`：完成 TypeBox/Ajv Schema 校验、统一 Normalizer、`X-Conversation-Key` 和稳定错误映射。
 - 两个 POST 端点共享同一个内部 `NormalizedRequest` 执行边界；Phase 1 默认生产执行器明确返回 HTTP `501` / `backend_not_implemented`，不会伪造 ChatGPT 回答。
 
-当前**尚未实现** ChatGPT Driver、Conversation Engine、真实 Streaming、附件上传、Tool Calling 执行、SQLite 和图片生成。因此下面的 V1 矩阵仍表示最终批准目标，而不是 Phase 1 当前已可执行能力。
+Phase 2 已实现独立的 SQLite 结构化持久化层：checksum migration、Conversation / Message / Tool Call / Attachment / File / Generated Image Repository，以及 `ConversationStore` 原子 aggregate 保存/加载和 close → reopen 恢复。Gateway 启动时会创建/迁移 `${DATA_DIR}/gateway.db`。
+
+当前**尚未实现** ChatGPT Driver、Conversation Engine / Context Sync、真实 Streaming、附件实际上传、Tool Calling 执行和图片生成。Phase 2 的 Repository 也尚未接到 POST 执行边界，因此下面的 V1 矩阵仍表示最终批准目标，而不是当前已可执行的 ChatGPT 能力。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 

@@ -1,7 +1,7 @@
 # Phase 2 SQLite and Conversation Persistence Design
 
 **Date:** 2026-08-14
-**Status:** Approved; implementation may proceed
+**Status:** Implemented and verified
 **Scope:** Phase 2
 
 ## 1. Goal（目标）
@@ -508,6 +508,7 @@ save(aggregate: ConversationAggregate): void
    - Tool Call message 属于同一 Conversation。
    - Tool Result `tool_call_id` 在同一 aggregate 中可解析。
    - Attachment message 属于同一 Conversation。
+   - aggregate 内每个 Generated Image 的 `conversationId` 必须等于当前 Conversation；非空 `messageId` 必须属于 aggregate Message。
 7. 任一 SQL/约束/验证失败，整个 aggregate 保存 rollback。
 
 Phase 2 选择“完整 aggregate snapshot save”是为了先获得简单、可证明的恢复语义。Phase 4 如需要高频增量 append，可在不破坏现有 Store 接口的情况下增加专用增量方法。
@@ -552,7 +553,7 @@ ROLLBACK
 → rethrow original persistence error
 ```
 
-事务 callback 必须是同步函数。不得在数据库 transaction 内 `await`，防止在一个未提交事务中把 Node event loop 交回其他请求。
+事务 callback 必须是同步函数。不得在数据库 transaction 内 `await`，防止在一个未提交事务中把 Node event loop 交回其他请求。Transaction helper 必须主动拒绝 `AsyncFunction` / Promise-like 返回值，并 rollback 已发生的同步写入。
 
 Repository 自身不偷偷开启互相嵌套事务；由 aggregate Store 或调用者拥有跨 Repository 事务。
 

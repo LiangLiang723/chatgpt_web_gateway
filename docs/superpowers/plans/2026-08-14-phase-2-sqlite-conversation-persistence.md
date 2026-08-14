@@ -688,7 +688,7 @@ corepack pnpm docker:smoke
 
 Expected: PASS. Real ChatGPT E2E remains unrun.
 
-- [ ] **Step 7: Commit Task 6**
+- [x] **Step 7: Commit Task 6**
 
 Commit message:
 
@@ -713,7 +713,7 @@ Commit message:
 - Produces: executable architecture rule preventing `node:sqlite` outside `src/persistence/`.
 - Produces: project memory showing Phase 2 actual status and Phase 3 as the next design task only when all Phase 2 acceptance criteria have evidence.
 
-- [ ] **Step 1: Add failing architecture guard evidence**
+- [x] **Step 1: Add failing architecture guard evidence**
 
 Before changing the checker, temporarily reason against/inspect a representative forbidden import pattern. Implement a checker rule equivalent to:
 
@@ -723,7 +723,7 @@ if source file is outside src/persistence/ and imports node:sqlite → architect
 
 Keep existing Playwright and `process.env` rules intact.
 
-- [ ] **Step 2: Run full deterministic verification**
+- [x] **Step 2: Run full deterministic verification**
 
 Run:
 
@@ -733,7 +733,7 @@ corepack pnpm verify
 
 Expected: format, lint, typecheck, all tests, build, project-memory, docs, architecture, and version checks pass.
 
-- [ ] **Step 3: Run fresh Docker verification**
+- [x] **Step 3: Run fresh Docker verification**
 
 Run:
 
@@ -744,27 +744,27 @@ corepack pnpm docker:smoke
 
 Expected: PASS with DB creation/migration/restart persistence checks.
 
-- [ ] **Step 4: Verify all 13 Phase 2 acceptance criteria line by line**
+- [x] **Step 4: Verify all 13 Phase 2 acceptance criteria line by line**
 
-Record evidence in this plan for:
+All 13 criteria have current execution/source evidence:
 
-1. no third-party SQLite driver/ORM;
-2. startup DB + migration;
-3. required PRAGMAs;
-4. checksum tamper detection;
-5. initial six-entity schema;
-6. UUID/timestamp policy;
-7. Repository/sqlite import boundary;
-8. atomic aggregate save/rollback;
-9. aggregate load by id/key;
-10. close/reopen recovery;
-11. Docker migrations + bind-mounted DB restart;
-12. deterministic `verify`;
-13. explicit real ChatGPT E2E unverified statement.
+1. `package.json` / lockfile contain no third-party SQLite driver or ORM; runtime imports use only built-in `node:sqlite`.
+2. `persistence-startup.test.ts` proves runtime creation creates `${DATA_DIR}/gateway.db` and applies `001_initial` before readiness.
+3. `persistence-migrations.test.ts` proves `foreign_keys=1`, file DB `journal_mode=wal`, and `busy_timeout=5000`.
+4. Migration unit test modifies applied SQL bytes and receives `migration_checksum_mismatch`.
+5. `migrations/001_initial.sql` creates six business tables plus required indexes/constraints; migration test inspects table presence.
+6. Repository boundaries validate UUID v4 IDs; schema stores timestamps as non-negative INTEGER Unix-millisecond fields and fixtures round-trip them unchanged.
+7. All SQL/`node:sqlite` production imports live under `src/persistence/`; architecture checker now rejects ordinary, dynamic/require, and side-effect forbidden imports outside that boundary.
+8. `ConversationStore.save()` uses one `BEGIN IMMEDIATE` transaction; recovery tests prove invalid replacement leaves prior aggregate unchanged, and transaction tests reject async callbacks/rollback synchronous writes.
+9. Recovery integration proves `loadById` and `loadByKey` restore semantic aggregate equality.
+10. Real temporary file DB test saves → closes → opens a fresh context → re-runs migrations → restores aggregate and independent File row.
+11. Fresh Docker image includes `/app/migrations`; smoke proves `/data/gateway.db` owner, one `001_initial` history row, and successful same-bind-mount Gateway restart.
+12. Fresh `corepack pnpm verify` passed with 15 test files / 67 tests, plus format, lint, typecheck, build and repository governance checks.
+13. README/testing/PROJECT_STATE continue to state real ChatGPT Web E2E has not run and no Browser/Driver capability is claimed.
 
-Any unmet item keeps `PROJECT_STATE` in Phase 2 active/blocker status.
+No Phase 2 acceptance blocker remains.
 
-- [ ] **Step 5: Apply documentation/project-memory writeback**
+- [x] **Step 5: Apply documentation/project-memory writeback**
 
 If all acceptance criteria pass:
 
@@ -778,7 +778,7 @@ NEXT_TASK=write-phase-3-browser-driver-spec
 
 `Implemented Now` may mark SQLite/migrations/repositories/restart recovery as complete, but must keep Browser Manager/ChatGPT Driver/Context Sync/Streaming/files execution/tools execution/images generation as not implemented.
 
-- [ ] **Step 6: Run Git hygiene checks**
+- [x] **Step 6: Run Git hygiene checks**
 
 Run:
 

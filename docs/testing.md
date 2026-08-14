@@ -16,6 +16,9 @@
 - MIME（媒体类型）、Base64、URL 输入解析。
 - 文件 SHA-256 去重。
 - OpenAI 错误映射。
+- SQLite PRAGMA、checksum migration、失败 migration rollback。
+- Conversation / Message / Tool Call / Attachment / File / Generated Image Repository 约束与 JSON round-trip。
+- `ConversationStore` aggregate validation 与同步事务边界。
 - Chat Completions / Responses SSE Encoder（流式编码器）。
 
 ## Integration（集成测试）
@@ -23,8 +26,9 @@
 使用 local fixture（本地固定样本）和 fake driver（假驱动），不连接 ChatGPT：
 
 - Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary。
+- Phase 2：真实临时 SQLite 文件 → migration → aggregate save → close → reopen → aggregate/File recovery。
+- Phase 2：Gateway runtime 在 Fastify readiness 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 幂等关闭 SQLite。
 - 后续：API → Normalizer → Conversation Engine → fake ChatGPT Driver。
-- SQLite Repository。
 - Conversation Queue（队列）。
 - Page Pool 策略。
 - 文件元数据 + 文件系统。
@@ -87,6 +91,9 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - noVNC overlay 只在维护配置下启动并发布端口；默认宿主机绑定为 `127.0.0.1`。
 - noVNC HTML 入口可访问，Xvfb / x11vnc / websockify / maintenance browser 均以指定 `PUID/PGID` 运行。
 - noVNC 密码不出现在进程命令行参数中。
+- `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
+- `schema_migrations` 包含且只包含一次 `001_initial` 当前基线。
+- 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 
 Docker smoke 不等于真实 ChatGPT E2E，不能用来证明 Selector、登录、上传或图片生成有效。
 
@@ -105,7 +112,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 

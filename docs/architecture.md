@@ -229,7 +229,9 @@ SQLite 保存 Conversation、Message、Tool Call、Attachment、File、Generated
 
 Phase 2 使用 Node 24 内置 `node:sqlite` 的单 `DatabaseSync` 连接，不引入 ORM 或第三方 SQLite driver。数据库固定 `${DATA_DIR}/gateway.db`，启用 `foreign_keys=ON`、WAL 和 5000ms busy timeout。Schema 通过单向顺序编号 migration 管理，并保存 SHA-256 checksum 防止已执行历史 SQL 被静默改写。
 
-业务实体使用 UUID v4 主键和 Unix 毫秒时间；需要查询/约束的字段关系化，复杂 content/instructions/tools/source 使用 JSON `TEXT`。上层只依赖 Repository / `ConversationStore`，`node:sqlite` 不能泄漏到 `src/persistence/` 外。完整 Conversation aggregate 的保存必须在单个同步事务中完成；进程关闭并重新打开同一数据库后应能恢复语义一致的结构化状态。
+业务实体使用 UUID v4 主键和 Unix 毫秒时间；需要查询/约束的字段关系化，复杂 content/instructions/tools/source 使用 JSON `TEXT`。上层只依赖 Repository / `ConversationStore`，`node:sqlite` 不能泄漏到 `src/persistence/` 外。完整 Conversation aggregate 的保存必须在单个同步事务中完成；事务 helper 会拒绝 async callback。进程关闭并重新打开同一数据库后应能恢复语义一致的结构化状态。
+
+Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 时幂等关闭数据库。最终 Docker 镜像包含 `migrations/`；Docker smoke 会验证数据库 owner、`001_initial` migration history 和同一 Bind Mount 下 Gateway restart 后继续可用。
 
 ## API Authentication（接口认证）
 
@@ -249,4 +251,5 @@ Phase 2 使用 Node 24 内置 `node:sqlite` 的单 `DatabaseSync` 连接，不�
 - `context/` 不依赖 `playwright`、`api/` 或 `chatgpt/`。
 - `stream/` 不直接导入 `chatgpt/selectors`。
 - `persistence/` 不依赖 `playwright`。
+- `node:sqlite` 只允许在 `src/persistence/` 中导入；checker 同时识别普通、动态、require 和 side-effect import。
 - ChatGPT Selector 只允许定义在 `src/chatgpt/selectors.ts`。
