@@ -52,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     puid: parseInteger('PUID', env.PUID, 1000, 1),
     pgid: parseInteger('PGID', env.PGID, 1000, 1),
     dataDir: requireNonEmpty('DATA_DIR', env.DATA_DIR ?? '/data'),
+    maxActivePages: parseInteger('MAX_ACTIVE_PAGES', env.MAX_ACTIVE_PAGES, 4, 1, 32),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),
     novncPassword: optionalNonEmpty(env.NOVNC_PASSWORD),
   };

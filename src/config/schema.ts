@@ -10,6 +10,7 @@ export const AppConfigSchema = Type.Object(
     puid: Type.Integer({ minimum: 1 }),
     pgid: Type.Integer({ minimum: 1 }),
     dataDir: Type.String({ minLength: 1 }),
+    maxActivePages: Type.Integer({ minimum: 1, maximum: 32 }),
     novncPort: Type.Integer({ minimum: 1, maximum: 65535 }),
     novncPassword: Type.Optional(Type.String({ minLength: 1 })),
   },

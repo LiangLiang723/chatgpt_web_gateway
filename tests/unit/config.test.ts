@@ -12,6 +12,7 @@ describe('loadConfig', () => {
       puid: 1000,
       pgid: 1000,
       dataDir: '/data',
+      maxActivePages: 4,
       novncPort: 6080,
       novncPassword: undefined,
     });
@@ -32,6 +33,7 @@ describe('loadConfig', () => {
         PUID: '1200',
         PGID: '1300',
         DATA_DIR: '/srv/gateway',
+        MAX_ACTIVE_PAGES: '7',
         NOVNC_PORT: '7777',
         NOVNC_PASSWORD: 'maintenance-secret',
       }),
@@ -43,6 +45,7 @@ describe('loadConfig', () => {
       puid: 1200,
       pgid: 1300,
       dataDir: '/srv/gateway',
+      maxActivePages: 7,
       novncPort: 7777,
       novncPassword: 'maintenance-secret',
     });
@@ -54,6 +57,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PUID: '-1' })).toThrow(/PUID/);
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PGID: 'not-a-number' })).toThrow(/PGID/);
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', NOVNC_PORT: '0' })).toThrow(/NOVNC_PORT/);
+    expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MAX_ACTIVE_PAGES: '0' })).toThrow(
+      /MAX_ACTIVE_PAGES/,
+    );
+    expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MAX_ACTIVE_PAGES: '33' })).toThrow(
+      /MAX_ACTIVE_PAGES/,
+    );
   });
 
   it('rejects unsupported UI modes', () => {

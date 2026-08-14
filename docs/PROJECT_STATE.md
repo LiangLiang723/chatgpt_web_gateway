@@ -13,7 +13,7 @@ STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
-NEXT_TASK=execute-phase-3-task-1-browser-runtime
+NEXT_TASK=execute-phase-3-task-2-selector-auth
 UPDATED_AT=2026-08-15
 ```
 
@@ -22,7 +22,7 @@ UPDATED_AT=2026-08-15
 - **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
 - **当前状态：** `active`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 执行 Phase 3 Task 1：BrowserManager、运行配置与 bounded Page Pool。
+- **下一个可执行任务：** 执行 Phase 3 Task 2：Selector Registry、Auth Probe 与确定性诊断。
 - **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
@@ -58,7 +58,8 @@ UPDATED_AT=2026-08-15
 - ✅ `ConversationStore` 单事务完整 aggregate 保存/加载；invalid replacement rollback 后旧快照保持不变。
 - ✅ 真实文件 SQLite close → reopen 后 Conversation aggregate 与独立 File metadata 恢复。
 - ✅ Docker 镜像包含 migrations；smoke 验证数据库 `PUID/PGID` owner、migration history 和 Bind Mount restart 持久性。
-- ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager。
+- ✅ Phase 3 BrowserManager / bounded Page Pool 核心库与 `MAX_ACTIVE_PAGES` 配置；尚未接入 Gateway runtime。
+- ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
 - ❌ 真 Streaming（流式输出）。

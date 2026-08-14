@@ -45,7 +45,7 @@
 - Produces: `createBrowserManager({ profileDir, maxActivePages, launchPersistentContext? }): Promise<BrowserManager>`.
 - Later tasks consume only `PagePool` / `PageLease`, not raw BrowserManager internals.
 
-- [ ] **Step 1: Add failing config tests for `MAX_ACTIVE_PAGES`**
+- [x] **Step 1: Add failing config tests for `MAX_ACTIVE_PAGES`**
 
 Extend `tests/unit/config.test.ts`:
 
@@ -59,7 +59,7 @@ expect(() =>
 ).toThrow(/MAX_ACTIVE_PAGES/);
 ```
 
-- [ ] **Step 2: Run config test and verify red**
+- [x] **Step 2: Run config test and verify red**
 
 Run:
 
@@ -69,7 +69,7 @@ corepack pnpm vitest run tests/unit/config.test.ts
 
 Expected: FAIL because `AppConfig` has no `maxActivePages`.
 
-- [ ] **Step 3: Implement config field**
+- [x] **Step 3: Implement config field**
 
 Add schema field:
 
@@ -85,7 +85,7 @@ maxActivePages: parseInteger('MAX_ACTIVE_PAGES', env.MAX_ACTIVE_PAGES, 4, 1, 32)
 
 Do not add page idle timeout.
 
-- [ ] **Step 4: Write failing PagePool tests using fake Page/Context boundaries**
+- [x] **Step 4: Write failing PagePool tests using fake Page/Context boundaries**
 
 Tests must prove:
 
@@ -117,7 +117,7 @@ And:
 - `pool.close()` closes all tracked Pages and rejects new acquire;
 - one Page failure never closes sibling Pages.
 
-- [ ] **Step 5: Run PagePool tests and verify red**
+- [x] **Step 5: Run PagePool tests and verify red**
 
 Run:
 
@@ -127,7 +127,7 @@ corepack pnpm vitest run tests/unit/page-pool.test.ts
 
 Expected: FAIL because `PagePool` does not exist.
 
-- [ ] **Step 6: Implement browser errors/types and PagePool**
+- [x] **Step 6: Implement browser errors/types and PagePool**
 
 Stable error shape:
 
@@ -146,7 +146,7 @@ export class BrowserRuntimeError extends Error {
 
 `PagePool` must track open leases explicitly. Capacity is `openCount`, not “currently leased count”. A closed Page must be removed from all tracking sets.
 
-- [ ] **Step 7: Write failing BrowserManager tests with injected launcher**
+- [x] **Step 7: Write failing BrowserManager tests with injected launcher**
 
 Use an injected `launchPersistentContext` fake to assert exact launch boundary:
 
@@ -164,7 +164,7 @@ Also assert:
 - manager `close()` is idempotent;
 - closing manager closes PagePool before BrowserContext.
 
-- [ ] **Step 8: Run BrowserManager test and verify red**
+- [x] **Step 8: Run BrowserManager test and verify red**
 
 Run:
 
@@ -174,7 +174,7 @@ corepack pnpm vitest run tests/unit/browser-manager.test.ts
 
 Expected: FAIL because BrowserManager does not exist.
 
-- [ ] **Step 9: Implement BrowserManager**
+- [x] **Step 9: Implement BrowserManager**
 
 Default launcher wrapper:
 
@@ -187,7 +187,7 @@ const defaultLaunch = (profileDir: string, options: LaunchPersistentContextOptio
 
 Do not navigate to ChatGPT here.
 
-- [ ] **Step 10: Run Task 1 verification**
+- [x] **Step 10: Run Task 1 verification**
 
 Run:
 
@@ -200,7 +200,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 11: Update plan/state and commit Task 1**
+- [x] **Step 11: Update plan/state and commit Task 1**
 
 Commit:
 
