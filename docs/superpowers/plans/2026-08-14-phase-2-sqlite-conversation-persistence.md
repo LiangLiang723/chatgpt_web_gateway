@@ -792,7 +792,7 @@ git diff --staged
 
 Confirm no `gateway.db`, `gateway.db-wal`, `gateway.db-shm`, `.env`, Browser Profile, uploaded file, generated image, or secret is staged.
 
-- [ ] **Step 7: Commit Phase 2 completion/writeback**
+- [x] **Step 7: Commit Phase 2 completion/writeback**
 
 Commit message:
 
@@ -800,6 +800,6 @@ Commit message:
 📝 记录 Phase 2 SQLite 持久化实施结果
 ```
 
-- [ ] **Step 8: Push feature branch**
+- [x] **Step 8: Push feature branch**
 
 Push `phase-2-persistence` normally to `origin`; do not force-push. Record actual result in final report.
