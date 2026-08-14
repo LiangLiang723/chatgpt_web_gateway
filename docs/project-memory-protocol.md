@@ -20,6 +20,10 @@
 
 不要在这些文件之间复制大段相同内容；用链接指向事实来源。代码边界、浏览器细节、API 兼容规则等实现知识不得回填到 `AGENTS.md`。
 
+## 版本变化
+
+如果任务改变公开版本，必须同步 `VERSION`、`package.json`、`CHANGELOG.md` 和 `docs/PROJECT_STATE.md`。版本规则见 [`versioning.md`](versioning.md)。
+
 ## Writeback Decision（回写判断）
 
 每次任务结束前逐项判断：
@@ -93,6 +97,7 @@
 node scripts/check-project-memory.mjs
 node scripts/check-docs.mjs
 node scripts/check-architecture.mjs
+node scripts/check-version.mjs
 ```
 
 这些检查只保证仓库内部一致性，不能替代产品测试。
