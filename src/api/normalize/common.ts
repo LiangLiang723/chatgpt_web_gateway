@@ -27,9 +27,21 @@ interface FunctionToolInput {
   };
 }
 
+interface ResponsesFunctionToolInput {
+  type: 'function';
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+}
+
 interface FunctionToolChoiceInput {
   type: 'function';
   function: { name: string };
+}
+
+interface ResponsesFunctionToolChoiceInput {
+  type: 'function';
+  name: string;
 }
 
 interface JsonObjectFormatInput {
@@ -65,12 +77,32 @@ export function normalizeTools(input: FunctionToolInput[] | undefined): Normaliz
   }));
 }
 
+export function normalizeResponsesTools(
+  input: ResponsesFunctionToolInput[] | undefined,
+): NormalizedTool[] {
+  if (!input) return [];
+  return input.map((tool) => ({
+    type: 'function',
+    name: tool.name,
+    ...(tool.description === undefined ? {} : { description: tool.description }),
+    parameters: tool.parameters ?? {},
+  }));
+}
+
 export function normalizeToolChoice(
   input: 'auto' | 'none' | 'required' | FunctionToolChoiceInput | undefined,
 ): NormalizedToolChoice {
   if (input === undefined || input === 'auto') return { mode: 'auto' };
   if (input === 'none' || input === 'required') return { mode: input };
   return { mode: 'function', name: input.function.name };
+}
+
+export function normalizeResponsesToolChoice(
+  input: 'auto' | 'none' | 'required' | ResponsesFunctionToolChoiceInput | undefined,
+): NormalizedToolChoice {
+  if (input === undefined || input === 'auto') return { mode: 'auto' };
+  if (input === 'none' || input === 'required') return { mode: input };
+  return { mode: 'function', name: input.name };
 }
 
 function nextAttachmentId(state: NormalizationState): string {
@@ -88,6 +120,15 @@ export function addImageAttachment(
     ? ({ type: 'data_url', dataUrl: value } as const)
     : ({ type: 'url', url: value } as const);
   state.attachments.push({ id, kind: 'image', source });
+  return { type: 'attachment', attachmentId: id };
+}
+
+export function addImageFileIdAttachment(
+  state: NormalizationState,
+  fileId: string,
+): NormalizedContentPart {
+  const id = nextAttachmentId(state);
+  state.attachments.push({ id, kind: 'image', source: { type: 'file_id', fileId } });
   return { type: 'attachment', attachmentId: id };
 }
 
@@ -135,6 +176,29 @@ export function normalizeStructuredOutput(
     };
   }
   throw new InvalidRequestError('Unsupported structured output format', 'response_format');
+}
+
+export function normalizeResponsesStructuredOutput(
+  input:
+    | JsonObjectFormatInput
+    | {
+        type: 'json_schema';
+        name: string;
+        description?: string;
+        schema: unknown;
+        strict?: boolean;
+      }
+    | undefined,
+): NormalizedStructuredOutput | undefined {
+  if (input === undefined) return undefined;
+  if (input.type === 'json_object') return { type: 'json_object' };
+  return {
+    type: 'json_schema',
+    name: input.name,
+    ...(input.description === undefined ? {} : { description: input.description }),
+    schema: input.schema,
+    ...(input.strict === undefined ? {} : { strict: input.strict }),
+  };
 }
 
 export function recordIgnoredParameters(

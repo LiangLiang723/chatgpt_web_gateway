@@ -13,7 +13,7 @@ STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md
-NEXT_TASK=execute-phase-1-task-4-chat-normalizer
+NEXT_TASK=execute-phase-1-task-5-responses-normalizer
 UPDATED_AT=2026-08-14
 ```
 
@@ -22,7 +22,7 @@ UPDATED_AT=2026-08-14
 - **当前阶段：** Phase 1 — Toolchain / Protocol / Docker Implementation（工具链 / 协议 / Docker 实施）。
 - **当前状态：** `active`
 - **活动计划：** [`2026-08-14-phase-1-toolchain-protocol-docker.md`](superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md)。
-- **下一个可执行任务：** 执行 Phase 1 Task 4：Chat Completions 请求标准化。
+- **下一个可执行任务：** 执行 Phase 1 Task 5：Responses 请求标准化与语义对齐。
 - **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）

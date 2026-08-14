@@ -288,7 +288,7 @@ Do not download attachments or execute tools. Preserve tool-call/result identity
 Run: `corepack pnpm vitest run tests/unit/chat-completions-normalizer.test.ts tests/unit/normalized-common.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 Commit message: `✨ 增加 Chat Completions 请求标准化`
 
@@ -306,24 +306,24 @@ Commit message: `✨ 增加 Chat Completions 请求标准化`
 - Produces: `normalizeResponses(request, meta): NormalizedRequest`.
 - Semantic parity test is the contract proving equivalent Chat Completions and Responses requests converge on the same internal meaning.
 
-- [ ] **Step 1: Write failing Responses normalization tests**
+- [x] **Step 1: Write failing Responses normalization tests**
 
 Cover `input` string, message array, `input_text`, `input_image`, `input_file`, tools, tool choice, streaming, structured output, ignored values, unsupported values, and conversation header propagation.
 
-- [ ] **Step 2: Write a failing semantic parity test**
+- [x] **Step 2: Write a failing semantic parity test**
 
 Construct one Chat Completions request and one Responses request representing the same instruction + user text + image + tool schema. Normalize both and compare the semantic fields after excluding endpoint-specific request IDs and deterministic attachment IDs where necessary.
 
-- [ ] **Step 3: Run tests and verify red**
+- [x] **Step 3: Run tests and verify red**
 
 Run: `corepack pnpm vitest run tests/unit/responses-normalizer.test.ts tests/unit/normalizer-parity.test.ts`
 Expected: FAIL because Responses normalization is missing.
 
-- [ ] **Step 4: Implement minimal Responses normalization**
+- [x] **Step 4: Implement minimal Responses normalization**
 
 Keep all transformation pure and reuse common helpers; do not copy browser or execution logic.
 
-- [ ] **Step 5: Run all normalizer unit tests**
+- [x] **Step 5: Run all normalizer unit tests**
 
 Run: `corepack pnpm vitest run tests/unit/*normalizer*.test.ts tests/unit/normalized-common.test.ts`
 Expected: PASS.

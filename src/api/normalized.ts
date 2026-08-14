@@ -35,7 +35,10 @@ export type NormalizedAttachment =
   | {
       id: string;
       kind: 'image';
-      source: { type: 'url'; url: string } | { type: 'data_url'; dataUrl: string };
+      source:
+        | { type: 'url'; url: string }
+        | { type: 'data_url'; dataUrl: string }
+        | { type: 'file_id'; fileId: string };
     }
   | {
       id: string;
