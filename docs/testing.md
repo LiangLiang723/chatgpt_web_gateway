@@ -22,7 +22,8 @@
 
 使用 local fixture（本地固定样本）和 fake driver（假驱动），不连接 ChatGPT：
 
-- API → Normalizer → Conversation Engine → fake ChatGPT Driver。
+- Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary。
+- 后续：API → Normalizer → Conversation Engine → fake ChatGPT Driver。
 - SQLite Repository。
 - Conversation Queue（队列）。
 - Page Pool 策略。
@@ -72,6 +73,21 @@ node scripts/check-architecture.mjs
 
 它们检查文档/状态/模块边界一致性，不代表产品功能测试。
 
+## Docker Smoke（容器冒烟）
+
+Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration 外还必须验证：
+
+- `linux/amd64` 镜像可构建。
+- 容器内 Node 版本符合批准 LTS 基线。
+- Playwright package 与官方基础镜像版本约束一致。
+- 默认 headless Compose 可启动 Gateway。
+- `/health` 可访问。
+- `/v1/models` 的 API Key 认证正确。
+- `/data` Bind Mount 可写，长期进程非 root。
+- noVNC overlay 只在维护配置下启动并发布端口。
+
+Docker smoke 不等于真实 ChatGPT E2E，不能用来证明 Selector、登录、上传或图片生成有效。
+
 ## 最终目标验证入口
 
 Phase 1 建立完整工具链后：
@@ -79,10 +95,12 @@ Phase 1 建立完整工具链后：
 ```text
 pnpm typecheck
 pnpm lint
+pnpm format:check
 pnpm test
 pnpm check:architecture
 pnpm check:project-memory
 pnpm check:docs
+pnpm check:version
 pnpm build
 pnpm verify
 ```

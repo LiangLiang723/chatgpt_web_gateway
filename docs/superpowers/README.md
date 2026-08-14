@@ -11,6 +11,7 @@
 → 用户批准设计
 → 写 spec
 → spec 自检
+→ 用户审阅书面 spec
 → 写 plan
 → 按 plan 执行
 → 持续更新 plan 状态

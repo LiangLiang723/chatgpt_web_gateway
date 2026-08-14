@@ -10,11 +10,11 @@
 
 验收：新 Agent 不读聊天，也能准确回答“现在实现了什么、V1 要做什么、下一步是什么”。
 
-## Phase 1：工具链 + 统一协议模型
+## Phase 1：工具链 + 统一协议模型 + 正式 Docker 运行边界
 
-交付：TypeScript、pnpm、Fastify、Schema 校验、内部统一请求类型、`/health`、`/v1/models`、Chat Completions / Responses 请求 Normalizer 单元测试。
+交付：TypeScript、pnpm、Fastify、TypeBox/Ajv Schema 校验、内部统一请求类型、API Key 认证、`/health`、`/v1/models`、Chat Completions / Responses 请求 Normalizer 单元测试，以及完整 `linux/amd64` Docker 镜像、基础 Compose、按需 noVNC 维护 overlay、`/data` Bind Mount 和非 root `PUID/PGID` 运行边界。
 
-验收：不启动浏览器也能完成协议解析和基础路由测试。
+验收：不连接真实 ChatGPT 也能完成协议解析和基础路由测试；完整容器可构建并完成 HTTP、认证、挂载、运行用户和维护 overlay 的确定性 smoke test。
 
 ## Phase 2：SQLite + Conversation 持久化
 
@@ -58,11 +58,11 @@
 
 验收：真实 E2E 生成图片并通过 API 返回可读取结果。
 
-## Phase 9：恢复、诊断、Docker 与 NAS
+## Phase 9：恢复、诊断与 NAS 生产成熟化
 
-交付：分级恢复、结构化错误、日志/诊断、Dockerfile、Compose、`/data` 持久化、NAS 部署文档。
+交付：分级恢复、结构化错误、日志/诊断、安全加固、NAS 运维与备份/恢复文档，以及对 Phase 1 容器运行边界的生产成熟化。
 
-验收：容器重启不丢 Browser Profile 和 Conversation；普通 `pnpm verify` 不依赖外网。
+验收：容器重启不丢 Browser Profile 和 Conversation；维护/恢复流程可操作；普通 `pnpm verify` 不依赖外网。
 
 ## Phase 10：V1 验收
 

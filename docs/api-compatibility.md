@@ -24,6 +24,13 @@
 | `POST /v1/images/generations` | ✅ |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ |
 
+## Authentication and Conversation Extension（认证与会话扩展）
+
+- `GET /health` 无需认证。
+- 所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。
+- 客户端可通过 `X-Conversation-Key` 提供稳定会话标识；Gateway 将其标准化为内部 `conversationKey`。
+- 未提供 `X-Conversation-Key` 时不在协议层猜测会话身份，自动绑定策略属于后续 Conversation / Context Sync 实现。
+
 ## Chat Completions（聊天补全）
 
 | 能力 | V1 | 行为 |

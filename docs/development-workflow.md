@@ -48,6 +48,38 @@
 → 下一个 Task
 ```
 
+## 项目依赖升级
+
+用户只说“升级项目依赖”时，默认升级范围是整套基础栈，而不是只升级普通 npm package：
+
+- Node LTS / Docker runtime baseline。
+- Playwright 官方基础镜像、Playwright package 与 bundled Chromium。
+- pnpm。
+- TypeScript、Fastify、TypeBox / Ajv。
+- Vitest、ESLint、Prettier。
+- 其他生产与开发依赖。
+
+标准流程：
+
+```text
+读取当前版本与官方兼容信息
+→ 确认 Node / Playwright / Chromium / pnpm 组合
+→ 分层升级并处理 breaking changes
+→ 更新 packageManager / engines / Docker image pins
+→ 刷新 pnpm-lock.yaml 并检查异常解析变化
+→ typecheck / lint / format:check / test / build / verify
+→ 重建完整 Docker 镜像
+→ 核对容器内实际版本
+→ Docker smoke test
+→ 项目记忆与版本文档回写判断
+→ git diff --check + staged diff
+→ 按提交规范提交
+```
+
+新 Node LTS major 允许在这套流程中一起升级；如果某项 major upgrade 需要独立迁移或当前不兼容，应拆分任务并明确 blocker，不为了追求最新版本强行升级。
+
+所有包版本、镜像 tag 和兼容性结论必须根据当次官方资料与实际验证确定，不凭记忆猜测。
+
 ## 完成门槛
 
 在声称完成前必须有刚刚运行的验证证据。

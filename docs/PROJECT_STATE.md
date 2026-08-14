@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-0-foundation
-STATUS=ready-for-phase-1-design
+PHASE=phase-1-design
+STATUS=awaiting-phase-1-spec-review
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-1-toolchain-and-protocol-spec
+NEXT_TASK=review-phase-1-toolchain-protocol-docker-spec
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 0 — Living Repository（活仓库）基础完成，等待 Phase 1 设计/计划。
-- **当前状态：** `ready-for-phase-1-design`
-- **活动计划：** 无。开始 Phase 1 实现前必须先建立对应 spec（设计规格）和 plan（实施计划）。
-- **下一个可执行任务：** 为 Phase 1“工具链 + 统一协议模型”编写并批准 spec。
-- **当前 blocker（阻塞）：** 无项目设计 blocker；真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
+- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker Design（工具链 / 协议 / Docker 设计）。
+- **当前状态：** `awaiting-phase-1-spec-review`
+- **活动计划：** 无。Phase 1 设计已写入 spec，用户完成书面 spec 审阅后才能建立实施 plan（计划）。
+- **下一个可执行任务：** 审阅并批准 [`2026-08-14-phase-1-toolchain-protocol-docker-design.md`](superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md)。
+- **当前 blocker（阻塞）：** 无技术 blocker；当前流程 gate（门槛）是书面 spec 用户审阅。真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
 
@@ -34,6 +34,7 @@ UPDATED_AT=2026-08-14
 - ✅ `PROJECT_STATE.md` 机器可检查状态头。
 - ✅ 架构、API 兼容、测试、Git、Roadmap（路线图）文档。
 - ✅ `docs/superpowers/specs/` / `plans/` 工作流目录。
+- ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计规格。
 - ✅ 文档链接检查脚本。
 - ✅ 项目记忆一致性检查脚本。
 - ✅ 基础架构依赖检查脚本。
@@ -51,7 +52,7 @@ UPDATED_AT=2026-08-14
 - ❌ 文件 / 图片输入。
 - ❌ Tool Calling（工具调用）。
 - ❌ ChatGPT 图片生成。
-- ❌ Docker / NAS 部署。
+- ❌ Docker / NAS 运行实现。
 
 **注意：Approved Scope（已批准范围）不代表上述产品能力已经完成。**
 
@@ -92,11 +93,16 @@ UPDATED_AT=2026-08-14
 - SQLite 是结构化 Conversation 状态的事实来源；文件字节使用文件系统。
 - Streaming 当前方案采用约 200ms DOM polling（网页轮询）+ Stable Prefix（稳定前缀）。
 - API Adapter（适配器）共享统一内部请求模型，不允许各自实现浏览器逻辑。
+- Docker 从 Phase 1 起是正式运行边界；目标平台先锁定 `linux/amd64`。
+- 默认 headless；noVNC 只通过维护 overlay 按需启用，正常运行不启动也不发布 noVNC。
+- `/health` 无需认证；所有 `/v1/*` 默认要求 Gateway Bearer API Key。
+- `X-Conversation-Key` 是受控兼容扩展，协议层只负责标准化，不提前实现会话生命周期。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-14：完成 Phase 1 工具链 / 协议 / Docker 设计讨论并写入正式 spec；Docker 正式运行边界从 Phase 9 前移到 Phase 1，依赖升级流程同步固化。
 - 2026-08-14：建立 `V0.0.1` 初始版本，并将版本历史统一迁移到 `CHANGELOG.md`。
 - 2026-08-14：精简 `AGENTS.md` 为长期工作入口，移除一次性执行环境描述，并把代码边界与实现细节统一下沉到专项文档。
 - 2026-08-14：把 ChatGPT Web Gateway 的 API、Context Sync、Streaming、附件、Tools、图片生成和持久化决策汇总为 governing spec。
@@ -107,13 +113,15 @@ UPDATED_AT=2026-08-14
 
 ## Next Steps（下一步）
 
-1. Phase 1 spec：TypeScript（类型化 JavaScript）工具链 + OpenAI 协议内部统一模型。
+1. 用户审阅并批准 Phase 1 书面 spec。
 2. Phase 1 plan：把 spec 拆成可测试任务。
-3. 实现 `/health`、`/v1/models` 和请求 Normalizer 的最小闭环。
-4. 按 [`roadmap.md`](roadmap.md) 逐 Phase 推进。
+3. 实现 TypeScript / pnpm / Fastify / TypeBox 工具链、认证、统一 Normalizer 和正式 Docker 运行边界。
+4. 完成 `/health`、`/v1/models`、两类 POST Adapter 与 Docker smoke 的最小闭环。
+5. 按 [`roadmap.md`](roadmap.md) 逐 Phase 推进。
 
 ## Known Risks（已知风险）
 
+- Playwright 官方镜像内置 Node 版本可能与批准的 Node LTS 不同步；Docker 构建必须显式校验版本组合。
 - ChatGPT 网页 DOM 会变化；Selector 必须集中并有诊断工具。
 - ChatGPT Web 自动化不是官方 OpenAI API，可靠性和平台限制必须通过保守并发与恢复策略控制。
 - Tool Calling 是 Gateway 的 Prompt + Parser 模拟层，不应伪装成 ChatGPT Web 原生工具协议。

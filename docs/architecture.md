@@ -91,6 +91,16 @@ interface NormalizedRequest {
 
 同一 Conversation 请求串行，不同 Conversation 可以并行。禁止全局锁串行所有用户。
 
+## Container Runtime（容器运行时）
+
+Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
+
+仓库提供单一完整镜像：正常模式默认只运行 Gateway + headless Chromium；首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / VNC / noVNC 维护栈。正常模式不启动维护进程，也不发布 noVNC 端口。
+
+镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。项目 Playwright package 与镜像浏览器版本必须匹配；Node LTS 版本独立校验并锁定，不能假设官方 Playwright 镜像内置 Node 永远等于项目批准的 LTS。
+
+持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，headless 与 noVNC 模式复用。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。
+
 ## Browser（浏览器）
 
 V1：
@@ -213,9 +223,15 @@ data/
 
 SQLite 保存 Conversation、Message、Tool Call、Attachment、Generated Image 等结构化记录。磁盘持久化是恢复事实来源，内存只做运行时缓存。
 
+## API Authentication（接口认证）
+
+`GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
+
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`；未提供时保持 `undefined`，自动会话策略由后续 Conversation / Context Sync 阶段实现。
+
 ## 错误边界
 
-内部使用稳定错误类型；API 层映射为 OpenAI 风格错误。不得把 Playwright 原始堆栈、Cookie、文件系统敏感路径直接返回客户端。
+内部使用稳定错误类型；API 层映射为 OpenAI 风格错误。不得把 Playwright 原始堆栈、Cookie、API Key、Authorization Header、文件系统敏感路径直接返回客户端或写入普通日志。
 
 ## 可执行架构约束
 

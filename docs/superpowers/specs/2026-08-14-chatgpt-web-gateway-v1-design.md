@@ -71,7 +71,7 @@ interface NormalizedRequest {
 
 内部统一使用 `ConversationKey`，不识别具体 Agent 品牌。
 
-客户端如果能提供稳定会话 ID，Gateway 允许通过兼容扩展（例如 Header 或受控扩展字段）绑定；无法提供时使用保守的自动策略。扩展不能破坏标准 OpenAI 请求的基本兼容性。
+客户端如果能提供稳定会话 ID，Gateway 使用受控兼容扩展 Header `X-Conversation-Key` 传入并标准化为内部 `conversationKey`。客户端未提供时，协议层保持 `undefined`，后续 Conversation / Context Sync 阶段再实现保守的自动策略。扩展不能破坏标准 OpenAI 请求的基本兼容性。
 
 每个 Conversation 本地保存：
 
@@ -130,6 +130,10 @@ PAGE_IDLE_TIMEOUT_MINUTES=30
 配置值可调整，不视为协议承诺。
 
 ## 8. Browser Runtime（浏览器运行时）
+
+Docker 从 Phase 1 起作为正式运行边界。目标平台先锁定 `linux/amd64`，完整镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。项目 Playwright package 与镜像浏览器版本必须匹配；Node LTS 独立校验，不能假设基础镜像内置 Node 永远与项目批准 LTS 一致。
+
+正常运行默认 `UI_MODE=headless`。首次登录、重新认证或人工排障时使用基础 Compose + noVNC 维护 overlay，临时启动 Xvfb / VNC / noVNC 并发布维护端口；正常模式不启动这些进程，也不发布 noVNC 端口。两种模式复用 `/data/browser-profile/`。
 
 V1：
 
@@ -307,6 +311,8 @@ SQLite 目标实体：Conversation、Message、Tool Call、Attachment、File、G
 
 ## 17. Error Handling and Recovery（错误和恢复）
 
+`GET /health` 无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。缺少正式 Gateway API Key 时服务启动失败，密钥与 Authorization Header 不得写入普通日志。
+
 对外返回稳定 OpenAI 风格错误，不暴露 Playwright 原始堆栈。
 
 恢复逐级升级：
@@ -334,7 +340,11 @@ Selector retry
 
 ## 19. Deployment（部署）
 
-最终目标为 NAS 上单服务容器化运行，持久化 `/data`。Docker / NAS 交付属于后续 Phase，不在基础骨架阶段提前实现。
+最终目标为 NAS 上单服务容器化运行，Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。
+
+仓库提供单一完整镜像、基础 Compose 和按需 noVNC 维护 overlay。`/data` 默认使用宿主机目录 Bind Mount，Browser Profile、SQLite、文件、生成资源和日志均位于该持久边界。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 权限对齐。
+
+后续生产 Phase 继续完善恢复、诊断、安全加固和 NAS 运维，不再负责第一次容器化。
 
 ## 20. V1 Success Criteria（V1 成功标准）
 
