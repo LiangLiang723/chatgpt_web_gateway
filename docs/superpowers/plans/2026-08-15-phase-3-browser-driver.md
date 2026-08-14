@@ -602,7 +602,7 @@ Commit:
 - Produces `encodeChatCompletion(result, meta)` and `encodeResponse(result, meta)`.
 - Produces Gateway errors for all Phase 3 stable codes, including `browser_maintenance_mode`.
 
-- [ ] **Step 1: Write failing response encoder tests**
+- [x] **Step 1: Write failing response encoder tests**
 
 Chat Completions expected essentials:
 
@@ -639,7 +639,7 @@ expect(response).toMatchObject({
 
 No fake token usage in Chat Completions.
 
-- [ ] **Step 2: Run encoder tests and verify red**
+- [x] **Step 2: Run encoder tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/response-encoders.test.ts
@@ -647,11 +647,11 @@ corepack pnpm vitest run tests/unit/response-encoders.test.ts
 
 Expected: FAIL because encoders do not exist.
 
-- [ ] **Step 3: Implement typed execution result and encoders**
+- [x] **Step 3: Implement typed execution result and encoders**
 
 Use Node `randomUUID()` to create Gateway-local IDs with `chatcmpl_`, `resp_`, and `msg_` prefixes. Timestamps exposed in OpenAI-style responses are Unix seconds; executor internal `completedAt` remains milliseconds.
 
-- [ ] **Step 4: Write failing API error mapping tests**
+- [x] **Step 4: Write failing API error mapping tests**
 
 Extend HTTP tests so injected execution errors map exactly:
 
@@ -670,11 +670,11 @@ unsupported_phase3_request       → 501
 
 401 remains only Gateway API key failure.
 
-- [ ] **Step 5: Implement error mapper**
+- [x] **Step 5: Implement error mapper**
 
 Add API-layer GatewayError subclasses/factory without importing Playwright. Browser/chatgpt/executor error classes should be mapped at one execution adapter boundary, not in Fastify routes by inspecting raw Playwright strings.
 
-- [ ] **Step 6: Update POST routes to encode shared execution result**
+- [x] **Step 6: Update POST routes to encode shared execution result**
 
 Routes become:
 
@@ -685,7 +685,7 @@ return encodeChatCompletion(result, responseMeta);
 
 and equivalent Responses encoder. Existing fake execution integration tests remain network/browser-free.
 
-- [ ] **Step 7: Run Task 5 verification**
+- [x] **Step 7: Run Task 5 verification**
 
 ```bash
 corepack pnpm vitest run tests/unit/response-encoders.test.ts tests/integration/post-routes.test.ts
@@ -696,7 +696,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 8: Update plan/state and commit Task 5**
+- [x] **Step 8: Update plan/state and commit Task 5**
 
 Commit:
 

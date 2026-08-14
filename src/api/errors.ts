@@ -81,12 +81,77 @@ export class InvalidRequestError extends GatewayError {
 export class BackendNotImplementedError extends GatewayError {
   constructor() {
     super({
-      message: 'ChatGPT execution is not implemented in Phase 1',
+      message: 'ChatGPT execution backend is not configured',
       statusCode: 501,
       type: 'server_error',
       code: 'backend_not_implemented',
     });
   }
+}
+
+const executionErrorMap = {
+  auth_required: {
+    statusCode: 503,
+    message: 'ChatGPT authentication is required',
+  },
+  browser_unavailable: {
+    statusCode: 503,
+    message: 'ChatGPT browser runtime is unavailable',
+  },
+  browser_maintenance_mode: {
+    statusCode: 503,
+    message: 'ChatGPT browser execution is unavailable during maintenance mode',
+  },
+  page_capacity_exceeded: {
+    statusCode: 503,
+    message: 'ChatGPT page capacity is currently exhausted',
+  },
+  selector_missing: {
+    statusCode: 502,
+    message: 'ChatGPT page structure does not match the current selector registry',
+  },
+  selector_ambiguous: {
+    statusCode: 502,
+    message: 'ChatGPT page structure produced an ambiguous selector match',
+  },
+  chatgpt_generation_timeout: {
+    statusCode: 504,
+    message: 'ChatGPT generation did not complete before the timeout',
+  },
+  chatgpt_response_missing: {
+    statusCode: 502,
+    message: 'ChatGPT did not produce a readable Assistant response',
+  },
+  conversation_sync_not_implemented: {
+    statusCode: 501,
+    message: 'Conversation synchronization is not implemented in Phase 3',
+  },
+  unsupported_phase3_request: {
+    statusCode: 501,
+    message: 'This request requires a capability not implemented in Phase 3',
+  },
+} as const;
+
+export type StableExecutionErrorCode = keyof typeof executionErrorMap;
+
+function executionCodeFromUnknown(error: unknown): StableExecutionErrorCode | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  const code = error.code;
+  return typeof code === 'string' && code in executionErrorMap
+    ? (code as StableExecutionErrorCode)
+    : undefined;
+}
+
+export function gatewayErrorFromExecution(error: unknown): GatewayError | undefined {
+  const code = executionCodeFromUnknown(error);
+  if (!code) return undefined;
+  const mapped = executionErrorMap[code];
+  return new GatewayError({
+    message: mapped.message,
+    statusCode: mapped.statusCode,
+    type: 'server_error',
+    code,
+  });
 }
 
 export function toOpenAIErrorBody(error: GatewayError): OpenAIErrorBody {

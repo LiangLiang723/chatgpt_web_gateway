@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { encodeResponse } from '../encode/responses.js';
 import type { NormalizedExecutionHandler } from '../execution.js';
 import { normalizeResponses } from '../normalize/responses.js';
 import { conversationKeyFromRequest } from '../request-meta.js';
@@ -12,12 +13,14 @@ export function registerResponsesRoute(
   app.post<{ Body: ResponsesRequest }>(
     '/v1/responses',
     { schema: { body: ResponsesRequestSchema } },
-    async (request) =>
-      execute(
+    async (request) => {
+      const result = await execute(
         normalizeResponses(request.body, {
           requestId: String(request.id),
           conversationKey: conversationKeyFromRequest(request),
         }),
-      ),
+      );
+      return encodeResponse(result);
+    },
   );
 }

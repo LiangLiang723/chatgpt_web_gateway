@@ -3,7 +3,12 @@ import type { FastifyError } from 'fastify';
 
 import type { AppConfig } from '../config/index.js';
 import { authenticateBearer } from './auth.js';
-import { GatewayError, ValidationError, toOpenAIErrorBody } from './errors.js';
+import {
+  GatewayError,
+  ValidationError,
+  gatewayErrorFromExecution,
+  toOpenAIErrorBody,
+} from './errors.js';
 import { backendNotImplementedExecution, type NormalizedExecutionHandler } from './execution.js';
 import { registerChatCompletionsRoute } from './routes/chat-completions.js';
 import { registerHealthRoute } from './routes/health.js';
@@ -34,7 +39,9 @@ export function buildServer(options: BuildServerOptions) {
 
   app.setErrorHandler((error, request, reply) => {
     const gatewayError =
-      error instanceof GatewayError ? error : validationErrorFromFastify(error as FastifyError);
+      error instanceof GatewayError
+        ? error
+        : (validationErrorFromFastify(error as FastifyError) ?? gatewayErrorFromExecution(error));
 
     if (gatewayError) {
       return reply.status(gatewayError.statusCode).send(toOpenAIErrorBody(gatewayError));
