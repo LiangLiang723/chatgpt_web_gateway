@@ -309,7 +309,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 Commit message:
 
@@ -331,7 +331,7 @@ Commit message:
 - Produces: `ToolCallRepository.insert/listByConversation/deleteByConversation`.
 - Produces: `AttachmentRepository.insert/listByConversation/deleteByConversation`.
 
-- [ ] **Step 1: Write failing Tool Call/Attachment repository tests**
+- [x] **Step 1: Write failing Tool Call/Attachment repository tests**
 
 Create one conversation and messages, then assert:
 
@@ -340,7 +340,7 @@ expect(toolCalls.listByConversation(conversationId)).toEqual([
   expect.objectContaining({
     externalCallId: 'call_weather_1',
     name: 'lookup_weather',
-    arguments: '{"city":"Tokyo"}',
+    argumentsText: '{"city":"Tokyo"}',
   }),
 ]);
 ```
@@ -355,7 +355,7 @@ Also cover:
 - Attachment `fileId` may point to an existing File row and FK rejects unknown File id;
 - Attachment raw `kind='video'` is rejected by SQLite.
 
-- [ ] **Step 2: Run tests and verify red**
+- [x] **Step 2: Run tests and verify red**
 
 Run:
 
@@ -365,7 +365,7 @@ corepack pnpm vitest run tests/unit/persistence-tools-attachments.test.ts
 
 Expected: FAIL because repositories do not exist.
 
-- [ ] **Step 3: Implement ToolCallRepository**
+- [x] **Step 3: Implement ToolCallRepository**
 
 Persist `argumentsText` as raw TEXT, not JSON. Before insert, verify `message_id` belongs to the same `conversation_id` using a prepared lookup; throw `DataIntegrityError` on mismatch.
 
@@ -375,7 +375,7 @@ Stable listing order:
 ORDER BY created_at ASC, id ASC
 ```
 
-- [ ] **Step 4: Implement AttachmentRepository**
+- [x] **Step 4: Implement AttachmentRepository**
 
 Persist `source` using JSON helper and optional `fileId` separately. Validate message/conversation ownership before insert. Listing order:
 
@@ -383,7 +383,7 @@ Persist `source` using JSON helper and optional `fileId` separately. Validate me
 ORDER BY created_at ASC, id ASC
 ```
 
-- [ ] **Step 5: Run focused and static checks**
+- [x] **Step 5: Run focused and static checks**
 
 Run:
 
