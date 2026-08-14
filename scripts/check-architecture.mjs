@@ -56,6 +56,18 @@ const rules = [
     forbidden: (value) => value === 'playwright' || value.startsWith('playwright/'),
     message: 'persistence/ must not import Playwright',
   },
+  {
+    dir: 'browser',
+    forbidden: (value) => /(?:^|\/)(?:api|persistence|chatgpt)(?:\/|$)/.test(value),
+    message: 'browser/ must stay independent from api/persistence/chatgpt',
+  },
+  {
+    dir: 'chatgpt',
+    forbidden: (value) =>
+      /(?:^|\/)(?:api|persistence)(?:\/|$)/.test(value) ||
+      /browser\/(?:browser-manager|page-pool)/.test(value),
+    message: 'chatgpt/ must not depend on api/persistence or BrowserManager/PagePool implementations',
+  },
 ];
 
 for (const rule of rules) {

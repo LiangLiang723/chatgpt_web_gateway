@@ -13,7 +13,7 @@ STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
-NEXT_TASK=execute-phase-3-task-7-docker-architecture
+NEXT_TASK=execute-phase-3-task-8-real-e2e
 UPDATED_AT=2026-08-15
 ```
 
@@ -22,7 +22,7 @@ UPDATED_AT=2026-08-15
 - **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
 - **当前状态：** `active`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 执行 Phase 3 Task 7：Docker headless Browser smoke 与架构约束。
+- **下一个可执行任务：** 执行 Phase 3 Task 8：显式真实 ChatGPT E2E、当前 Selector 校准与真实 Fresh 文本验收。
 - **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
@@ -65,7 +65,7 @@ UPDATED_AT=2026-08-15
 - ✅ Chat Completions / Responses 非流式文本编码与 stable execution error → OpenAI-style HTTP error 映射。
 - ✅ Headless Gateway runtime 已注入 BrowserManager + Phase3Executor；`UI_MODE=novnc` 明确禁用产品 BrowserManager 并返回 `browser_maintenance_mode`。
 - ✅ `inspect:chatgpt` 核心与显式独立 Profile / 可选诊断产物安全边界；真实 ChatGPT 尚未运行。
-- ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker 进程边界尚待 Task 7 smoke 验证。
+- ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker smoke 已验证普通 headless 与 maintenance headed Chromium 的 Profile 单 owner、PUID/PGID 和 restart 边界。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
 - ❌ 真 Streaming（流式输出）。

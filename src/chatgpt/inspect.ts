@@ -3,11 +3,6 @@ import { join, resolve } from 'node:path';
 
 import type { Page } from 'playwright';
 
-import {
-  createBrowserManager as defaultCreateBrowserManager,
-  type CreateBrowserManagerOptions,
-} from '../browser/browser-manager.js';
-import type { BrowserManager } from '../browser/types.js';
 import { probeAuth } from './auth.js';
 import { inspectCollection, inspectUnique } from './selector-registry.js';
 import { chatGptSelectors } from './selectors.js';
@@ -23,10 +18,8 @@ export interface ParsedInspectEnvironment {
   diagnosticsDir?: string;
 }
 
-export interface InspectChatGptOptions {
-  profileDir: string;
+export interface InspectChatGptPageOptions {
   diagnosticsDir?: string;
-  createBrowserManager?: (options: CreateBrowserManagerOptions) => Promise<BrowserManager>;
   mkdir?: typeof mkdirSync;
   writeFile?: typeof writeFileSync;
 }
@@ -69,7 +62,10 @@ function uniqueStatus(
   return value.status;
 }
 
-async function inspectPage(page: Page): Promise<InspectChatGptResult> {
+export async function inspectChatGptPage(
+  page: Page,
+  options: InspectChatGptPageOptions = {},
+): Promise<InspectChatGptResult> {
   await page.goto('https://chatgpt.com/', {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
@@ -81,6 +77,17 @@ async function inspectPage(page: Page): Promise<InspectChatGptResult> {
   const assistantTurns = await inspectCollection(page, chatGptSelectors.assistantTurns);
   const stopControl = await inspectUnique(page, chatGptSelectors.stopControl);
 
+  if (options.diagnosticsDir) {
+    const mkdir = options.mkdir ?? mkdirSync;
+    const writeFile = options.writeFile ?? writeFileSync;
+    mkdir(options.diagnosticsDir, { recursive: true });
+    await page.screenshot({
+      path: join(options.diagnosticsDir, 'chatgpt.png'),
+      fullPage: true,
+    });
+    writeFile(join(options.diagnosticsDir, 'chatgpt.html'), await page.content(), 'utf8');
+  }
+
   return {
     url: page.url(),
     auth: auth.state,
@@ -91,35 +98,4 @@ async function inspectPage(page: Page): Promise<InspectChatGptResult> {
       stopControl: uniqueStatus(stopControl),
     },
   };
-}
-
-export async function inspectChatGpt(
-  options: InspectChatGptOptions,
-): Promise<InspectChatGptResult> {
-  const browser = await (options.createBrowserManager ?? defaultCreateBrowserManager)({
-    profileDir: options.profileDir,
-    maxActivePages: 1,
-  });
-  const mkdir = options.mkdir ?? mkdirSync;
-  const writeFile = options.writeFile ?? writeFileSync;
-
-  try {
-    const lease = await browser.pages.acquire();
-    try {
-      const result = await inspectPage(lease.page);
-      if (options.diagnosticsDir) {
-        mkdir(options.diagnosticsDir, { recursive: true });
-        await lease.page.screenshot({
-          path: join(options.diagnosticsDir, 'chatgpt.png'),
-          fullPage: true,
-        });
-        writeFile(join(options.diagnosticsDir, 'chatgpt.html'), await lease.page.content(), 'utf8');
-      }
-      return result;
-    } finally {
-      await lease.release();
-    }
-  } finally {
-    await browser.close();
-  }
 }

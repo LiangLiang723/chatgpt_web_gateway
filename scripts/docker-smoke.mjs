@@ -194,6 +194,49 @@ function assertRuntimeIdentity(id) {
   );
 }
 
+function browserProfileOwner(id) {
+  const processList = runDocker(['exec', id, 'ps', '-eo', 'pid=,args='], { quiet: true });
+  const owners = processList
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(.*)$/))
+    .filter(
+      (match) =>
+        match?.[2]?.includes('--user-data-dir=/data/browser-profile') &&
+        !match[2].includes(' --type='),
+    );
+
+  if (owners.length !== 1) {
+    throw new Error(
+      `Expected exactly one Chromium owner for /data/browser-profile, got ${owners.length}`,
+    );
+  }
+  return { pid: owners[0][1], args: owners[0][2] };
+}
+
+function assertBrowserMode(id, maintenance) {
+  const owner = browserProfileOwner(id);
+  const headless = owner.args.includes('--headless');
+  if (maintenance ? headless : !headless) {
+    throw new Error(
+      `Expected ${maintenance ? 'headed maintenance' : 'headless product'} Chromium, got: ${owner.args}`,
+    );
+  }
+
+  const identity = runDocker(
+    [
+      'exec',
+      id,
+      'sh',
+      '-lc',
+      `awk '/^Uid:/{print $2} /^Gid:/{print $2}' /proc/${owner.pid}/status`,
+    ],
+    { quiet: true },
+  ).split(/\s+/);
+  if (identity[0] !== String(puid) || identity[1] !== String(pgid)) {
+    throw new Error(`Chromium must run as ${puid}:${pgid}, got ${identity.join(':')}`);
+  }
+}
+
 function assertMaintenanceProcesses(id, expected) {
   for (const pattern of ['Xvfb', 'x11vnc', 'websockify', 'maintenance-browser.mjs']) {
     const found = commandSucceeds(['exec', id, 'pgrep', '-f', pattern]);
@@ -252,6 +295,7 @@ async function main() {
     let baseId = containerId(false);
     assertRuntimeIdentity(baseId);
     assertPersistence(baseId);
+    assertBrowserMode(baseId, false);
     assertMaintenanceProcesses(baseId, false);
 
     runDocker(composeArgs(false, 'restart', 'gateway'));
@@ -259,6 +303,7 @@ async function main() {
     baseId = containerId(false);
     assertRuntimeIdentity(baseId);
     assertPersistence(baseId);
+    assertBrowserMode(baseId, false);
     assertMaintenanceProcesses(baseId, false);
   } finally {
     down(false);
@@ -271,6 +316,7 @@ async function main() {
     const maintenanceId = containerId(true);
     assertRuntimeIdentity(maintenanceId);
     assertPersistence(maintenanceId);
+    assertBrowserMode(maintenanceId, true);
     assertMaintenanceProcesses(maintenanceId, true);
   } finally {
     down(true);

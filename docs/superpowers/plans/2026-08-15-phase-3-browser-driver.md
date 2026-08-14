@@ -720,7 +720,7 @@ Commit:
 **Interfaces:**
 - Headless `GatewayRuntime` owns `browser?: BrowserManager` and real Phase3 execution handler.
 - Maintenance `GatewayRuntime` has no product BrowserManager and uses execution handler throwing `browser_maintenance_mode`.
-- Produces `inspectChatGpt({ profileDir, diagnosticsDir? })` and `pnpm inspect:chatgpt`.
+- Produces `inspectChatGptPage(page, { diagnosticsDir? })` plus `pnpm inspect:chatgpt`; the CLI owns the isolated BrowserManager while `src/chatgpt/` stays independent from BrowserManager/PagePool implementations.
 - Extends `CreateGatewayRuntimeOptions` with test-only `browserProfileDir?: string`; production callers omit it and always use `join(DATA_DIR, 'browser-profile')`.
 
 - [x] **Step 1: Write failing runtime composition tests using injected BrowserManager factory**
@@ -789,7 +789,7 @@ No diagnostics path means no screenshot/HTML write calls.
 
 - [x] **Step 5: Implement inspect core and CLI**
 
-`inspectChatGpt` launches its own Persistent Context using the explicitly supplied test Profile, opens ChatGPT, runs auth probe, and prints JSON selector status. Optional diagnostics directory creates only controlled screenshot + HTML snapshot.
+`inspectChatGptPage` inspects an already-owned Page and optionally writes controlled screenshot + HTML diagnostics. `scripts/inspect-chatgpt.ts` alone launches the explicitly supplied isolated Persistent Context, leases a Page, invokes the ChatGPT inspection core, then closes BrowserManager.
 
 `package.json`:
 
@@ -843,7 +843,7 @@ Commit:
 - Docker smoke proves production headless Chromium starts without accessing ChatGPT.
 - Architecture checker enforces Browser/ChatGPT/API boundaries and selector-centralization.
 
-- [ ] **Step 1: Add failing Docker smoke expectations before changing runtime assertions**
+- [x] **Step 1: Add failing Docker smoke expectations before changing runtime assertions**
 
 Normal headless Compose must prove a product Chromium process exists under configured `PUID/PGID`, while maintenance-only processes remain absent.
 
@@ -858,7 +858,7 @@ product headless BrowserManager does not exist as a second Chromium owner
 
 If process-pattern differentiation needs an explicit Chromium argument marker, add one deterministic BrowserManager launch arg only if supported and safe; otherwise assert expected process count/profile lock behavior without relying on unstable command-line internals.
 
-- [ ] **Step 2: Run current Docker smoke and verify red**
+- [x] **Step 2: Run current Docker smoke and verify red**
 
 ```bash
 corepack pnpm docker:build
@@ -867,7 +867,7 @@ corepack pnpm docker:smoke
 
 Expected: new headless Chromium assertion fails before Browser runtime image is rebuilt/integrated.
 
-- [ ] **Step 3: Add architecture checker rules with failing evidence**
+- [x] **Step 3: Add architecture checker rules with failing evidence**
 
 Temporarily demonstrate checker catches representative forbidden imports, then remove temporary violations. Rules:
 
@@ -880,7 +880,7 @@ selector-like literals outside src/chatgpt/selectors.ts fail
 
 Keep side-effect import parsing fixed from Phase 2.
 
-- [ ] **Step 4: Run architecture check green**
+- [x] **Step 4: Run architecture check green**
 
 ```bash
 node scripts/check-architecture.mjs
@@ -888,7 +888,7 @@ node scripts/check-architecture.mjs
 
 Expected: PASS on real tree after temporary evidence is removed.
 
-- [ ] **Step 5: Run fresh application + Docker verification**
+- [x] **Step 5: Run fresh application + Docker verification**
 
 ```bash
 corepack pnpm verify
@@ -898,7 +898,7 @@ corepack pnpm docker:smoke
 
 Expected: PASS; none of these commands contacts real ChatGPT.
 
-- [ ] **Step 6: Update plan/state and commit Task 7**
+- [x] **Step 6: Update plan/state and commit Task 7**
 
 Commit:
 
