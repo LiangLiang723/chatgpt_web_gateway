@@ -8,21 +8,21 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-3-design
-STATUS=ready-for-phase-3-plan
+PHASE=phase-3-implementation
+STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=write-phase-3-browser-driver-plan
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
+NEXT_TASK=execute-phase-3-task-1-browser-runtime
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）设计已批准，等待实施计划。
-- **当前状态：** `ready-for-phase-3-plan`
-- **活动计划：** 无；Phase 3 设计规格已批准。
-- **下一个可执行任务：** 编写 Phase 3 Browser / Driver implementation plan，并按 TDD 实施。
+- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
+- **当前状态：** `active`
+- **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
+- **下一个可执行任务：** 执行 Phase 3 Task 1：BrowserManager、运行配置与 bounded Page Pool。
 - **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
