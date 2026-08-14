@@ -70,10 +70,14 @@ for (const rule of rules) {
 
 for (const file of sourceFiles(src)) {
   const relative = path.relative(root, file).replaceAll('\\', '/');
-  if (relative === 'src/chatgpt/selectors.ts') continue;
   const content = fs.readFileSync(file, 'utf8');
-  if (/data-testid|#prompt-textarea|data-message-author-role/.test(content)) {
+
+  if (relative !== 'src/chatgpt/selectors.ts' && /data-testid|#prompt-textarea|data-message-author-role/.test(content)) {
     errors.push(`${relative} contains ChatGPT selector-like literals; keep selectors in src/chatgpt/selectors.ts`);
+  }
+
+  if (!relative.startsWith('src/config/') && /\bprocess\.env\b/.test(content)) {
+    errors.push(`${relative} reads process.env directly; runtime configuration belongs in src/config/`);
   }
 }
 
