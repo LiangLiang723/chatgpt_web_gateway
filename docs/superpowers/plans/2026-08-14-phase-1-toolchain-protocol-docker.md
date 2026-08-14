@@ -108,7 +108,7 @@ Keep future browser tuning variables only when they remain approved architecture
 Run: `corepack pnpm vitest run tests/unit/config.test.ts && corepack pnpm typecheck && corepack pnpm lint && corepack pnpm format:check`
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 Commit message: `🔧 建立 Phase 1 TypeScript 与配置工具链`
 
@@ -133,20 +133,20 @@ Commit message: `🔧 建立 Phase 1 TypeScript 与配置工具链`
 - Produces: `buildServer({ config, execute? }): FastifyInstance`.
 - Produces: `NormalizedExecutionHandler` placeholder interface for later POST routes.
 
-- [ ] **Step 1: Write failing authentication tests**
+- [x] **Step 1: Write failing authentication tests**
 
 Cover missing Authorization, wrong scheme, wrong key, and correct Bearer key. Assert errors never include the configured secret.
 
-- [ ] **Step 2: Run auth tests and verify red**
+- [x] **Step 2: Run auth tests and verify red**
 
 Run: `corepack pnpm vitest run tests/unit/auth.test.ts`
 Expected: FAIL because auth/error modules do not exist.
 
-- [ ] **Step 3: Implement stable API errors and bearer authentication**
+- [x] **Step 3: Implement stable API errors and bearer authentication**
 
 Use timing-safe comparison for equal-length secrets and return OpenAI-shaped errors at the Fastify boundary. Keep error classes free of Fastify types so they remain reusable.
 
-- [ ] **Step 4: Write failing route integration tests**
+- [x] **Step 4: Write failing route integration tests**
 
 Use Fastify `inject()` and explicit test config. Assertions:
 
@@ -162,20 +162,20 @@ expect((await app.inject({
 
 Also assert `/health` returns exactly the Phase 1 process-level status contract and that error responses have the OpenAI error envelope.
 
-- [ ] **Step 5: Run route tests and verify red**
+- [x] **Step 5: Run route tests and verify red**
 
 Run: `corepack pnpm vitest run tests/integration/health-models.test.ts`
 Expected: FAIL because server/routes are missing.
 
-- [ ] **Step 6: Implement server composition and two GET routes**
+- [x] **Step 6: Implement server composition and two GET routes**
 
 `buildServer` owns error mapping, auth hooks for `/v1/*`, and route registration. `/health` must not imply browser/login health. `/v1/models` exposes only `chatgpt-web`.
 
-- [ ] **Step 7: Add executable process entrypoint**
+- [x] **Step 7: Add executable process entrypoint**
 
 `src/index.ts` loads config, builds the server, listens on `config.host/config.port`, logs startup metadata without secrets, and performs graceful close on `SIGTERM`/`SIGINT`.
 
-- [ ] **Step 8: Run focused checks**
+- [x] **Step 8: Run focused checks**
 
 Run: `corepack pnpm vitest run tests/unit/auth.test.ts tests/integration/health-models.test.ts && corepack pnpm typecheck`
 Expected: PASS.
