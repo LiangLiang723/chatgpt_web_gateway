@@ -484,7 +484,7 @@ Commit:
 - Produces: `createPhase3Executor({ pagePool, driver, now }): NormalizedExecutionHandler` returning `Phase3TextExecutionResult`.
 - Produces stable execution errors `conversation_sync_not_implemented | unsupported_phase3_request`.
 
-- [ ] **Step 1: Write failing capability validation tests**
+- [x] **Step 1: Write failing capability validation tests**
 
 Build minimal normalized request fixture and prove accepted shape:
 
@@ -519,7 +519,7 @@ structured output
 output.mode=image
 ```
 
-- [ ] **Step 2: Run executor test and verify red**
+- [x] **Step 2: Run executor test and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/phase3-executor.test.ts
@@ -527,7 +527,7 @@ corepack pnpm vitest run tests/unit/phase3-executor.test.ts
 
 Expected: FAIL because executor does not exist.
 
-- [ ] **Step 3: Add envelope tests before implementation**
+- [x] **Step 3: Add envelope tests before implementation**
 
 Assert exact JSON semantic content rather than hand-written escaping:
 
@@ -543,7 +543,7 @@ expect(payload).toEqual({
 
 Multiple user text parts concatenate deterministically with newline separator; empty text-only user request is rejected as invalid Phase 3 input.
 
-- [ ] **Step 4: Implement validation + envelope + executor leasing**
+- [x] **Step 4: Implement validation + envelope + executor leasing**
 
 Executor must acquire and release in `finally`:
 
@@ -564,7 +564,7 @@ try {
 
 Tests must prove release on success, auth error, selector error, and timeout.
 
-- [ ] **Step 5: Run Task 4 verification**
+- [x] **Step 5: Run Task 4 verification**
 
 ```bash
 corepack pnpm vitest run tests/unit/phase3-executor.test.ts
@@ -575,7 +575,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 6: Update plan/state and commit Task 4**
+- [x] **Step 6: Update plan/state and commit Task 4**
 
 Commit:
 

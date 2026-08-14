@@ -13,7 +13,7 @@ STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
-NEXT_TASK=execute-phase-3-task-4-fresh-executor
+NEXT_TASK=execute-phase-3-task-5-api-encoding
 UPDATED_AT=2026-08-15
 ```
 
@@ -22,7 +22,7 @@ UPDATED_AT=2026-08-15
 - **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
 - **当前状态：** `active`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 执行 Phase 3 Task 4：Fresh 请求能力边界、instruction envelope 与 Page lease 编排。
+- **下一个可执行任务：** 执行 Phase 3 Task 5：Chat Completions / Responses 编码与稳定错误映射。
 - **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
@@ -61,6 +61,7 @@ UPDATED_AT=2026-08-15
 - ✅ Phase 3 BrowserManager / bounded Page Pool 核心库与 `MAX_ACTIVE_PAGES` 配置；尚未接入 Gateway runtime。
 - ✅ ChatGPT Selector Registry 与 Auth Probe 核心：unique/collection、fallback、missing/ambiguous、authenticated/auth_required/unknown；真实 DOM 尚待 E2E 校准。
 - ✅ Fresh ChatGPT text Driver 核心与 Completion Observer：Assistant baseline/new-turn ownership、生成状态与稳定文本采样；真实网页尚待 E2E 验证。
+- ✅ Phase3Executor Fresh-only capability boundary、JSON instruction envelope 与 Page lease finally-release；尚未接入生产 POST runtime。
 - ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
