@@ -10,6 +10,7 @@
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-0-foundation
 STATUS=ready-for-phase-1-design
+RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
 ACTIVE_PLAN=none
 NEXT_TASK=write-phase-1-toolchain-and-protocol-spec
@@ -52,9 +53,9 @@ UPDATED_AT=2026-08-14
 - ❌ ChatGPT 图片生成。
 - ❌ Docker / NAS 部署。
 
-**注意：V1 Approved Scope（已批准范围）不代表上述产品能力已经完成。**
+**注意：Approved Scope（已批准范围）不代表上述产品能力已经完成。**
 
-## V1 Approved Scope（V1 已批准范围）
+## Approved Scope（已批准产品范围）
 
 ### API
 
@@ -77,7 +78,7 @@ UPDATED_AT=2026-08-14
 - Tool Calling（工具调用）。
 - 基于 ChatGPT DOM（文档对象模型）的真 Streaming（流式输出）。
 - 完整对话持久化。
-- ChatGPT 图片生成；V1 非流式、`n=1`。
+- ChatGPT 图片生成；当前批准范围为非流式、`n=1`。
 - 同一 Conversation 串行，不同 Conversation 可并行。
 
 ## Architecture Facts（当前架构事实）
@@ -89,18 +90,19 @@ UPDATED_AT=2026-08-14
 - 一个 BrowserContext（浏览器上下文）管理多个 Page（网页标签）。
 - Context Sync 模式：`FRESH | APPEND | RESTORE | REBUILD`。
 - SQLite 是结构化 Conversation 状态的事实来源；文件字节使用文件系统。
-- Streaming 第一版采用约 200ms DOM polling（网页轮询）+ Stable Prefix（稳定前缀）。
+- Streaming 当前方案采用约 200ms DOM polling（网页轮询）+ Stable Prefix（稳定前缀）。
 - API Adapter（适配器）共享统一内部请求模型，不允许各自实现浏览器逻辑。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-14：建立 `V0.0.1` 初始版本，并将版本历史统一迁移到 `CHANGELOG.md`。
 - 2026-08-14：精简 `AGENTS.md` 为长期工作入口，移除一次性执行环境描述，并把代码边界与实现细节统一下沉到专项文档。
-- 2026-08-14：把 ChatGPT Web Gateway V1 的 API、Context Sync、Streaming、附件、Tools、图片生成和持久化决策汇总为 governing spec。
+- 2026-08-14：把 ChatGPT Web Gateway 的 API、Context Sync、Streaming、附件、Tools、图片生成和持久化决策汇总为 governing spec。
 - 2026-08-14：确认 B 方案 Living Repository（活仓库）作为项目治理模式。
 - 2026-08-14：参考 FlyMail 的 `AGENTS.md`，加入用户纠错沉淀、计划随事实更新、文档同步和 Agent 自我改进机制。
-- 2026-08-14：把“已实现”与“V1 已批准目标”严格拆开，避免 Agent 把设计目标误认成现有能力。
+- 2026-08-14：把“已实现”与“已批准产品范围”严格拆开，避免 Agent 把设计目标误认成现有能力。
 - 2026-08-14：加入可执行 `project-memory / docs / architecture` 仓库检查。
 
 ## Next Steps（下一步）
