@@ -13,7 +13,7 @@ STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
-NEXT_TASK=execute-phase-3-task-6-runtime-inspect
+NEXT_TASK=execute-phase-3-task-7-docker-architecture
 UPDATED_AT=2026-08-15
 ```
 
@@ -22,7 +22,7 @@ UPDATED_AT=2026-08-15
 - **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
 - **当前状态：** `active`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 执行 Phase 3 Task 6：Gateway Browser 生命周期、maintenance exclusion 与 `inspect:chatgpt`。
+- **下一个可执行任务：** 执行 Phase 3 Task 7：Docker headless Browser smoke 与架构约束。
 - **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
@@ -62,8 +62,10 @@ UPDATED_AT=2026-08-15
 - ✅ ChatGPT Selector Registry 与 Auth Probe 核心：unique/collection、fallback、missing/ambiguous、authenticated/auth_required/unknown；真实 DOM 尚待 E2E 校准。
 - ✅ Fresh ChatGPT text Driver 核心与 Completion Observer：Assistant baseline/new-turn ownership、生成状态与稳定文本采样；真实网页尚待 E2E 验证。
 - ✅ Phase3Executor Fresh-only capability boundary、JSON instruction envelope 与 Page lease finally-release；尚未接入生产 POST runtime。
-- ✅ Chat Completions / Responses 非流式文本编码与 stable execution error → OpenAI-style HTTP error 映射；生产 runtime 尚未注入真实 Executor。
-- ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime。
+- ✅ Chat Completions / Responses 非流式文本编码与 stable execution error → OpenAI-style HTTP error 映射。
+- ✅ Headless Gateway runtime 已注入 BrowserManager + Phase3Executor；`UI_MODE=novnc` 明确禁用产品 BrowserManager 并返回 `browser_maintenance_mode`。
+- ✅ `inspect:chatgpt` 核心与显式独立 Profile / 可选诊断产物安全边界；真实 ChatGPT 尚未运行。
+- ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker 进程边界尚待 Task 7 smoke 验证。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
 - ❌ 真 Streaming（流式输出）。

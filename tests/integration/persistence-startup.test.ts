@@ -21,9 +21,10 @@ describe('Gateway persistence startup', () => {
     const config = loadConfig({
       GATEWAY_API_KEY: 'test-key',
       DATA_DIR: dataDir,
+      UI_MODE: 'novnc',
     });
 
-    const runtime = createGatewayRuntime({
+    const runtime = await createGatewayRuntime({
       config,
       migrationsDir: paths.migrationsDir,
       logger: false,

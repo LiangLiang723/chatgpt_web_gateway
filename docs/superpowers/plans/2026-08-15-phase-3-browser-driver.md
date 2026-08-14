@@ -723,7 +723,7 @@ Commit:
 - Produces `inspectChatGpt({ profileDir, diagnosticsDir? })` and `pnpm inspect:chatgpt`.
 - Extends `CreateGatewayRuntimeOptions` with test-only `browserProfileDir?: string`; production callers omit it and always use `join(DATA_DIR, 'browser-profile')`.
 
-- [ ] **Step 1: Write failing runtime composition tests using injected BrowserManager factory**
+- [x] **Step 1: Write failing runtime composition tests using injected BrowserManager factory**
 
 Headless:
 
@@ -747,7 +747,7 @@ expect(response.json().error.code).toBe('browser_maintenance_mode');
 
 Also verify runtime close order and idempotence without opening TCP.
 
-- [ ] **Step 2: Run runtime tests and verify red**
+- [x] **Step 2: Run runtime tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/integration/runtime-browser.test.ts
@@ -755,7 +755,7 @@ corepack pnpm vitest run tests/integration/runtime-browser.test.ts
 
 Expected: FAIL because runtime has no BrowserManager composition.
 
-- [ ] **Step 3: Make `createGatewayRuntime` async and integrate BrowserManager**
+- [x] **Step 3: Make `createGatewayRuntime` async and integrate BrowserManager**
 
 Because Persistent Context launch is async, update production `src/index.ts` to:
 
@@ -771,7 +771,7 @@ const profileDir = options.browserProfileDir ?? join(options.config.dataDir, 'br
 
 Production `src/index.ts` never supplies this option. On headless Browser startup failure, close Persistence before rethrow. On maintenance mode, do not launch BrowserManager.
 
-- [ ] **Step 4: Write failing inspect CLI safety tests**
+- [x] **Step 4: Write failing inspect CLI safety tests**
 
 Prove:
 
@@ -787,7 +787,7 @@ CHATGPT_PROFILE_DIR === join(DATA_DIR, 'browser-profile') → e2e_profile_must_b
 
 No diagnostics path means no screenshot/HTML write calls.
 
-- [ ] **Step 5: Implement inspect core and CLI**
+- [x] **Step 5: Implement inspect core and CLI**
 
 `inspectChatGpt` launches its own Persistent Context using the explicitly supplied test Profile, opens ChatGPT, runs auth probe, and prints JSON selector status. Optional diagnostics directory creates only controlled screenshot + HTML snapshot.
 
@@ -799,7 +799,7 @@ No diagnostics path means no screenshot/HTML write calls.
 
 Prefer TypeScript `scripts/inspect-chatgpt.ts` so it can import source modules during development; build output need not include diagnostic CLI.
 
-- [ ] **Step 6: Extend `.gitignore` for diagnostic/test-profile artifacts**
+- [x] **Step 6: Extend `.gitignore` for diagnostic/test-profile artifacts**
 
 Ensure patterns cover repository-local variants such as:
 
@@ -811,7 +811,7 @@ Ensure patterns cover repository-local variants such as:
 
 Do not broadly ignore source fixture directories.
 
-- [ ] **Step 7: Run Task 6 verification**
+- [x] **Step 7: Run Task 6 verification**
 
 ```bash
 corepack pnpm vitest run tests/integration/runtime-browser.test.ts tests/unit/inspect-chatgpt.test.ts
@@ -822,7 +822,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 8: Update plan/state and commit Task 6**
+- [x] **Step 8: Update plan/state and commit Task 6**
 
 Commit:
 

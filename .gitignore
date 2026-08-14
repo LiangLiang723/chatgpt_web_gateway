@@ -20,6 +20,8 @@ playwright-report/
 test-results/
 blob-report/
 .auth/
+e2e-browser-profile/
+chatgpt-diagnostics/
 
 # Logs / temp
 *.log

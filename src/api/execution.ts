@@ -14,6 +14,19 @@ export type NormalizedExecutionHandler = (
   request: NormalizedRequest,
 ) => Promise<NormalizedExecutionResult>;
 
+export class BrowserMaintenanceModeError extends Error {
+  readonly code = 'browser_maintenance_mode';
+
+  constructor() {
+    super('Browser execution is disabled during maintenance mode');
+    this.name = 'BrowserMaintenanceModeError';
+  }
+}
+
 export const backendNotImplementedExecution: NormalizedExecutionHandler = async () => {
   throw new BackendNotImplementedError();
+};
+
+export const browserMaintenanceModeExecution: NormalizedExecutionHandler = async () => {
+  throw new BrowserMaintenanceModeError();
 };

@@ -2,7 +2,7 @@ import { loadConfig } from './config/index.js';
 import { createGatewayRuntime } from './runtime.js';
 
 const config = loadConfig();
-const runtime = createGatewayRuntime({ config, logger: true });
+const runtime = await createGatewayRuntime({ config, logger: true });
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   runtime.app.log.info({ signal }, 'Shutting down Gateway');
