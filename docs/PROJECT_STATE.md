@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-2-complete
-STATUS=ready-for-phase-3-design
+PHASE=phase-3-design
+STATUS=ready-for-phase-3-plan
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-3-browser-driver-spec
-UPDATED_AT=2026-08-14
+NEXT_TASK=write-phase-3-browser-driver-plan
+UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）已完成。
-- **当前状态：** `ready-for-phase-3-design`
-- **活动计划：** 无；Phase 2 实施计划已完成。
-- **下一个可执行任务：** 为 Phase 3“Playwright Chromium + 最小 ChatGPT Driver”编写并批准 spec。
-- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要 Phase 3 Browser / Driver 实现和显式 E2E（端到端）验证。
+- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）设计已批准，等待实施计划。
+- **当前状态：** `ready-for-phase-3-plan`
+- **活动计划：** 无；Phase 3 设计规格已批准。
+- **下一个可执行任务：** 编写 Phase 3 Browser / Driver implementation plan，并按 TDD 实施。
+- **当前 blocker（阻塞）：** 无实现 blocker。Phase 3 最终完成仍要求使用独立测试 Profile 的真实 ChatGPT 登录检查和 Fresh 文本 E2E。
 
 ## Implemented Now（当前已实现）
 
@@ -36,6 +36,7 @@ UPDATED_AT=2026-08-14
 - ✅ `docs/superpowers/specs/` / `plans/` 工作流目录。
 - ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计与实施计划。
 - ✅ Phase 2 `node:sqlite`、Migration、Repository 与 Conversation aggregate 持久化设计规格和实施计划。
+- ✅ Phase 3 Persistent BrowserContext / Page Pool / Selector Registry / Auth Probe / Fresh Text Driver / real E2E 设计规格。
 - ✅ 文档链接、项目记忆、架构和版本一致性检查。
 - ✅ TypeScript / Vitest 产品代码与测试基础。
 
@@ -130,10 +131,11 @@ UPDATED_AT=2026-08-14
 
 ## Next Steps（下一步）
 
-1. Phase 3 spec：Persistent BrowserContext、Browser Manager、手动登录流程、Page Pool、Selector Registry、`inspect:chatgpt` 和最小非流式文本 Driver。
-2. Phase 3 plan：把 Browser / Driver spec 拆成确定性测试与显式真实 E2E 任务。
-3. 实现正常 headless Browser Manager，并与现有 `/data/browser-profile/` 和 maintenance noVNC Profile 边界复用。
-4. 只有显式真实 E2E 通过后，才把 ChatGPT 当前登录、Selector 和文本问答标记为已验证。
+1. Phase 3 plan：把已批准的 Browser / Driver spec 拆成确定性测试、Docker 验证和显式真实 E2E 任务。
+2. 实现正常 headless BrowserManager + bounded Page Pool；`UI_MODE=novnc` 禁用产品 BrowserManager，避免 Profile 双 owner。
+3. 实现 Selector Registry、Auth Probe、`inspect:chatgpt`、Fresh text Driver 与 Phase3Executor。
+4. 接入 Chat Completions / Responses Fresh non-stream text 输出，并明确拒绝 Phase 4+ 能力。
+5. 使用独立测试 Profile 跑真实 auth/selector、Driver 和 Gateway HTTP E2E；只有全部通过后才把 Phase 3 标记完成。
 
 ## Known Risks（已知风险）
 

@@ -103,7 +103,7 @@ Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。�
 
 镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 
-持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，未来正常 browser runtime 与当前 noVNC maintenance browser 复用。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。noVNC overlay 默认只把维护端口绑定到宿主机 `127.0.0.1`；需要远程 NAS 访问时必须显式调整绑定并自行保证网络访问控制。
+持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，未来正常 browser runtime 与当前 noVNC maintenance browser 复用。**同一 Profile 同时只能有一个 Chromium owner**：Phase 3 起 `UI_MODE=headless` 由产品 BrowserManager 占用 Profile；`UI_MODE=novnc` 则明确禁用产品 BrowserManager，只启动 headed maintenance browser。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。noVNC overlay 默认只把维护端口绑定到宿主机 `127.0.0.1`；需要远程 NAS 访问时必须显式调整绑定并自行保证网络访问控制。
 
 ## Browser（浏览器）
 
@@ -118,7 +118,7 @@ Playwright
           └── Page C → Conversation C
 ```
 
-Page 数有上限，空闲 Page 可关闭；SQLite 保留会话状态，需要时重新打开 conversation URL。
+Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/关闭；Conversation Queue、idle Page 回收和 conversation URL restore 从 Phase 4 实现。SQLite 保留会话状态，后续恢复时再重新打开 conversation URL。
 
 故障恢复逐级升级：
 
