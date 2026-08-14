@@ -226,7 +226,7 @@ Commit:
 - Produces: `resolveUnique(page, definition)` and `resolveCollection(page, definition)`.
 - Produces: `probeAuth(page): Promise<ChatGptAuthState>`.
 
-- [ ] **Step 1: Write failing selector-registry tests**
+- [x] **Step 1: Write failing selector-registry tests**
 
 Use narrow fake `Page` / `Locator` objects that implement only the candidate factory and `count()` behavior required by the registry. Default `verify` must not need a real browser binary just to test selector resolution.
 
@@ -256,7 +256,7 @@ await expect(resolveUnique(ambiguousPage, definition)).rejects.toMatchObject({
 
 Collection resolution returns count without treating `count > 1` as ambiguity.
 
-- [ ] **Step 2: Run selector tests and verify red**
+- [x] **Step 2: Run selector tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-selector-registry.test.ts
@@ -264,7 +264,7 @@ corepack pnpm vitest run tests/unit/chatgpt-selector-registry.test.ts
 
 Expected: FAIL because selector modules do not exist.
 
-- [ ] **Step 3: Implement selector definitions and registry**
+- [x] **Step 3: Implement selector definitions and registry**
 
 Definitions must cover at minimum:
 
@@ -282,7 +282,7 @@ Candidate implementation may use `getByRole`, `getByPlaceholder`, and stable att
 
 Do not mark any candidate “real verified” until Task 9 real inspection.
 
-- [ ] **Step 4: Write failing auth probe tests**
+- [x] **Step 4: Write failing auth probe tests**
 
 Prove:
 
@@ -294,7 +294,7 @@ expect((await probeAuth(unknownPage)).state).toBe('unknown');
 
 If composer itself is ambiguous, do not return `auth_required`; preserve selector ambiguity.
 
-- [ ] **Step 5: Run auth tests and verify red**
+- [x] **Step 5: Run auth tests and verify red**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-auth.test.ts
@@ -302,7 +302,7 @@ corepack pnpm vitest run tests/unit/chatgpt-auth.test.ts
 
 Expected: FAIL because auth probe does not exist.
 
-- [ ] **Step 6: Implement `probeAuth`**
+- [x] **Step 6: Implement `probeAuth`**
 
 Order:
 
@@ -317,7 +317,7 @@ if (login.status === 'ambiguous') throw selectorAmbiguous(...);
 return { state: 'unknown', reason: 'composer_and_login_indicator_missing' };
 ```
 
-- [ ] **Step 7: Run Task 2 verification**
+- [x] **Step 7: Run Task 2 verification**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-selector-registry.test.ts tests/unit/chatgpt-auth.test.ts
@@ -328,7 +328,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 8: Update plan/state and commit Task 2**
+- [x] **Step 8: Update plan/state and commit Task 2**
 
 Commit:
 
