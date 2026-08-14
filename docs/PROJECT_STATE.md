@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-1-implementation
-STATUS=active
+PHASE=phase-1-complete
+STATUS=ready-for-phase-2-design
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md
-NEXT_TASK=execute-phase-1-task-7-docker-runtime
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
+ACTIVE_PLAN=none
+NEXT_TASK=write-phase-2-persistence-spec
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker Implementation（工具链 / 协议 / Docker 实施）。
-- **当前状态：** `active`
-- **活动计划：** [`2026-08-14-phase-1-toolchain-protocol-docker.md`](superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md)。
-- **下一个可执行任务：** 执行 Phase 1 Task 7：完整 Docker 运行时与 noVNC 维护 Overlay。
-- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
+- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker（工具链 / 协议 / Docker）已完成。
+- **当前状态：** `ready-for-phase-2-design`
+- **活动计划：** 无；Phase 1 实施计划已完成，进入 Phase 2 前先建立 SQLite / Conversation persistence（持久化）spec 和 plan。
+- **下一个可执行任务：** 为 Phase 2“SQLite + Conversation 持久化”编写并批准 spec。
+- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 Browser / Driver Phase 和显式 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
 
@@ -34,27 +34,33 @@ UPDATED_AT=2026-08-14
 - ✅ `PROJECT_STATE.md` 机器可检查状态头。
 - ✅ 架构、API 兼容、测试、Git、Roadmap（路线图）文档。
 - ✅ `docs/superpowers/specs/` / `plans/` 工作流目录。
-- ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计规格。
-- ✅ 文档链接检查脚本。
-- ✅ 项目记忆一致性检查脚本。
-- ✅ 基础架构依赖检查脚本。
-- ✅ `src/` / `tests/` 空模块骨架。
+- ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计与实施计划。
+- ✅ 文档链接、项目记忆、架构和版本一致性检查。
+- ✅ TypeScript / Vitest 产品代码与测试基础。
 
 ### 产品代码
 
-- ❌ Fastify（Web 服务框架）HTTP Server。
-- ❌ OpenAI 请求 Schema（结构）与 Normalizer（标准化器）。
+- ✅ Fastify（Web 服务框架）HTTP Server。
+- ✅ Gateway Bearer API Key 认证；`/health` 免认证，`/v1/*` 默认认证。
+- ✅ `GET /health` 与 `GET /v1/models`；模型列表只暴露 `chatgpt-web`。
+- ✅ Chat Completions / Responses TypeBox/Ajv 请求 Schema（结构）。
+- ✅ 两套协议共享的 `NormalizedRequest` 与纯 Normalizer（标准化器）。
+- ✅ `X-Conversation-Key` 协议扩展、Tool Schema / Tool Choice、Structured Output、附件描述标准化。
+- ✅ ignored 参数诊断与 unsupported 参数稳定错误。
+- ✅ 两个 POST 路由完成 HTTP → Schema → Normalizer → injected execution boundary；默认生产执行器明确返回 `501 backend_not_implemented`，不伪造 ChatGPT 回答。
+- ✅ 完整 `linux/amd64` Docker 运行基础：Playwright Chromium 镜像、Compose、`/data` Bind Mount、动态非 root `PUID/PGID`。
+- ✅ 按需 noVNC maintenance overlay；默认 headless Compose 不启动维护进程、不发布 noVNC 端口。
 - ❌ SQLite 持久化。
-- ❌ Playwright Chromium 生命周期。
+- ❌ 产品级 Playwright Chromium 生命周期 / Browser Manager。
 - ❌ ChatGPT Driver（网页驱动）。
 - ❌ Context Sync（上下文同步）。
 - ❌ 真 Streaming（流式输出）。
-- ❌ 文件 / 图片输入。
-- ❌ Tool Calling（工具调用）。
+- ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
+- ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
 - ❌ ChatGPT 图片生成。
-- ❌ Docker / NAS 运行实现。
+- ❌ NAS 实机部署、备份/恢复和生产运维成熟化。
 
-**注意：Approved Scope（已批准范围）不代表上述产品能力已经完成。**
+**注意：Approved Scope（已批准范围）不代表上述未实现产品能力已经完成。**
 
 ## Approved Scope（已批准产品范围）
 
@@ -86,43 +92,43 @@ UPDATED_AT=2026-08-14
 
 - ChatGPT Web only（仅 ChatGPT 网页）。
 - OpenAI Compatible API only（仅 OpenAI 兼容接口）。
-- Playwright 自带 Chromium。
+- Playwright 自带 Chromium；项目 package 与官方镜像当前固定为 `1.62.1`。
+- Phase 1 Docker 实测运行时为 `linux/amd64` + Node `v24.18.1`。
 - 不使用 ChatGPT 私有 `/backend-api`。
-- 一个 BrowserContext（浏览器上下文）管理多个 Page（网页标签）。
-- Context Sync 模式：`FRESH | APPEND | RESTORE | REBUILD`。
-- SQLite 是结构化 Conversation 状态的事实来源；文件字节使用文件系统。
-- Streaming 当前方案采用约 200ms DOM polling（网页轮询）+ Stable Prefix（稳定前缀）。
 - API Adapter（适配器）共享统一内部请求模型，不允许各自实现浏览器逻辑。
+- `NormalizedRequest` 当前包含 `toolChoice` 与 `diagnostics.ignoredParameters`，用于保留协议策略和明确记录网页无法真实执行的 ignored 参数。
+- 配置集中在 `src/config/`；架构检查禁止其他 `src/` 模块直接读取 `process.env`。
 - Docker 从 Phase 1 起是正式运行边界；目标平台先锁定 `linux/amd64`。
-- 默认 headless；noVNC 只通过维护 overlay 按需启用，正常运行不启动也不发布 noVNC。
+- Phase 1 普通 Compose 当前只启动 Gateway；产品级 headless Browser Manager 属于 Phase 3。
+- noVNC 只通过维护 overlay 按需启用，默认宿主机绑定 `127.0.0.1`，正常运行不启动也不发布 noVNC。
+- `/data/browser-profile/` 是未来正常 browser runtime 与当前 maintenance browser 共用的持久 Profile 边界。
 - `/health` 无需认证；所有 `/v1/*` 默认要求 Gateway Bearer API Key。
 - `X-Conversation-Key` 是受控兼容扩展，协议层只负责标准化，不提前实现会话生命周期。
+- 后续设计仍保持一个 BrowserContext 管理多个 Page、Context Sync `FRESH | APPEND | RESTORE | REBUILD`、SQLite 为 Conversation 事实来源、约 200ms DOM polling + Stable Prefix Streaming。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-14：完成 Phase 1 工具链 / 协议 / Docker 设计讨论并写入正式 spec；Docker 正式运行边界从 Phase 9 前移到 Phase 1，依赖升级流程同步固化。
-- 2026-08-14：建立 `V0.0.1` 初始版本，并将版本历史统一迁移到 `CHANGELOG.md`。
-- 2026-08-14：精简 `AGENTS.md` 为长期工作入口，移除一次性执行环境描述，并把代码边界与实现细节统一下沉到专项文档。
-- 2026-08-14：把 ChatGPT Web Gateway 的 API、Context Sync、Streaming、附件、Tools、图片生成和持久化决策汇总为 governing spec。
-- 2026-08-14：确认 B 方案 Living Repository（活仓库）作为项目治理模式。
-- 2026-08-14：参考 FlyMail 的 `AGENTS.md`，加入用户纠错沉淀、计划随事实更新、文档同步和 Agent 自我改进机制。
-- 2026-08-14：把“已实现”与“已批准产品范围”严格拆开，避免 Agent 把设计目标误认成现有能力。
-- 2026-08-14：加入可执行 `project-memory / docs / architecture` 仓库检查。
+- 2026-08-14：完成 Phase 1 实施：TypeScript/Fastify/TypeBox 工具链、认证、统一 Chat Completions / Responses Normalizer、基础 GET/POST 路由和 40 个确定性测试。
+- 2026-08-14：完成正式 `linux/amd64` Docker 运行基础与 noVNC maintenance overlay；Docker smoke 验证 Node 24、HTTP 认证、Bind Mount、非 root `PUID/PGID`、维护进程/端口隔离和 noVNC 页面。
+- 2026-08-14：固化 pnpm/Corepack 精确版本、pnpm 11 build-script allowlist 和整套“升级项目依赖”流程。
+- 2026-08-14：完成 Phase 1 工具链 / 协议 / Docker 设计讨论；Docker 正式运行边界从 Phase 9 前移到 Phase 1。
+- 2026-08-14：建立 `V0.0.1` 初始版本和 Living Repository（活仓库）治理体系。
 
 ## Next Steps（下一步）
 
-1. 用户审阅并批准 Phase 1 书面 spec。
-2. Phase 1 plan：把 spec 拆成可测试任务。
-3. 实现 TypeScript / pnpm / Fastify / TypeBox 工具链、认证、统一 Normalizer 和正式 Docker 运行边界。
-4. 完成 `/health`、`/v1/models`、两类 POST Adapter 与 Docker smoke 的最小闭环。
-5. 按 [`roadmap.md`](roadmap.md) 逐 Phase 推进。
+1. Phase 2 spec：SQLite schema / migration、Conversation / Message / Tool Call / File / Attachment / Generated Image Repository 边界。
+2. Phase 2 plan：把持久化 spec 拆成可测试任务。
+3. 实现数据库迁移和完整会话保存/加载，在进程重启后恢复结构化状态。
+4. Phase 3 再实现正常运行的 Playwright Browser Manager、登录脚本、Selector Registry、ChatGPT Driver 与真实文本 E2E。
 
 ## Known Risks（已知风险）
 
-- Playwright 官方镜像内置 Node 版本可能与批准的 Node LTS 不同步；Docker 构建必须显式校验版本组合。
-- ChatGPT 网页 DOM 会变化；Selector 必须集中并有诊断工具。
-- ChatGPT Web 自动化不是官方 OpenAI API，可靠性和平台限制必须通过保守并发与恢复策略控制。
+- **真实 ChatGPT Web E2E 尚未运行。** 当前不能证明 ChatGPT Selector、真实登录、实际文件上传或图片生成可用。
+- maintenance browser 已在 `about:blank` 下通过 Docker smoke，但尚未用真实 ChatGPT 账号完成首次登录流程验证。
+- Phase 1 POST 端点只有协议闭环，默认生产执行器返回 `501 backend_not_implemented`，在 Phase 3/4 前不能用于真实聊天。
+- 当前 Docker 验收矩阵只有 `linux/amd64`，未验证 ARM64。
+- ChatGPT 网页 DOM 会变化；后续 Selector 必须集中并有诊断工具。
 - Tool Calling 是 Gateway 的 Prompt + Parser 模拟层，不应伪装成 ChatGPT Web 原生工具协议。
-- 真正的网页兼容性只有真实 E2E 才能证明；普通 Unit（单元）/Integration（集成）测试不能替代。
+- 真正的网页兼容性只有真实 E2E 才能证明；普通 Unit（单元）/Integration（集成）/Docker smoke 不能替代。

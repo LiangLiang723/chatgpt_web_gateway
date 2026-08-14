@@ -84,7 +84,9 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - `/health` 可访问。
 - `/v1/models` 的 API Key 认证正确。
 - `/data` Bind Mount 可写，长期进程非 root。
-- noVNC overlay 只在维护配置下启动并发布端口。
+- noVNC overlay 只在维护配置下启动并发布端口；默认宿主机绑定为 `127.0.0.1`。
+- noVNC HTML 入口可访问，Xvfb / x11vnc / websockify / maintenance browser 均以指定 `PUID/PGID` 运行。
+- noVNC 密码不出现在进程命令行参数中。
 
 Docker smoke 不等于真实 ChatGPT E2E，不能用来证明 Selector、登录、上传或图片生成有效。
 
@@ -93,19 +95,19 @@ Docker smoke 不等于真实 ChatGPT E2E，不能用来证明 Selector、登录�
 Phase 1 建立完整工具链后：
 
 ```text
-pnpm typecheck
-pnpm lint
-pnpm format:check
-pnpm test
-pnpm check:architecture
-pnpm check:project-memory
-pnpm check:docs
-pnpm check:version
-pnpm build
-pnpm verify
+corepack pnpm typecheck
+corepack pnpm lint
+corepack pnpm format:check
+corepack pnpm test
+corepack pnpm build
+corepack pnpm verify
+corepack pnpm docker:build
+corepack pnpm docker:smoke
 ```
 
-`pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+
+`corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
 ## 不能伪造的验证
 

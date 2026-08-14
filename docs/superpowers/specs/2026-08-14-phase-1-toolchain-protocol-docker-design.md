@@ -1,7 +1,7 @@
 # Phase 1 Toolchain, Protocol Model, and Docker Runtime Design
 
 **Date:** 2026-08-14
-**Status:** Approved; implementation active
+**Status:** Approved; Phase 1 implemented and verified
 **Scope:** Phase 1
 
 ## 1. Goal（目标）
@@ -126,7 +126,7 @@ UI_MODE=novnc      首次登录、重新认证或人工排障
 正常模式：
 
 - Gateway 运行。
-- Chromium 以 headless 方式运行（进入浏览器 Phase 后）。
+- Phase 1 镜像包含 Playwright bundled Chromium，但产品级 Chromium 生命周期在 Browser Phase 才启用；Phase 1 普通模式不会为了“看起来完整”而启动一个无 Driver 的空浏览器进程。
 - Xvfb / VNC / noVNC / 轻量窗口管理器不启动。
 - noVNC 端口不发布。
 
@@ -252,16 +252,20 @@ interface NormalizedRequest {
   instructions: NormalizedInstruction[];
   messages: NormalizedMessage[];
   tools: NormalizedTool[];
+  toolChoice: NormalizedToolChoice;
   attachments: NormalizedAttachment[];
   output: {
     mode: 'text' | 'image';
     stream: boolean;
     structured?: NormalizedStructuredOutput;
   };
+  diagnostics: {
+    ignoredParameters: string[];
+  };
 }
 ```
 
-Phase 1 必须定义这些子结构的最小稳定边界，并测试语义等价输入得到一致内部表达。
+Phase 1 必须定义这些子结构的最小稳定边界，并测试语义等价输入得到一致内部表达。`toolChoice` 显式保留调用策略；`diagnostics.ignoredParameters` 明确记录协议已接受但 ChatGPT Web 无法真实执行的参数，避免 ignored 行为只存在日志或隐式约定中。
 
 ### 9.1 Instructions（指令）
 

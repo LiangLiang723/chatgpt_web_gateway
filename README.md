@@ -2,9 +2,32 @@
 
 一个只面向 **ChatGPT Web（ChatGPT 网页）** 的 OpenAI Compatible API（OpenAI 兼容接口）网关。
 
-项目使用 Playwright（浏览器自动化框架）自带 Chromium（浏览器）操作 `chatgpt.com`，把网页能力转换为通用 OpenAI 风格接口，供任意支持 OpenAI API（应用程序接口）的 Agent（智能体）或客户端调用。
+项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 主要能力
+## 当前已实现：Phase 1
+
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界：
+
+- TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
+- Vitest、ESLint、Prettier 和确定性 `verify`。
+- `GET /health`。
+- `GET /v1/models`，默认只暴露 `chatgpt-web`。
+- `/v1/*` Bearer API Key 认证；`/health` 无需认证。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 的 Schema 校验和统一 `NormalizedRequest` Normalizer。
+- `X-Conversation-Key` 兼容扩展。
+- 文本、图片/文件描述、Tools、Structured Output、ignored/unsupported 参数的协议标准化。
+- 完整 `linux/amd64` Docker 镜像。
+- `/data` Bind Mount、动态 `PUID/PGID` 非 root 运行。
+- 默认 headless Compose 与按需 noVNC maintenance overlay。
+- Docker build / smoke 自动验证。
+
+**Phase 1 还没有 ChatGPT 执行后端。** 两个 POST 接口会完成协议解析，但默认执行边界明确返回 HTTP `501` / `backend_not_implemented`；不会伪造 Assistant 回答。
+
+尚未实现的核心能力包括 SQLite、Conversation Engine、正常模式 Browser Manager、ChatGPT DOM Driver、真实 Streaming、附件上传、Tool Calling 执行闭环和图片生成。真实 ChatGPT 页面也尚未做 E2E 验证。
+
+## V1 批准范围
+
+V1 最终目标包括：
 
 - `GET /health`
 - `GET /v1/models`
@@ -16,106 +39,215 @@
 - `GET /v1/files/:id/content`
 - `DELETE /v1/files/:id`
 - `POST /v1/images/generations`
-- 文本、图片 URL、Base64 图片、文件输入
-- `file_id` 文件复用
-- Tool Calling（工具调用）
-- 真 DOM（文档对象模型）Streaming（流式输出）
-- 完整 Conversation（对话）持久化
-- SQLite（嵌入式数据库）保存结构化状态
-- 同 Conversation 串行、不同 Conversation 可并行
+- 多轮 Conversation、Context Sync、真 DOM Streaming
+- 图片/文件输入与 `file_id` 复用
+- Tool Calling
+- SQLite 完整会话持久化
+- 多 Conversation 并行
 - ChatGPT 图片生成
 
-> 上述是项目批准的产品范围，不代表当前都已实现。真实实现状态以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
+> 这是已批准产品范围，不代表上述能力已经全部实现。
+
+## Docker 运行
+
+### 1. 准备配置
+
+复制示例配置：
+
+```bash
+cp .env.example .env
+```
+
+至少修改：
+
+```dotenv
+GATEWAY_API_KEY=replace-with-a-long-random-secret
+DATA_PATH=./data
+PUID=1000
+PGID=1000
+```
+
+`.env` 已被 Git 忽略，不得提交真实 API Key、Cookie 或 Browser Profile。
+
+### 2. 构建并启动普通模式
+
+```bash
+corepack pnpm docker:build
+docker compose up -d
+```
+
+普通 Compose：
+
+- 默认映射 Gateway `3000` 端口。
+- 默认 `UI_MODE=headless`。
+- **不会启动 noVNC / Xvfb / x11vnc / maintenance browser。**
+- **不会发布 noVNC 端口。**
+- 当前 Phase 1 的普通 Gateway 也不会启动产品级 Chromium Driver；该能力属于后续 Browser Phase。
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:3000/health
+```
+
+模型列表需要认证：
+
+```bash
+curl \
+  -H "Authorization: Bearer replace-with-the-key-from-.env" \
+  http://127.0.0.1:3000/v1/models
+```
+
+### 3. 持久化目录
+
+Compose 默认：
+
+```text
+${DATA_PATH:-./data} → /data
+```
+
+容器内预留：
+
+```text
+/data/
+├── gateway.db
+├── browser-profile/
+├── files/
+├── generated/
+├── temp/
+└── logs/
+```
+
+Phase 1 已验证 Bind Mount 可由指定 `PUID/PGID` 非 root 进程写入。SQLite 和真实业务文件会在后续 Phase 实现。
+
+## noVNC 维护模式
+
+noVNC 是**首次登录、重新认证和人工排障入口**，不是正常运行依赖。
+
+先在 `.env` 中设置独立维护密码：
+
+```dotenv
+NOVNC_PASSWORD=replace-with-another-strong-secret
+```
+
+启动维护 Overlay：
+
+```bash
+docker compose -f compose.yaml -f compose.novnc.yaml up -d
+```
+
+默认只把 noVNC 绑定到宿主机：
+
+```text
+127.0.0.1:6080
+```
+
+如果 NAS 需要从其他设备访问，可以显式修改 `NOVNC_BIND`，但这会扩大访问面，应由部署网络、防火墙或反向代理保证安全。
+
+维护模式使用同一 `/data/browser-profile/`。完成登录或排障后恢复普通模式：
+
+```bash
+docker compose -f compose.yaml -f compose.novnc.yaml down
+docker compose up -d
+```
+
+> 当前 maintenance browser 已通过本地 Docker smoke 验证能以 headed Chromium 启动；**尚未使用真实 ChatGPT 账号完成登录 E2E**。
+
+## 配置摘要
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `HOST` | `0.0.0.0` | Gateway 容器内监听地址 |
+| `PORT` | `3000` | Gateway 端口 |
+| `GATEWAY_BIND` | `0.0.0.0` | Compose 宿主机 API 绑定地址 |
+| `GATEWAY_API_KEY` | 无 | 必填；`/v1/*` Bearer Key |
+| `DATA_PATH` | `./data` | 宿主机 Bind Mount 路径 |
+| `PUID` | `1000` | 长期业务进程 UID |
+| `PGID` | `1000` | 长期业务进程 GID |
+| `NOVNC_BIND` | `127.0.0.1` | noVNC 宿主机绑定地址 |
+| `NOVNC_PORT` | `6080` | noVNC 端口 |
+| `NOVNC_PASSWORD` | 无 | 仅 maintenance mode 必填 |
+| `MAINTENANCE_URL` | `https://chatgpt.com/` | headed maintenance browser 初始页面 |
+
+## 开发与验证
+
+项目锁定 pnpm 版本，通过 Corepack 使用，不要求宿主机全局安装 pnpm：
+
+```bash
+corepack pnpm install
+corepack pnpm verify
+```
+
+Docker 验证：
+
+```bash
+corepack pnpm docker:build
+corepack pnpm docker:smoke
+```
+
+`verify` 不访问真实 ChatGPT；Docker smoke 也使用 `about:blank` 验证 maintenance browser，不需要账号或外网 ChatGPT 登录态。
+
+真实 ChatGPT E2E 必须显式开启，且只有后续 Browser / Driver Phase 实现后才有意义。
 
 ## 明确不做
 
-- Claude / Gemini / Grok 等其他 Provider（服务商）
-- Anthropic Compatible API（Anthropic 兼容接口）
+- Claude / Gemini / Grok 等其他 Provider
+- Anthropic Compatible API
 - ChatGPT 私有 `/backend-api` 逆向调用
 - Google Chrome / Edge / Firefox / WebKit 兼容层
-- noVNC（网页远程桌面）核心依赖
-- Audio（音频）、Embeddings（向量嵌入）、Realtime（实时接口）、Batches（批处理）、Fine-tuning（微调）、Vector Stores（向量存储）等无法自然映射到 ChatGPT Web 的接口
+- 把 noVNC 作为正常运行核心依赖
+- Audio、Embeddings、Realtime、Batches、Fine-tuning、Vector Stores 等无法自然映射到 ChatGPT Web 的接口
 
 ## 架构概览
 
 ```text
-任意 OpenAI API Client / Agent
-            │
-            ▼
- OpenAI Compatible API
-            │
-            ▼
-   Request Normalizer
-            │
-            ▼
-  Conversation Engine
-      ├── Context Sync
-      ├── Tool Manager
-      ├── Attachments
-      └── Streaming
-            │
-            ▼
-     ChatGPT Driver
-            │
-            ▼
-       Playwright
-            │
-            ▼
- Playwright Chromium
-            │
-            ▼
-       chatgpt.com
+OpenAI Compatible Client / Agent
+              │
+              ▼
+          API Layer
+              │
+              ▼
+      Request Normalizer
+              │
+              ▼
+       NormalizedRequest
+              │
+              ▼
+       Conversation Engine        ← 后续 Phase
+              │
+              ▼
+        ChatGPT Driver            ← 后续 Phase
+              │
+              ▼
+     Playwright Chromium
+              │
+              ▼
+          chatgpt.com
 ```
 
 ## Living Repository（活仓库）
 
-本项目不把聊天记录当作项目记忆。长期事实必须写回仓库：
+长期事实写回仓库，不依赖聊天记录：
 
-- [`AGENTS.md`](AGENTS.md)：Agent 怎么工作。
-- [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)：现在真实实现到哪里、下一步是什么。
-- [`docs/architecture.md`](docs/architecture.md)：系统为什么这样设计。
-- [`docs/api-compatibility.md`](docs/api-compatibility.md)：当前对外协议兼容程度。
-- [`docs/project-memory-protocol.md`](docs/project-memory-protocol.md)：任务结束时哪些事实必须回写。
-- [`docs/superpowers/specs/`](docs/superpowers/specs/)：设计决策。
+- [`AGENTS.md`](AGENTS.md)：Agent 工作规则。
+- [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)：当前真实实现、下一任务和 blocker。
+- [`docs/architecture.md`](docs/architecture.md)：稳定架构和模块边界。
+- [`docs/api-compatibility.md`](docs/api-compatibility.md)：目标兼容范围与当前协议实现说明。
+- [`docs/testing.md`](docs/testing.md)：测试层级和完成门槛。
+- [`docs/development-workflow.md`](docs/development-workflow.md)：开发和整套依赖升级流程。
+- [`docs/superpowers/specs/`](docs/superpowers/specs/)：设计规格。
 - [`docs/superpowers/plans/`](docs/superpowers/plans/)：实施计划与执行状态。
 
-仓库提供机器检查：
-
-```bash
-node scripts/check-project-memory.mjs
-node scripts/check-docs.mjs
-node scripts/check-architecture.mjs
-node scripts/check-version.mjs
-```
-
-如果本机安装了 pnpm（高性能 Node.js 包管理器），也可以运行：
-
-```bash
-pnpm verify:repo
-```
-
-## 当前真实状态
-
-**目前只有项目治理、架构和空模块骨架，尚未实现 HTTP Server（HTTP 服务）、Playwright 自动化、SQLite 或 API 路由。**
-
-请始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 的 `Implemented Now（当前已实现）` 为准。
-
-## 开始开发
-
-Agent / 开发者进入仓库后先阅读：
-
-1. [`AGENTS.md`](AGENTS.md)
-2. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-3. `PROJECT_STATE` 指向的 Active Plan（活动计划）
-4. 当前任务相关文档、源码与测试
-
-开发完整流程见 [`docs/development-workflow.md`](docs/development-workflow.md)。
+Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`、Active Plan 和当前任务相关源码/测试。
 
 ## 版本与变更
 
-- 版本规则见 [`docs/versioning.md`](docs/versioning.md)。
-- 版本修改记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+- 当前仓库版本：`V0.0.1`。
+- 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
+- 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+本次 Phase 1 实现本身不创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
 
 ## 开源协议
 
-本项目采用 [MIT License](LICENSE) 开源协议。你可以自由使用、修改、分发和二次开发，但需保留原始版权与许可声明。
+本项目采用 [MIT License](LICENSE)。

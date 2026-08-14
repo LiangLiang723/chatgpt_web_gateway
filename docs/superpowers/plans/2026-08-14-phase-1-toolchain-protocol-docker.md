@@ -443,7 +443,7 @@ Base Compose uses the bind mount `${DATA_PATH:-./data}:/data`, Gateway port vari
 Run: `corepack pnpm docker:build && corepack pnpm docker:smoke`
 Expected: PASS for all deterministic checks. The final smoke also verifies the noVNC HTML endpoint, maintenance process UID/GID, password absence from process arguments, and that the maintenance browser remains alive against `about:blank`. Real ChatGPT login is intentionally not exercised.
 
-- [ ] **Step 9: Commit Task 7**
+- [x] **Step 9: Commit Task 7**
 
 Commit message: `🐳 增加完整 Gateway Docker 与 noVNC 维护模式`
 
@@ -463,33 +463,47 @@ Commit message: `🐳 增加完整 Gateway Docker 与 noVNC 维护模式`
 **Interfaces:**
 - Produces: current project facts sufficient for a new agent to know Phase 1 is implemented, what commands prove it, and what remains unverified.
 
-- [ ] **Step 1: Run complete deterministic product verification**
+- [x] **Step 1: Run complete deterministic product verification**
 
 Run: `corepack pnpm verify`
 Expected: PASS with zero test/lint/type/build/repository failures.
 
-- [ ] **Step 2: Run fresh Docker verification**
+- [x] **Step 2: Run fresh Docker verification**
 
 Run: `corepack pnpm docker:build && corepack pnpm docker:smoke`
 Expected: PASS.
 
-- [ ] **Step 3: Verify requirements line by line**
+- [x] **Step 3: Verify requirements line by line**
 
-Check all 13 Phase 1 acceptance criteria from the governing spec against current source/tests/runtime evidence. Any unmet criterion remains `[!]` in this plan and keeps `PROJECT_STATE` from claiming Phase 1 completion.
+Check all 13 Phase 1 acceptance criteria from the governing spec against current source/tests/runtime evidence. All 13 are satisfied by current evidence:
 
-- [ ] **Step 4: Update human-facing usage documentation**
+1. exact TypeScript/pnpm/Fastify/TypeBox/Ajv/Vitest/ESLint/Prettier toolchain executes;
+2. `corepack pnpm verify` passes deterministically with 40/40 tests;
+3. `/health` and `/v1/models` integration tests and Docker smoke pass;
+4. Bearer authentication is covered by unit/integration/smoke tests;
+5. both public POST schemas normalize to `NormalizedRequest`;
+6. semantic parity test proves equivalent Chat/Responses inputs converge;
+7. ignored/unsupported behavior has focused tests;
+8. `X-Conversation-Key` reaches the unified model while no lifecycle is implemented;
+9. fresh `linux/amd64` Docker build and Compose smoke pass;
+10. base Compose has no maintenance processes/port and overlay-only noVNC passes;
+11. bind mount write plus non-root `PUID/PGID` checks pass for Gateway and maintenance processes;
+12. docs explicitly state real ChatGPT E2E is not run;
+13. full-stack dependency upgrade workflow is persisted in `docs/development-workflow.md`.
+
+- [x] **Step 4: Update human-facing usage documentation**
 
 README must document normal Compose startup, `.env` setup, Gateway authentication, `/data` bind mount, maintenance overlay usage, and the explicit statement that real ChatGPT execution is not implemented until later phases.
 
-- [ ] **Step 5: Apply Project Memory writeback**
+- [x] **Step 5: Apply Project Memory writeback**
 
 If all deterministic acceptance criteria pass, update `PROJECT_STATE` to Phase 1 implemented / ready for Phase 2 design. Keep real ChatGPT E2E listed as unverified and do not mark browser-driver capabilities implemented.
 
-- [ ] **Step 6: Mark every completed plan checkbox with current evidence**
+- [x] **Step 6: Mark every completed plan checkbox with current evidence**
 
 Use `[x]` only for executed/verified steps; `[!]` for blockers and `[-]` only for superseded steps with explanation.
 
-- [ ] **Step 7: Run repository governance and Git hygiene checks**
+- [x] **Step 7: Run repository governance and Git hygiene checks**
 
 Run:
 

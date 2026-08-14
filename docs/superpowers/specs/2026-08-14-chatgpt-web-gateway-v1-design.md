@@ -56,11 +56,15 @@ interface NormalizedRequest {
   instructions: NormalizedInstruction[];
   messages: NormalizedMessage[];
   tools: NormalizedTool[];
+  toolChoice: NormalizedToolChoice;
   attachments: NormalizedAttachment[];
   output: {
     mode: 'text' | 'image';
     stream: boolean;
     structured?: NormalizedStructuredOutput;
+  };
+  diagnostics: {
+    ignoredParameters: string[];
   };
 }
 ```
@@ -133,7 +137,7 @@ PAGE_IDLE_TIMEOUT_MINUTES=30
 
 Docker 从 Phase 1 起作为正式运行边界。目标平台先锁定 `linux/amd64`，完整镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。项目 Playwright package 与镜像浏览器版本必须匹配；Node LTS 独立校验，不能假设基础镜像内置 Node 永远与项目批准 LTS 一致。
 
-正常运行默认 `UI_MODE=headless`。首次登录、重新认证或人工排障时使用基础 Compose + noVNC 维护 overlay，临时启动 Xvfb / VNC / noVNC 并发布维护端口；正常模式不启动这些进程，也不发布 noVNC 端口。两种模式复用 `/data/browser-profile/`。
+正常运行默认 `UI_MODE=headless`。Phase 1 镜像已经包含 Playwright bundled Chromium，但正常模式的产品级 Browser Manager / headless Chromium 生命周期从 Browser Phase 开始启用。首次登录、重新认证或人工排障时使用基础 Compose + noVNC 维护 overlay，临时启动 Xvfb / VNC / noVNC 和 headed maintenance browser 并发布维护端口；正常模式不启动这些维护进程，也不发布 noVNC 端口。两种模式复用 `/data/browser-profile/`。
 
 V1：
 

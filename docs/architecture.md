@@ -67,11 +67,15 @@ interface NormalizedRequest {
   instructions: NormalizedInstruction[];
   messages: NormalizedMessage[];
   tools: NormalizedTool[];
+  toolChoice: NormalizedToolChoice;
   attachments: NormalizedAttachment[];
   output: {
     mode: 'text' | 'image';
     stream: boolean;
     structured?: NormalizedStructuredOutput;
+  };
+  diagnostics: {
+    ignoredParameters: string[];
   };
 }
 ```
@@ -95,11 +99,11 @@ interface NormalizedRequest {
 
 Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
 
-仓库提供单一完整镜像：正常模式默认只运行 Gateway + headless Chromium；首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / VNC / noVNC 维护栈。正常模式不启动维护进程，也不发布 noVNC 端口。
+仓库提供单一完整镜像。Phase 1 当前正常模式只启动 Gateway；镜像已经包含 Playwright bundled Chromium，但产品级 Browser Manager / ChatGPT Driver 要到后续 Phase 才会在正常模式启动 headless Chromium。首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser。正常模式不启动这些维护进程，也不发布 noVNC 端口。
 
-镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。项目 Playwright package 与镜像浏览器版本必须匹配；Node LTS 版本独立校验并锁定，不能假设官方 Playwright 镜像内置 Node 永远等于项目批准的 LTS。
+镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 
-持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，headless 与 noVNC 模式复用。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。
+持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，未来正常 browser runtime 与当前 noVNC maintenance browser 复用。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。noVNC overlay 默认只把维护端口绑定到宿主机 `127.0.0.1`；需要远程 NAS 访问时必须显式调整绑定并自行保证网络访问控制。
 
 ## Browser（浏览器）
 

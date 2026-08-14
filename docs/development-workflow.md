@@ -80,6 +80,12 @@
 
 所有包版本、镜像 tag 和兼容性结论必须根据当次官方资料与实际验证确定，不凭记忆猜测。
 
+pnpm 11 的供应链保护也属于升级验收：
+
+- 保持默认 release-age（发布时间成熟窗口）检查，不为了追最新版本随意加入例外。
+- 新依赖如果要求 lifecycle/build script，先确认用途，再把具体 package 加入 `pnpm-workspace.yaml` 的 `allowBuilds`；禁止全局放开所有 build script。
+- 当前仅批准 `esbuild` 的 install script。新增 allowlist 必须和依赖升级一起审查、测试和提交。
+
 ## 完成门槛
 
 在声称完成前必须有刚刚运行的验证证据。
@@ -95,8 +101,10 @@ node scripts/check-architecture.mjs
 完整 TypeScript（类型化 JavaScript）工具链建立后，目标总入口：
 
 ```bash
-pnpm verify
+corepack pnpm verify
 ```
+
+正式命令使用 Corepack 调用仓库锁定的 pnpm，不要求宿主机安装全局 pnpm。
 
 真实 ChatGPT E2E（端到端）不应默认包含在本地确定性 `verify` 中，必须显式开启。
 
