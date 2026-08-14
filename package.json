@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-web-gateway",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "OpenAI-compatible gateway backed by ChatGPT Web through Playwright Chromium.",
   "type": "module",
@@ -8,7 +8,8 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:project-memory": "node scripts/check-project-memory.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
-    "verify:repo": "node scripts/check-project-memory.mjs && node scripts/check-docs.mjs && node scripts/check-architecture.mjs"
+    "check:version": "node scripts/check-version.mjs",
+    "verify:repo": "node scripts/check-project-memory.mjs && node scripts/check-docs.mjs && node scripts/check-architecture.mjs && node scripts/check-version.mjs"
   },
   "license": "MIT"
 }
