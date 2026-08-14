@@ -24,7 +24,7 @@
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:version": "node scripts/check-version.mjs",
     "verify:repo": "node scripts/check-project-memory.mjs && node scripts/check-docs.mjs && node scripts/check-architecture.mjs && node scripts/check-version.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm verify:repo"
+    "verify": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build && corepack pnpm verify:repo"
   },
   "dependencies": {
     "@fastify/type-provider-typebox": "6.1.0",
