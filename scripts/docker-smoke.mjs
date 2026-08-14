@@ -130,6 +130,36 @@ function containerId(maintenance) {
   return id;
 }
 
+function assertPersistence(id) {
+  if (!commandSucceeds(['exec', id, 'test', '-f', '/data/gateway.db'])) {
+    throw new Error('Gateway did not create /data/gateway.db');
+  }
+
+  const owner = runDocker(['exec', id, 'stat', '-c', '%u:%g', '/data/gateway.db'], { quiet: true });
+  if (owner !== `${puid}:${pgid}`) {
+    throw new Error(`Expected gateway.db owner ${puid}:${pgid}, got ${owner}`);
+  }
+
+  const migration = JSON.parse(
+    runDocker(
+      [
+        'exec',
+        '--user',
+        `${puid}:${pgid}`,
+        id,
+        'node',
+        '--input-type=module',
+        '-e',
+        "import { DatabaseSync } from 'node:sqlite'; const db=new DatabaseSync('/data/gateway.db',{readOnly:true}); const row=db.prepare('SELECT version,name,(SELECT COUNT(*) FROM schema_migrations) AS count FROM schema_migrations WHERE version=1').get(); db.close(); console.log(JSON.stringify(row));",
+      ],
+      { quiet: true },
+    ),
+  );
+  if (migration?.version !== 1 || migration?.name !== 'initial' || migration?.count !== 1) {
+    throw new Error(`Unexpected SQLite migration state: ${JSON.stringify(migration)}`);
+  }
+}
+
 function assertRuntimeIdentity(id) {
   const nodeVersion = runDocker(['exec', id, 'node', '--version'], { quiet: true });
   if (!/^v24\./.test(nodeVersion)) {
@@ -219,8 +249,16 @@ async function main() {
     runDocker(composeArgs(false, 'up', '-d', '--no-build'));
     await waitForHealth();
     await assertHttpContract();
-    const baseId = containerId(false);
+    let baseId = containerId(false);
     assertRuntimeIdentity(baseId);
+    assertPersistence(baseId);
+    assertMaintenanceProcesses(baseId, false);
+
+    runDocker(composeArgs(false, 'restart', 'gateway'));
+    await waitForHealth();
+    baseId = containerId(false);
+    assertRuntimeIdentity(baseId);
+    assertPersistence(baseId);
     assertMaintenanceProcesses(baseId, false);
   } finally {
     down(false);
@@ -232,6 +270,7 @@ async function main() {
     await waitForNovnc();
     const maintenanceId = containerId(true);
     assertRuntimeIdentity(maintenanceId);
+    assertPersistence(maintenanceId);
     assertMaintenanceProcesses(maintenanceId, true);
   } finally {
     down(true);

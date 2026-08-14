@@ -596,7 +596,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 5**
+- [x] **Step 9: Commit Task 5**
 
 Commit message:
 
@@ -609,6 +609,7 @@ Commit message:
 ### Task 6: Gateway startup/shutdown and Docker persistence smoke
 
 **Files:**
+- Create: `src/runtime.ts`
 - Modify: `src/index.ts`
 - Modify: `Dockerfile`
 - Modify: `scripts/docker-smoke.mjs`
@@ -616,16 +617,17 @@ Commit message:
 
 **Interfaces:**
 - Consumes: `createPersistenceContext` from Task 5 and `AppConfig.dataDir`.
-- Produces: production process opens `${dataDir}/gateway.db` before Fastify listen and closes DB during graceful shutdown.
+- Produces: `createGatewayRuntime({ config, logger?, migrationsDir? })` that opens `${dataDir}/gateway.db`, builds Fastify, and exposes idempotent `close()` without opening a TCP port.
+- Produces: production `src/index.ts` calls that runtime before Fastify listen and closes DB during graceful shutdown.
 - Docker image contains `/app/migrations/`.
 
-- [ ] **Step 1: Write failing startup integration test**
+- [x] **Step 1: Write failing startup integration test**
 
 Extract the process composition needed to test startup without opening a TCP port if necessary. Assert a temp `DATA_DIR` creates `gateway.db` and applies migration before the server is considered ready. Assert calling shutdown twice is safe.
 
 Do not make `buildServer()` itself require persistence; existing HTTP injection tests must remain file-IO free.
 
-- [ ] **Step 2: Run startup test and verify red**
+- [x] **Step 2: Run startup test and verify red**
 
 Run:
 
@@ -635,7 +637,7 @@ corepack pnpm vitest run tests/integration/persistence-startup.test.ts
 
 Expected: FAIL because production startup does not open persistence yet.
 
-- [ ] **Step 3: Integrate persistence into process lifecycle**
+- [x] **Step 3: Integrate persistence into process lifecycle**
 
 Production startup sequence:
 
@@ -649,7 +651,7 @@ const app = buildServer({ config, logger: true });
 
 If DB/migration setup fails, close any opened resources and exit non-zero. Graceful shutdown closes Fastify then persistence, with an idempotence guard.
 
-- [ ] **Step 4: Copy migrations into runtime Docker image**
+- [x] **Step 4: Copy migrations into runtime Docker image**
 
 Add to runtime stage:
 
@@ -659,7 +661,7 @@ COPY migrations ./migrations
 
 The compiled application must resolve that directory without requiring source files.
 
-- [ ] **Step 5: Extend Docker smoke before implementation verification**
+- [x] **Step 5: Extend Docker smoke before implementation verification**
 
 After the normal Compose starts, smoke must prove:
 
@@ -674,7 +676,7 @@ Restart the Gateway service with the same bind mount, wait for `/health`, and co
 
 Do not inspect/modify real user data; smoke uses its existing temporary bind mount.
 
-- [ ] **Step 6: Run application and fresh Docker verification**
+- [x] **Step 6: Run application and fresh Docker verification**
 
 Run:
 

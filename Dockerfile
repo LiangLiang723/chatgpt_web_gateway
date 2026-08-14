@@ -37,6 +37,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY package.json ./
+COPY migrations ./migrations
 COPY docker/maintenance-browser.mjs ./docker/maintenance-browser.mjs
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/gateway-entrypoint
 COPY --chmod=755 docker/start-novnc.sh /usr/local/bin/start-novnc.sh
