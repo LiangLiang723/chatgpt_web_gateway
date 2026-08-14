@@ -396,7 +396,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 Commit message:
 
@@ -418,7 +418,7 @@ Commit message:
 - Produces: `FileRepository.insert/getById/findBySha256`.
 - Produces: `GeneratedImageRepository.insert/getById/listByConversation/deleteByConversation`.
 
-- [ ] **Step 1: Write failing File/Generated Image tests**
+- [x] **Step 1: Write failing File/Generated Image tests**
 
 Cover:
 
@@ -431,7 +431,7 @@ Cover:
 - listing by Conversation is ordered `created_at, id`;
 - deleting a Conversation leaves Generated Image row with nullable conversation/message references because FKs use `ON DELETE SET NULL`.
 
-- [ ] **Step 2: Run tests and verify red**
+- [x] **Step 2: Run tests and verify red**
 
 Run:
 
@@ -441,15 +441,15 @@ corepack pnpm vitest run tests/unit/persistence-files-images.test.ts
 
 Expected: FAIL because repositories do not exist.
 
-- [ ] **Step 3: Implement FileRepository**
+- [x] **Step 3: Implement FileRepository**
 
 `findBySha256(sha256)` returns `FileRecord[]`, never silently deduplicates. Do not read or write file bytes.
 
-- [ ] **Step 4: Implement GeneratedImageRepository**
+- [x] **Step 4: Implement GeneratedImageRepository**
 
 Keep all behavior metadata-only. No Playwright/network/filesystem image operations belong in this repository.
 
-- [ ] **Step 5: Run focused and static checks**
+- [x] **Step 5: Run focused and static checks**
 
 Run:
 
