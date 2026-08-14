@@ -1,7 +1,7 @@
 # Phase 1 Toolchain, Protocol Model, and Docker Runtime Design
 
 **Date:** 2026-08-14
-**Status:** Design approved in discussion; written-spec review pending
+**Status:** Approved; implementation active
 **Scope:** Phase 1
 
 ## 1. Goal（目标）

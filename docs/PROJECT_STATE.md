@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-1-design
-STATUS=awaiting-phase-1-spec-review
+PHASE=phase-1-implementation
+STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=review-phase-1-toolchain-protocol-docker-spec
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md
+NEXT_TASK=execute-phase-1-task-1-toolchain-config
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker Design（工具链 / 协议 / Docker 设计）。
-- **当前状态：** `awaiting-phase-1-spec-review`
-- **活动计划：** 无。Phase 1 设计已写入 spec，用户完成书面 spec 审阅后才能建立实施 plan（计划）。
-- **下一个可执行任务：** 审阅并批准 [`2026-08-14-phase-1-toolchain-protocol-docker-design.md`](superpowers/specs/2026-08-14-phase-1-toolchain-protocol-docker-design.md)。
-- **当前 blocker（阻塞）：** 无技术 blocker；当前流程 gate（门槛）是书面 spec 用户审阅。真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
+- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker Implementation（工具链 / 协议 / Docker 实施）。
+- **当前状态：** `active`
+- **活动计划：** [`2026-08-14-phase-1-toolchain-protocol-docker.md`](superpowers/plans/2026-08-14-phase-1-toolchain-protocol-docker.md)。
+- **下一个可执行任务：** 执行 Phase 1 Task 1：工具链、包管理器和确定性配置。
+- **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
 
