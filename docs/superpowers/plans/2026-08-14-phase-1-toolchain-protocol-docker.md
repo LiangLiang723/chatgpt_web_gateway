@@ -180,7 +180,7 @@ Expected: FAIL because server/routes are missing.
 Run: `corepack pnpm vitest run tests/unit/auth.test.ts tests/integration/health-models.test.ts && corepack pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 Commit message: `✨ 增加 Gateway 认证与基础 HTTP 路由`
 
@@ -195,22 +195,23 @@ Commit message: `✨ 增加 Gateway 认证与基础 HTTP 路由`
 - Create: `src/api/schemas/responses.ts`
 - Create: `src/api/normalize/common.ts`
 - Create: `tests/unit/normalized-common.test.ts`
+- Create: `tests/unit/request-schemas.test.ts`
 
 **Interfaces:**
 - Produces: `NormalizedRequest`, `NormalizedInstruction`, `NormalizedMessage`, `NormalizedContentPart`, `NormalizedTool`, `NormalizedAttachment`, `NormalizedStructuredOutput`, `NormalizedToolChoice`.
 - Produces: TypeBox request schemas and inferred request types for both public POST endpoints.
 - Produces pure common helpers used by Tasks 4 and 5.
 
-- [ ] **Step 1: Write failing tests for common canonicalization**
+- [x] **Step 1: Write failing tests for common canonicalization**
 
 Cover text parts, instructions, tool definition canonicalization, tool-choice variants, structured output descriptions, image/file attachment descriptors, and ignored parameter recording. Tests must compare semantic structures, not JSON string formatting accidents.
 
-- [ ] **Step 2: Run tests and verify red**
+- [x] **Step 2: Run tests and verify red**
 
 Run: `corepack pnpm vitest run tests/unit/normalized-common.test.ts`
 Expected: FAIL because normalized model/helpers do not exist.
 
-- [ ] **Step 3: Define focused internal types**
+- [x] **Step 3: Define focused internal types**
 
 Use discriminated unions. Example shape:
 
@@ -228,15 +229,15 @@ type NormalizedAttachment =
 
 Use deterministic local attachment IDs derived from request traversal order, not persistence IDs.
 
-- [ ] **Step 4: Define TypeBox request schemas**
+- [x] **Step 4: Define TypeBox request schemas**
 
 Schemas must be broad enough for the approved V1 subset but strict enough to reject malformed role/content/tool structures. Model ignored parameters explicitly so accepted-but-ignored values pass validation. Model unsupported parameters so the normalizer can return stable `UnsupportedParameterError` instead of generic schema rejection when practical.
 
-- [ ] **Step 5: Implement common pure normalizer helpers**
+- [x] **Step 5: Implement common pure normalizer helpers**
 
 No Fastify, filesystem, network, Playwright, or process environment access.
 
-- [ ] **Step 6: Run focused tests and typecheck**
+- [x] **Step 6: Run focused tests and typecheck**
 
 Run: `corepack pnpm vitest run tests/unit/normalized-common.test.ts && corepack pnpm typecheck`
 Expected: PASS.
