@@ -517,10 +517,10 @@ git diff --staged
 
 Expected: checks pass; staged diff contains no `.env`, Browser Profile, database, upload, generated image, or secret.
 
-- [ ] **Step 8: Commit Phase 1 completion/writeback**
+- [x] **Step 8: Commit Phase 1 completion/writeback**
 
 Commit message: `📝 记录 Phase 1 工具链与 Docker 实施结果`
 
-- [ ] **Step 9: Push the feature branch**
+- [x] **Step 9: Push the feature branch**
 
 Push normally to `origin/phase-1-toolchain-spec`; do not force-push. Record the actual push result in the final report.
