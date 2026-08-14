@@ -8,21 +8,21 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-2-design
-STATUS=ready-for-phase-2-plan
+PHASE=phase-2-implementation
+STATUS=active
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-2-sqlite-conversation-persistence-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=write-phase-2-persistence-plan
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-14-phase-2-sqlite-conversation-persistence.md
+NEXT_TASK=execute-phase-2-task-1-database-migrations
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）设计已批准。
-- **当前状态：** `ready-for-phase-2-plan`
-- **活动计划：** 无；Phase 2 spec 已批准，下一步直接建立实施 plan。
-- **下一个可执行任务：** 编写并执行 Phase 2 SQLite / Repository / Conversation aggregate persistence 实施计划。
+- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）实施中。
+- **当前状态：** `active`
+- **活动计划：** [`2026-08-14-phase-2-sqlite-conversation-persistence.md`](superpowers/plans/2026-08-14-phase-2-sqlite-conversation-persistence.md)。
+- **下一个可执行任务：** 执行 Phase 2 Task 1：数据库、PRAGMA、checksum migration 与初始 Schema。
 - **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 Browser / Driver Phase 和显式 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
