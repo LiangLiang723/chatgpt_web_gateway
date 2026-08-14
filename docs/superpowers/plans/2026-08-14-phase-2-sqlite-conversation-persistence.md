@@ -204,7 +204,7 @@ corepack pnpm format:check
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 1**
+- [x] **Step 9: Commit Task 1**
 
 Commit message:
 
@@ -228,7 +228,7 @@ Commit message:
 - Produces: `ConversationRepository` with `insert`, `update`, `getById`, `getByKey`.
 - Produces: `MessageRepository` with `insert`, `listByConversation`, `deleteByConversation`.
 
-- [ ] **Step 1: Write failing Conversation/Message repository tests**
+- [x] **Step 1: Write failing Conversation/Message repository tests**
 
 Use an isolated migrated database and records such as:
 
@@ -257,7 +257,7 @@ Assert:
 - duplicate `(conversation_id, sequence)` fails;
 - invalid role inserted through raw SQL is rejected by SQLite.
 
-- [ ] **Step 2: Run focused tests and verify red**
+- [x] **Step 2: Run focused tests and verify red**
 
 Run:
 
@@ -267,7 +267,7 @@ corepack pnpm vitest run tests/unit/persistence-conversations-messages.test.ts
 
 Expected: FAIL because types/repositories do not exist.
 
-- [ ] **Step 3: Define persistence record types**
+- [x] **Step 3: Define persistence record types**
 
 Define exact interfaces for all Phase 2 entities in `types.ts`, importing existing normalized protocol types where useful:
 
@@ -286,17 +286,17 @@ export interface MessageRecord {
 
 Also define `ConversationRecord`, `ToolCallRecord`, `AttachmentRecord`, `FileRecord`, `GeneratedImageRecord`, and later `ConversationAggregate`.
 
-- [ ] **Step 4: Implement ConversationRepository with prepared statements**
+- [x] **Step 4: Implement ConversationRepository with prepared statements**
 
 Repository accepts the shared `DatabaseSync` in its constructor. Store optional values as SQL `NULL`; serialize JSON through `encodeJson`; decode through `decodeJson`.
 
 `update(record)` must update by primary key and throw `DataIntegrityError` if no row was changed rather than silently inserting.
 
-- [ ] **Step 5: Implement MessageRepository**
+- [x] **Step 5: Implement MessageRepository**
 
 Use prepared statements. `listByConversation` must include `ORDER BY sequence ASC`. `deleteByConversation` deletes only rows for that conversation and relies on FK cascade for message-owned Tool Calls/Attachments.
 
-- [ ] **Step 6: Run focused and full unit/static checks**
+- [x] **Step 6: Run focused and full unit/static checks**
 
 Run:
 
