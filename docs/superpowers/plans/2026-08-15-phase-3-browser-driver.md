@@ -1066,31 +1066,38 @@ If E2E is blocked, commit harness plus blocker evidence/state with a specific me
 - If all real E2E passes: `PHASE=phase-3-complete`, `STATUS=ready-for-phase-4-design`, `ACTIVE_PLAN=none`, `NEXT_TASK=write-phase-4-context-sync-spec`.
 - If real E2E is blocked: retain `PHASE=phase-3-implementation`, `STATUS=blocked`, keep active plan, and set exact next task to resolve the real E2E blocker.
 
-- [ ] **Step 1: Re-read all 24 Phase 3 acceptance criteria and record evidence**
+- [x] **Step 1: Re-read all 24 Phase 3 acceptance criteria and record evidence**
 
-For each spec criterion, identify a source/test/command result. At minimum record:
+Current evidence by criterion:
 
-```text
-BrowserManager/headless/maintenance exclusion
-PagePool capacity/lifecycle
-Selector strictness
-Auth Probe
-Fresh Driver turn ownership/completion
-Phase3Executor capability boundary
-envelope escaping
-API encoders/error mapping
-inspect safety/diagnostics
-architecture rules
-deterministic verify
-Docker headless browser smoke
-real auth inspection
-real Driver challenge
-real Gateway HTTP challenge
-```
+1. `src/runtime.ts` + runtime integration tests + Docker smoke prove headless BrowserManager and novnc maintenance exclusion.
+2. Runtime fixes production Profile to `${DATA_DIR}/browser-profile`; BrowserManager tests prove idempotent close.
+3. PagePool tests prove default config `4`, acquire/release/reuse/capacity/page removal.
+4. Selector Registry tests prove unique/collection/fallback/missing/ambiguous behavior.
+5. Architecture checker + source search enforce selector literals in `src/chatgpt/selectors.ts`.
+6. Auth tests prove authenticated/auth_required/unknown distinction.
+7. Unit/API mapping proves `auth_required` is stable 503 and does not become Gateway 401; current real network blocker prevents observing a real unauthenticated page.
+8. Driver tests prove Assistant baseline and new-turn index ownership.
+9. Completion tests prove generating + non-empty stable samples and timeout behavior without `networkidle` completion semantics.
+10. Phase3Executor tests prove Fresh non-stream text-only capability boundary and explicit future-capability errors.
+11. Executor tests parse the JSON envelope and prove role order/escaping.
+12. Executor tests prove Page lease release on success/error.
+13. Response encoder tests prove Chat Completions non-stream object without fabricated usage.
+14. Response encoder tests prove Responses completed/output_text object with `usage: null`.
+15. API integration tests prove all stable Browser/Driver/maintenance HTTP mappings and no raw error leakage.
+16. `inspect:chatgpt` exists; safety tests reject missing/production E2E Profile.
+17. Inspect tests prove screenshot/HTML only when diagnostics dir is explicit.
+18. Fresh deterministic `corepack pnpm verify` passed with 26 test files / 128 tests after Task 8.
+19. Final-tree Docker build succeeded as image `sha256:f6435e4033733894f1c44b7f9172ace54926a5457cdbb66c5bc4d828b0f332be`; fresh Docker smoke passed headless Chromium, maintenance single-owner, HTTP, SQLite and restart checks.
+20. **BLOCKED:** real auth/selector inspection was run but `chatgpt.com` navigation timed out before auth/selector observation.
+21. **BLOCKED:** real Fresh Driver challenge was not reached because criterion 20 failed at network access.
+22. **BLOCKED:** real Gateway HTTP challenge was not reached because criterion 20 failed at network access.
+23. README/API/architecture/testing/roadmap/PROJECT_STATE are being rewritten in this Task to match the blocked implementation state.
+24. `PROJECT_STATE` is `phase-3-implementation / blocked` with active plan and exact network-access next task.
 
-Any missing real E2E item prevents complete state.
+Criteria 20–22 are unmet, therefore Phase 3 is not eligible for completion.
 
-- [ ] **Step 2: Apply documentation writeback**
+- [x] **Step 2: Apply documentation writeback**
 
 README/API docs must clearly distinguish:
 
@@ -1103,7 +1110,7 @@ Document manual auth recovery via noVNC and the headless/novnc Profile single-ow
 
 Testing docs must show explicit E2E command and isolated Profile requirement.
 
-- [ ] **Step 3: Run fresh full deterministic verification after docs/state writeback**
+- [x] **Step 3: Run fresh full deterministic verification after docs/state writeback**
 
 ```bash
 corepack pnpm verify
@@ -1111,7 +1118,7 @@ corepack pnpm verify
 
 Expected: PASS.
 
-- [ ] **Step 4: Run fresh Docker verification after final tree**
+- [x] **Step 4: Run fresh Docker verification after final tree**
 
 ```bash
 corepack pnpm docker:build
@@ -1120,7 +1127,7 @@ corepack pnpm docker:smoke
 
 Expected: PASS.
 
-- [ ] **Step 5: If Phase 3 is eligible for completion, rerun real E2E on final HEAD**
+- [!] **Step 5: If Phase 3 is eligible for completion, rerun real E2E on final HEAD — not eligible while criteria 20–22 are network-blocked**
 
 ```bash
 E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> corepack pnpm test:e2e:chatgpt
@@ -1130,7 +1137,9 @@ Expected: PASS. A previous E2E run before final code/docs changes is not suffici
 
 If the real E2E cannot run/pass, keep blocked state and report the exact unverified external condition.
 
-- [ ] **Step 6: Run Git hygiene checks**
+Current decision: do not rerun a final-head challenge because Phase 3 is not eligible for completion and the already reproduced DevSpace HTTPS `ETIMEDOUT` occurs before auth/selector inspection. The active blocker must be resolved first; prior real `inspect:chatgpt` and full `test:e2e:chatgpt` attempts remain the execution evidence.
+
+- [x] **Step 6: Run Git hygiene checks**
 
 ```bash
 corepack pnpm verify:repo
@@ -1155,7 +1164,7 @@ logs
 
 No sensitive artifact may be committed.
 
-- [ ] **Step 7: Commit Phase 3 result**
+- [x] **Step 7: Commit Phase 3 result**
 
 If complete:
 
@@ -1169,7 +1178,7 @@ If blocked:
 📝 记录 Phase 3 实现与真实 E2E 阻塞状态
 ```
 
-- [ ] **Step 8: Close plan only if eligible**
+- [!] **Step 8: Close plan only if eligible — blocked; keep this plan active until real E2E passes**
 
 If complete, mark all plan checkboxes `[x]`, set `ACTIVE_PLAN=none`, commit:
 

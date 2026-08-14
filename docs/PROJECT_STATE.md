@@ -116,17 +116,20 @@ UPDATED_AT=2026-08-15
 - Persistence 业务实体使用 UUID v4 主键、Unix 毫秒时间；复杂 payload 使用受 JSON 校验保护的 `TEXT`。
 - `ConversationStore` 是 Phase 2 的恢复聚合边界；同步事务拒绝 async callback。
 - Docker 从 Phase 1 起是正式运行边界；目标平台先锁定 `linux/amd64`。
-- Phase 1 普通 Compose 当前只启动 Gateway；产品级 headless Browser Manager 属于 Phase 3。
-- noVNC 只通过维护 overlay 按需启用，默认宿主机绑定 `127.0.0.1`，正常运行不启动也不发布 noVNC。
-- `/data/browser-profile/` 是未来正常 browser runtime 与当前 maintenance browser 共用的持久 Profile 边界。
+- Phase 3 普通 Compose 的 Gateway 进程会启动产品级 headless BrowserManager / Persistent BrowserContext；Docker smoke 已验证 Chromium 与 Gateway 使用指定 `PUID/PGID`。
+- noVNC 只通过维护 overlay 按需启用，默认宿主机绑定 `127.0.0.1`；maintenance 模式禁用产品 BrowserManager，只启动 headed maintenance browser。
+- `/data/browser-profile/` 是 normal BrowserManager 与 maintenance browser 共用但互斥占用的持久 Profile 边界；Docker smoke 验证两种模式都只有一个 browser owner。
 - `/health` 无需认证；所有 `/v1/*` 默认要求 Gateway Bearer API Key。
-- `X-Conversation-Key` 是受控兼容扩展，协议层只负责标准化，不提前实现会话生命周期。
-- 后续设计仍保持一个 BrowserContext 管理多个 Page、Context Sync `FRESH | APPEND | RESTORE | REBUILD`、SQLite 为 Conversation 事实来源、约 200ms DOM polling + Stable Prefix Streaming。
+- `X-Conversation-Key` 是受控兼容扩展；协议层负责标准化，Phase3Executor 看到该 key 会明确返回 `conversation_sync_not_implemented`，不静默忽略。
+- Phase 3 使用一个 Persistent BrowserContext + bounded Page Pool；Selector/Auth/Driver/Completion 都已实现确定性边界，但真实 selector/login/answer 尚被网络 blocker 阻塞。
+- 后续仍保持 Context Sync `FRESH | APPEND | RESTORE | REBUILD`、SQLite 为 Conversation 事实来源、约 200ms DOM polling + Stable Prefix Streaming。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-15：完成 Phase 3 BrowserManager / PagePool / Selector Registry / Auth Probe / Fresh Driver / Phase3Executor / OpenAI-style text encoder / inspect + real E2E harness 代码实现；最终文档回写后的 `corepack pnpm verify` 通过 26 个测试文件 / 128 个测试，最终镜像 `sha256:f6435e40…` 的 Docker smoke 通过 Chromium 单-owner / SQLite / HTTP / restart 验证。
+- 2026-08-15：真实 Phase 3 E2E 已实际启动；当前 DevSpace DNS 可解析 `chatgpt.com`，但 HTTPS `fetch` 为 `ETIMEDOUT`、Playwright navigation 60 秒超时，状态记录为 `blocked`，未进入 auth/selector/Driver/Gateway challenge。
 - 2026-08-14：完成 Phase 2 SQLite / Conversation persistence 实施：单 `DatabaseSync`、checksum migration、六类业务 Repository、原子 aggregate save/load、真实文件 DB close/reopen 恢复和 Gateway/Docker 生命周期接入。
 - 2026-08-14：Phase 2 最终确定性验证通过 15 个测试文件 / 67 个测试；Docker smoke 验证 `/data/gateway.db`、`001_initial`、非 root owner 和 restart 持久性。
 - 2026-08-14：批准 Phase 2 SQLite / Conversation persistence 设计：`node:sqlite`、单向 checksum migration、UUID v4、Unix 毫秒、关系型核心 + JSON payload、单 `DatabaseSync` 与 aggregate transaction。

@@ -99,7 +99,7 @@ interface NormalizedRequest {
 
 Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
 
-仓库提供单一完整镜像。Phase 1 当前正常模式只启动 Gateway；镜像已经包含 Playwright bundled Chromium，但产品级 Browser Manager / ChatGPT Driver 要到后续 Phase 才会在正常模式启动 headless Chromium。首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser。正常模式不启动这些维护进程，也不发布 noVNC 端口。
+仓库提供单一完整镜像。Phase 3 起正常 `UI_MODE=headless` 会随 Gateway 启动产品级 BrowserManager，并通过 Playwright bundled Chromium 打开一个 Persistent BrowserContext；首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser。maintenance 模式不启动产品 BrowserManager，ChatGPT POST 返回稳定 `browser_maintenance_mode`，从而保证同一 Profile 只有一个 Chromium owner。正常模式不启动维护进程，也不发布 noVNC 端口。
 
 镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 
@@ -135,7 +135,15 @@ Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
 
-浏览器同步使用真实可观察状态，不用任意固定 sleep（休眠）猜网页已经准备好。
+Phase 3 已实现 Fresh-only text Driver：每次请求先导航到 ChatGPT Fresh 起点，Auth Probe 区分 `authenticated | auth_required | unknown`，发送前记录 Assistant Turn baseline，发送后只观察 index=`baseline` 的新 Assistant Turn。完成判断使用 generating/stop/thinking 可观察状态 + 非空文本连续稳定采样；固定约 250ms 只是 polling cadence，不把任意 sleep 或 `networkidle` 当作完成证据。
+
+Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。
+
+Phase 3 Executor 只接受 Fresh、非流式、纯文本请求；system/developer/user 通过一次 JSON-serialized prompt envelope 近似映射。Conversation Key/历史属于 Phase 4，Streaming/附件/Tools/Structured Output 属于后续 Phase。
+
+浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
+
+当前真实 ChatGPT DOM 和登录态尚未验收：2026-08-15 real E2E 实际启动，但 DevSpace 到 `chatgpt.com` 的 HTTPS 访问超时，停在 auth/selector inspection 之前。
 
 ## Streaming（流式输出）
 
@@ -253,3 +261,4 @@ Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前�
 - `persistence/` 不依赖 `playwright`。
 - `node:sqlite` 只允许在 `src/persistence/` 中导入；checker 同时识别普通、动态、require 和 side-effect import。
 - ChatGPT Selector 只允许定义在 `src/chatgpt/selectors.ts`。
+- `browser/` 不依赖 `api/`、`persistence/` 或 `chatgpt/`；`chatgpt/` 不依赖 `api/`、`persistence/` 或 BrowserManager/PagePool 实现。

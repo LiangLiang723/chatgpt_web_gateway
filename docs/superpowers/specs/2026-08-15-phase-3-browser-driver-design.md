@@ -802,6 +802,8 @@ corepack pnpm inspect:chatgpt
 
 该命令是**显式真实 ChatGPT 工具**，不属于默认 `verify`。
 
+实现边界保持 `chatgpt/` 与 BrowserManager 解耦：`src/chatgpt/inspect.ts` 提供 `inspectChatGptPage(page, ...)`，只检查一个已经拥有的 Page；`scripts/inspect-chatgpt.ts` 才负责用显式 E2E Profile 启动/关闭 BrowserManager 和 lease/release Page。这样架构检查可以继续禁止 `chatgpt/` 依赖 BrowserManager/PagePool 实现。
+
 ### 17.1 Required E2E Profile
 
 必须显式设置：
