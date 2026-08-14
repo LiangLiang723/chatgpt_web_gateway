@@ -242,7 +242,7 @@ No Fastify, filesystem, network, Playwright, or process environment access.
 Run: `corepack pnpm vitest run tests/unit/normalized-common.test.ts && corepack pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 Commit message: `✨ 建立 OpenAI 统一协议内部模型`
 
@@ -258,7 +258,7 @@ Commit message: `✨ 建立 OpenAI 统一协议内部模型`
 - Consumes: `ChatCompletionsRequest` schema type and common helpers from Task 3.
 - Produces: `normalizeChatCompletions(request, meta): NormalizedRequest` where `meta` includes `requestId` and optional `conversationKey`.
 
-- [ ] **Step 1: Write representative failing normalization tests**
+- [x] **Step 1: Write representative failing normalization tests**
 
 Cover:
 
@@ -274,16 +274,16 @@ Cover:
 10. `logprobs` and `logit_bias` stable unsupported errors;
 11. propagation of `X-Conversation-Key` metadata.
 
-- [ ] **Step 2: Run the normalizer test and verify red**
+- [x] **Step 2: Run the normalizer test and verify red**
 
 Run: `corepack pnpm vitest run tests/unit/chat-completions-normalizer.test.ts`
 Expected: FAIL because the normalizer does not exist.
 
-- [ ] **Step 3: Implement minimal pure Chat Completions normalization**
+- [x] **Step 3: Implement minimal pure Chat Completions normalization**
 
 Do not download attachments or execute tools. Preserve tool-call/result identity needed by later phases without inventing browser formatting.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run: `corepack pnpm vitest run tests/unit/chat-completions-normalizer.test.ts tests/unit/normalized-common.test.ts`
 Expected: PASS.
