@@ -201,6 +201,27 @@ describe('Conversation persistence recovery', () => {
     context.close();
   });
 
+  it('rejects generated images that are not owned by the aggregate conversation', () => {
+    const paths = temp();
+    const context = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    context.files.insert(fileRecord());
+    const original = aggregate();
+    context.conversationStore.save(original);
+
+    const invalid = aggregate();
+    invalid.generatedImages = invalid.generatedImages.map((image) => ({
+      ...image,
+      conversationId: undefined,
+    }));
+
+    expect(() => context.conversationStore.save(invalid)).toThrowError(DataIntegrityError);
+    expect(context.conversationStore.loadById(conversationId)).toEqual(original);
+    context.close();
+  });
+
   it('rejects duplicate sequences and child references outside the aggregate before replacement', () => {
     const paths = temp();
     const context = createPersistenceContext({

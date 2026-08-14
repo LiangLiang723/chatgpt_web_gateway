@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase, openDatabase } from '../../src/persistence/database.js';
-import { MigrationError } from '../../src/persistence/errors.js';
+import { MigrationError, PersistenceError } from '../../src/persistence/errors.js';
 import { runMigrations } from '../../src/persistence/migrations.js';
+import { transaction } from '../../src/persistence/transaction.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
 
 const resources: TempPersistencePaths[] = [];
@@ -118,6 +119,30 @@ describe('SQLite database and migrations', () => {
       }),
     );
     expect(tableNames(database)).not.toContain('one');
+
+    closeDatabase(database);
+  });
+
+  it('rejects async transaction callbacks and rolls back their synchronous writes', () => {
+    const paths = temp();
+    const database = openDatabase(paths.databasePath);
+    runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 1000 });
+    database.exec('CREATE TABLE transaction_probe (value TEXT) STRICT;');
+
+    expect(() =>
+      transaction(database, async () => {
+        database.prepare('INSERT INTO transaction_probe (value) VALUES (?)').run('should-rollback');
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<PersistenceError>>({
+        code: 'async_transaction_callback',
+      }),
+    );
+    expect(database.prepare('SELECT COUNT(*) AS count FROM transaction_probe').get()).toMatchObject(
+      {
+        count: 0,
+      },
+    );
 
     closeDatabase(database);
   });

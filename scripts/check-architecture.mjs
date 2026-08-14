@@ -21,6 +21,7 @@ function importsFrom(content) {
   const results = [];
   const patterns = [
     /\bfrom\s+['"]([^'"]+)['"]/g,
+    /\bimport\s+['"]([^'"]+)['"]/g,
     /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
@@ -78,6 +79,14 @@ for (const file of sourceFiles(src)) {
 
   if (!relative.startsWith('src/config/') && /\bprocess\.env\b/.test(content)) {
     errors.push(`${relative} reads process.env directly; runtime configuration belongs in src/config/`);
+  }
+
+  if (!relative.startsWith('src/persistence/')) {
+    for (const imported of importsFrom(content)) {
+      if (imported === 'node:sqlite') {
+        errors.push(`${relative} imports node:sqlite; SQLite access belongs in src/persistence/`);
+      }
+    }
   }
 }
 

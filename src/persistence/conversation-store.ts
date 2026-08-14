@@ -64,8 +64,8 @@ function validateAggregate(aggregate: ConversationAggregate): void {
   }
 
   for (const image of aggregate.generatedImages) {
-    if (image.conversationId !== undefined && image.conversationId !== conversationId) {
-      throw new DataIntegrityError('Generated Image belongs to a different Conversation');
+    if (image.conversationId !== conversationId) {
+      throw new DataIntegrityError('Generated Image must belong to the aggregate Conversation');
     }
     if (image.messageId !== undefined && !messageIds.has(image.messageId)) {
       throw new DataIntegrityError('Generated Image must reference a Message in the aggregate');
