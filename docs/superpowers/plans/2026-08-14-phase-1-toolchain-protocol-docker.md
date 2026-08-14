@@ -6,12 +6,12 @@
 
 **Architecture:** Fastify routes validate requests with TypeBox JSON Schema and delegate protocol conversion to pure normalizers that produce one `NormalizedRequest`. HTTP execution remains behind an injected boundary so Phase 1 proves protocol behavior without pretending ChatGPT execution exists. Docker is the formal runtime boundary from this phase onward; the normal Compose path exposes only the Gateway while a second overlay enables the maintenance display stack.
 
-**Tech Stack:** Node.js 24 LTS, pnpm 11.21.0, TypeScript 6.0.3, Fastify 5.12.0, TypeBox 1.3.13 + `@fastify/type-provider-typebox` 6.1.0, Ajv 8.20.0, Vitest 4.1.10, ESLint 10.8.1 + `typescript-eslint` 8.67.0, Prettier 3.9.6, Playwright 1.62.1, Docker/Compose, Xvfb + x11vnc + noVNC + websockify.
+**Tech Stack:** Node.js 24 LTS, pnpm 11.21.0, TypeScript 6.0.3, Fastify 5.11.3, TypeBox 1.3.13 + `@fastify/type-provider-typebox` 6.1.0, Ajv 8.20.0, Vitest 4.1.10, ESLint 10.8.1 + `typescript-eslint` 8.67.0, Prettier 3.9.6, Playwright 1.62.1, Docker/Compose, Xvfb + x11vnc + noVNC + websockify.
 
 ## Global Constraints
 
 - Runtime baseline is Node.js 24.x LTS; the Docker implementation targets the current Node 24 LTS patch after verifying it against the official Node release page. Future dependency upgrades may move to a newer LTS major only through the documented upgrade workflow.
-- The current compatible toolchain pins pnpm 11.21.0, TypeScript 6.0.3, Fastify 5.12.0, TypeBox 1.3.13, `@fastify/type-provider-typebox` 6.1.0, Ajv 8.20.0, Vitest 4.1.10, ESLint 10.8.1, `typescript-eslint` 8.67.0, Prettier 3.9.6, and Playwright 1.62.1. TypeScript 7.0.2 is intentionally not selected because the current `typescript-eslint` peer range is `<6.1.0`.
+- The current compatible toolchain pins pnpm 11.21.0, TypeScript 6.0.3, Fastify 5.11.3, TypeBox 1.3.13, `@fastify/type-provider-typebox` 6.1.0, Ajv 8.20.0, Vitest 4.1.10, ESLint 10.8.1, `typescript-eslint` 8.67.0, Prettier 3.9.6, and Playwright 1.62.1. TypeScript 7.0.2 is intentionally not selected because the current `typescript-eslint` peer range is `<6.1.0`.
 - Target container platform is `linux/amd64`.
 - Pin pnpm exactly through `packageManager`; commit `pnpm-lock.yaml`.
 - Pin the Playwright Docker image and project Playwright package to the same version.
@@ -32,7 +32,9 @@
 **Files:**
 - Modify: `package.json`
 - Create: `pnpm-lock.yaml`
+- Create: `pnpm-workspace.yaml`
 - Create: `tsconfig.json`
+- Create: `tsconfig.build.json`
 - Create: `eslint.config.js`
 - Create: `.prettierrc.json`
 - Create: `.prettierignore`
@@ -46,15 +48,15 @@
 - Produces: `AppConfig` with `host`, `port`, `gatewayApiKey`, `uiMode`, `puid`, `pgid`, `dataDir`, `novncPort`, `novncPassword`.
 - Consumes: only environment input; no API/browser dependencies.
 
-- [ ] **Step 1: Add exact toolchain metadata and dependencies**
+- [x] **Step 1: Add exact toolchain metadata and dependencies**
 
-Set `engines.node` to `>=24 <25`, `packageManager` to `pnpm@11.21.0`, add deterministic scripts (`dev`, `typecheck`, `lint`, `format`, `format:check`, `test`, `build`, `start`, repository checks, `verify`), and pin the compatible versions listed in Global Constraints. Keep `playwright@1.62.1` as a production dependency because the runtime image must contain the package that matches its bundled browsers.
+Set `engines.node` to `>=24 <25`, `packageManager` to `pnpm@11.21.0`, add deterministic scripts (`dev`, `typecheck`, `lint`, `format`, `format:check`, `test`, `build`, `start`, repository checks, `verify`), and pin the compatible versions listed in Global Constraints. Keep `playwright@1.62.1` as a production dependency because the runtime image must contain the package that matches its bundled browsers. pnpm 11's default 24-hour release-age policy rejected the just-published Fastify 5.12.0 candidate, so the implementation pins the latest mature compatible Fastify 5.11.3 instead. `pnpm-workspace.yaml` explicitly allows only the reviewed `esbuild` install script.
 
-- [ ] **Step 2: Add TypeScript, ESLint, and Prettier configuration**
+- [x] **Step 2: Add TypeScript, ESLint, and Prettier configuration**
 
-Use ESM/NodeNext compilation into `dist/`, strict type checking, `noEmit` only for the dedicated typecheck command, TypeScript-aware ESLint flat config, and Prettier check coverage over source/tests/docs/config files while excluding build/runtime output.
+Use ESM/NodeNext compilation into `dist/`, strict type checking, `noEmit` only for the dedicated typecheck command, TypeScript-aware ESLint flat config, and Prettier checks over Phase 1 source/tests/config/new scripts while excluding build/runtime output, existing Markdown, and the four pre-Phase-1 governance scripts so enabling the formatter does not create unrelated churn.
 
-- [ ] **Step 3: Write failing configuration tests**
+- [x] **Step 3: Write failing configuration tests**
 
 Test all of the following explicitly:
 
@@ -73,16 +75,16 @@ expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PORT: '0' })).toThrow(/PORT/);
 expect(() => loadConfig({ GATEWAY_API_KEY: 'x', UI_MODE: 'desktop' })).toThrow(/UI_MODE/);
 ```
 
-- [ ] **Step 4: Run the config test and verify red**
+- [x] **Step 4: Run the config test and verify red**
 
 Run: `corepack pnpm vitest run tests/unit/config.test.ts`
 Expected: FAIL because config modules do not exist yet.
 
-- [ ] **Step 5: Implement the minimal config parser**
+- [x] **Step 5: Implement the minimal config parser**
 
 Use TypeBox as the schema/type source for environment-derived configuration where practical and explicit parsing for numeric environment values. Do not allow other modules to read `process.env` directly; `loadConfig()` is the boundary.
 
-- [ ] **Step 6: Update `.env.example` to the approved names/defaults**
+- [x] **Step 6: Update `.env.example` to the approved names/defaults**
 
 Required baseline:
 
@@ -101,7 +103,7 @@ E2E_CHATGPT=0
 
 Keep future browser tuning variables only when they remain approved architecture defaults.
 
-- [ ] **Step 7: Run focused and static checks**
+- [x] **Step 7: Run focused and static checks**
 
 Run: `corepack pnpm vitest run tests/unit/config.test.ts && corepack pnpm typecheck && corepack pnpm lint && corepack pnpm format:check`
 Expected: PASS.

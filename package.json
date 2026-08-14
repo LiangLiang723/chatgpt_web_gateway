@@ -4,12 +4,44 @@
   "private": true,
   "description": "OpenAI-compatible gateway backed by ChatGPT Web through Playwright Chromium.",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "pnpm@11.21.0",
   "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
     "check:docs": "node scripts/check-docs.mjs",
     "check:project-memory": "node scripts/check-project-memory.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:version": "node scripts/check-version.mjs",
-    "verify:repo": "node scripts/check-project-memory.mjs && node scripts/check-docs.mjs && node scripts/check-architecture.mjs && node scripts/check-version.mjs"
+    "verify:repo": "node scripts/check-project-memory.mjs && node scripts/check-docs.mjs && node scripts/check-architecture.mjs && node scripts/check-version.mjs",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm verify:repo"
+  },
+  "dependencies": {
+    "@fastify/type-provider-typebox": "6.1.0",
+    "ajv": "8.20.0",
+    "fastify": "5.11.3",
+    "playwright": "1.62.1",
+    "typebox": "1.3.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "eslint": "10.8.1",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.11.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.10"
   },
   "license": "MIT"
 }

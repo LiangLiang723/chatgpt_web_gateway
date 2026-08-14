@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+data/
+playwright-report/
+test-results/
+blob-report/
+.auth/
+.worktrees/
+worktrees/
+pnpm-lock.yaml
+scripts/check-architecture.mjs
+scripts/check-docs.mjs
+scripts/check-project-memory.mjs
+scripts/check-version.mjs
+*.md
