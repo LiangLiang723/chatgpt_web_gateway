@@ -44,7 +44,7 @@
 - Produces: `openDatabase(path: string): DatabaseSync` and `closeDatabase(database): void`.
 - Later tasks consume the migrated schema and one shared `DatabaseSync`.
 
-- [ ] **Step 1: Write failing database/migration tests**
+- [x] **Step 1: Write failing database/migration tests**
 
 Create tests that prove configuration and initial migration behavior:
 
@@ -69,7 +69,7 @@ Also test:
 - files `001_initial.sql` + `003_gap.sql` throw a sequence-gap migration error;
 - a syntactically broken pending migration rolls back both its schema changes and history row.
 
-- [ ] **Step 2: Run focused migration tests and verify red**
+- [x] **Step 2: Run focused migration tests and verify red**
 
 Run:
 
@@ -79,7 +79,7 @@ corepack pnpm vitest run tests/unit/persistence-migrations.test.ts
 
 Expected: FAIL because `src/persistence/*` and `migrations/001_initial.sql` do not exist.
 
-- [ ] **Step 3: Add persistence error and JSON helpers**
+- [x] **Step 3: Add persistence error and JSON helpers**
 
 Implement stable internal errors with non-sensitive metadata:
 
@@ -112,7 +112,7 @@ export class DataIntegrityError extends PersistenceError {
 
 `encodeJson` rejects top-level `undefined`; `decodeJson` catches `JSON.parse` failures and throws `DataIntegrityError` without embedding the raw JSON value in the message.
 
-- [ ] **Step 4: Implement synchronous transaction helper**
+- [x] **Step 4: Implement synchronous transaction helper**
 
 Use exactly one transaction owner:
 
@@ -136,7 +136,7 @@ export function transaction<T>(database: DatabaseSync, work: () => T): T {
 
 Do not accept `Promise` callbacks.
 
-- [ ] **Step 5: Implement database open/configure/close**
+- [x] **Step 5: Implement database open/configure/close**
 
 `openDatabase(path)` must create parent directories when the path is file-backed, instantiate `DatabaseSync`, then execute:
 
@@ -150,7 +150,7 @@ Verify each PRAGMA after setting it. If any required setting is not active, clos
 
 `closeDatabase` should close once; callers own idempotence at the context level.
 
-- [ ] **Step 6: Implement strict migration discovery/checksum runner**
+- [x] **Step 6: Implement strict migration discovery/checksum runner**
 
 Migration discovery must:
 
@@ -170,7 +170,7 @@ const MIGRATION_FILE = /^([0-9]{3})_([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/;
 
 Return only migrations applied during the current invocation.
 
-- [ ] **Step 7: Create `001_initial.sql` with the approved schema**
+- [x] **Step 7: Create `001_initial.sql` with the approved schema**
 
 The migration must create STRICT tables and explicit constraints for:
 
@@ -191,7 +191,7 @@ CREATE TABLE conversations (
 
 Add `messages`, `tool_calls`, `files`, `attachments`, and `generated_images` exactly as specified in the governing Phase 2 spec, including FK actions and CHECK/UNIQUE constraints. Add indexes on message sequence, tool-call lookup, attachments, file SHA-256, and generated-image chronology.
 
-- [ ] **Step 8: Run migration tests and static checks**
+- [x] **Step 8: Run migration tests and static checks**
 
 Run:
 
