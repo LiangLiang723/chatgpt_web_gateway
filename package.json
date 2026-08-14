@@ -20,6 +20,7 @@
     "docker:build": "docker build --platform linux/amd64 --tag chatgpt-web-gateway:phase1 .",
     "docker:smoke": "node scripts/docker-smoke.mjs",
     "inspect:chatgpt": "tsx scripts/inspect-chatgpt.ts",
+    "test:e2e:chatgpt": "tsx scripts/test-chatgpt-e2e.ts",
     "check:docs": "node scripts/check-docs.mjs",
     "check:project-memory": "node scripts/check-project-memory.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",

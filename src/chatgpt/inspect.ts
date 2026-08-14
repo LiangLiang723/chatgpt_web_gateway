@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import type { Page } from 'playwright';
 
 import { probeAuth } from './auth.js';
+import { asChatGptDriverError } from './errors.js';
 import { inspectCollection, inspectUnique } from './selector-registry.js';
 import { chatGptSelectors } from './selectors.js';
 
@@ -66,36 +67,40 @@ export async function inspectChatGptPage(
   page: Page,
   options: InspectChatGptPageOptions = {},
 ): Promise<InspectChatGptResult> {
-  await page.goto('https://chatgpt.com/', {
-    waitUntil: 'domcontentloaded',
-    timeout: 60_000,
-  });
-
-  const auth = await probeAuth(page);
-  const composer = await inspectUnique(page, chatGptSelectors.composer);
-  const sendButton = await inspectUnique(page, chatGptSelectors.sendButton);
-  const assistantTurns = await inspectCollection(page, chatGptSelectors.assistantTurns);
-  const stopControl = await inspectUnique(page, chatGptSelectors.stopControl);
-
-  if (options.diagnosticsDir) {
-    const mkdir = options.mkdir ?? mkdirSync;
-    const writeFile = options.writeFile ?? writeFileSync;
-    mkdir(options.diagnosticsDir, { recursive: true });
-    await page.screenshot({
-      path: join(options.diagnosticsDir, 'chatgpt.png'),
-      fullPage: true,
+  try {
+    await page.goto('https://chatgpt.com/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
     });
-    writeFile(join(options.diagnosticsDir, 'chatgpt.html'), await page.content(), 'utf8');
-  }
 
-  return {
-    url: page.url(),
-    auth: auth.state,
-    selectors: {
-      composer: uniqueStatus(composer),
-      sendButton: uniqueStatus(sendButton),
-      assistantTurns: { status: 'collection', count: assistantTurns.count },
-      stopControl: uniqueStatus(stopControl),
-    },
-  };
+    const auth = await probeAuth(page);
+    const composer = await inspectUnique(page, chatGptSelectors.composer);
+    const sendButton = await inspectUnique(page, chatGptSelectors.sendButton);
+    const assistantTurns = await inspectCollection(page, chatGptSelectors.assistantTurns);
+    const stopControl = await inspectUnique(page, chatGptSelectors.stopControl);
+
+    if (options.diagnosticsDir) {
+      const mkdir = options.mkdir ?? mkdirSync;
+      const writeFile = options.writeFile ?? writeFileSync;
+      mkdir(options.diagnosticsDir, { recursive: true });
+      await page.screenshot({
+        path: join(options.diagnosticsDir, 'chatgpt.png'),
+        fullPage: true,
+      });
+      writeFile(join(options.diagnosticsDir, 'chatgpt.html'), await page.content(), 'utf8');
+    }
+
+    return {
+      url: page.url(),
+      auth: auth.state,
+      selectors: {
+        composer: uniqueStatus(composer),
+        sendButton: uniqueStatus(sendButton),
+        assistantTurns: { status: 'collection', count: assistantTurns.count },
+        stopControl: uniqueStatus(stopControl),
+      },
+    };
+  } catch (error) {
+    throw asChatGptDriverError(error, 'ChatGPT inspection page operation failed');
+  }
 }

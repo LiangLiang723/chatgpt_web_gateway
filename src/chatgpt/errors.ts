@@ -1,5 +1,6 @@
 export type ChatGptDriverErrorCode =
   | 'auth_required'
+  | 'browser_unavailable'
   | 'selector_missing'
   | 'selector_ambiguous'
   | 'chatgpt_generation_timeout'
@@ -27,4 +28,16 @@ export class ChatGptDriverError extends Error {
     this.candidateName = options.candidateName;
     this.cause = options.cause;
   }
+}
+
+export function asChatGptDriverError(
+  error: unknown,
+  message = 'ChatGPT page operation failed',
+): ChatGptDriverError {
+  if (error instanceof ChatGptDriverError) return error;
+  return new ChatGptDriverError({
+    code: 'browser_unavailable',
+    message,
+    cause: error,
+  });
 }

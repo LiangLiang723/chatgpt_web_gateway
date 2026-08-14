@@ -95,6 +95,19 @@ describe('ChatGptDriver', () => {
     ]);
   });
 
+  it('maps navigation/runtime failures to browser_unavailable', async () => {
+    const page = {
+      goto: vi.fn(async () => {
+        throw new Error('raw Playwright network detail');
+      }),
+    } as unknown as Page;
+    const driver = createChatGptDriver();
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).rejects.toMatchObject({
+      code: 'browser_unavailable',
+    });
+  });
+
   it('maps explicit unauthenticated state to auth_required', async () => {
     const { page } = fakePage();
     const driver = createChatGptDriver({

@@ -923,7 +923,7 @@ Commit:
 - Requires: `E2E_CHATGPT=1`, explicit isolated `CHATGPT_PROFILE_DIR`.
 - Performs real auth/selector inspection, real Driver Fresh text request, then one real Gateway HTTP Chat Completions request while using that isolated Profile.
 
-- [ ] **Step 1: Write E2E harness safety gate before real navigation**
+- [x] **Step 1: Write E2E harness safety gate before real navigation**
 
 CLI gate:
 
@@ -936,7 +936,7 @@ const profileDir = requireIsolatedProfile(env);
 
 Reject missing or production Profile paths.
 
-- [ ] **Step 2: Add deterministic test for E2E gate**
+- [x] **Step 2: Add deterministic test for E2E gate**
 
 ```bash
 corepack pnpm vitest run tests/unit/inspect-chatgpt.test.ts
@@ -944,7 +944,7 @@ corepack pnpm vitest run tests/unit/inspect-chatgpt.test.ts
 
 Expected: PASS without network.
 
-- [ ] **Step 3: Implement real auth/selector inspection scenario**
+- [x] **Step 3: Implement real auth/selector inspection scenario**
 
 The E2E must print a concise structured result and fail unless:
 
@@ -956,7 +956,7 @@ assistantTurns collection is queryable
 
 If actual DOM differs, use real evidence to update `selectors.ts`; do not add unsafe `.first()` fallbacks.
 
-- [ ] **Step 4: Implement real Driver Fresh challenge scenario**
+- [x] **Step 4: Implement real Driver Fresh challenge scenario**
 
 Generate:
 
@@ -980,7 +980,7 @@ expect(result.conversationUrl).not.toBe('https://chatgpt.com/');
 
 Close the E2E BrowserManager in `finally`.
 
-- [ ] **Step 5: Implement real Gateway HTTP scenario without sharing one Profile between two Chromium instances**
+- [x] **Step 5: Implement real Gateway HTTP scenario without sharing one Profile between two Chromium instances**
 
 Run Driver scenario and close it first. Then create a GatewayRuntime using the same E2E Profile **sequentially**, not concurrently, by passing the Task 6 test-only `browserProfileDir` option. Production callers never set this option, so the production Profile rule remains fixed.
 
@@ -1000,7 +1000,7 @@ const response = await runtime.app.inject({
 
 Assert HTTP 200 and challenge token in `choices[0].message.content`.
 
-- [ ] **Step 6: Add package script**
+- [x] **Step 6: Add package script**
 
 ```json
 "test:e2e:chatgpt": "tsx scripts/test-chatgpt-e2e.ts"
@@ -1008,7 +1008,7 @@ Assert HTTP 200 and challenge token in `choices[0].message.content`.
 
 Do not add it to `verify`.
 
-- [ ] **Step 7: Run real inspect/auth E2E**
+- [!] **Step 7: Run real inspect/auth E2E — blocked by DevSpace network access**
 
 Run only with explicit environment available in the workspace:
 
@@ -1020,7 +1020,9 @@ Expected for completion: authenticated + current selector diagnostics healthy.
 
 If no authenticated isolated Profile exists, record `auth_required` as the real Phase 3 blocker; do not fake login.
 
-- [ ] **Step 8: Run full real Phase 3 E2E**
+2026-08-15 execution evidence: no pre-existing isolated E2E Profile was available. A fresh isolated `/tmp/cwg-phase3-e2e-profile` was created only for diagnostics. Bundled Chromium launched, but `page.goto('https://chatgpt.com/')` timed out after 60 seconds before auth/selector inspection. Independent Node `fetch('https://chatgpt.com/')` resolved DNS but failed with `ETIMEDOUT`. The inspect command therefore ended with stable `browser_unavailable`; no selector/auth calibration was possible.
+
+- [!] **Step 8: Run full real Phase 3 E2E — blocked before auth inspection by the same network timeout**
 
 ```bash
 E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> corepack pnpm test:e2e:chatgpt
@@ -1030,7 +1032,9 @@ Expected for completion: auth inspection PASS, Fresh Driver challenge PASS, Gate
 
 If blocked by auth/network/CAPTCHA/current DOM, update `PROJECT_STATE` to Phase 3 blocked with exact evidence and continue Task 9 documentation/verification without falsely closing Phase 3.
 
-- [ ] **Step 9: Update plan/state and commit Task 8 implementation/evidence**
+2026-08-15 execution evidence: `E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=/tmp/cwg-phase3-e2e-profile corepack pnpm test:e2e:chatgpt` was actually run and failed in the initial real inspection navigation with stable `browser_unavailable`. Driver challenge and Gateway HTTP challenge were not reached and remain unverified.
+
+- [x] **Step 9: Update plan/state and commit Task 8 implementation/evidence**
 
 If E2E passes, commit selector calibration and E2E harness:
 

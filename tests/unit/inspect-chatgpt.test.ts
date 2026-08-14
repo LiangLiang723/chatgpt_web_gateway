@@ -63,6 +63,18 @@ describe('inspect:chatgpt safety', () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it('maps page navigation failures to browser_unavailable', async () => {
+    const page = {
+      goto: vi.fn(async () => {
+        throw new Error('raw page navigation detail');
+      }),
+    } as unknown as Page;
+
+    await expect(inspectChatGptPage(page)).rejects.toMatchObject({
+      code: 'browser_unavailable',
+    });
+  });
+
   it('writes only controlled screenshot and HTML artifacts when diagnostics are explicit', async () => {
     const screenshot = vi.fn(async () => undefined);
     const content = vi.fn(async () => '<html>diagnostic</html>');
