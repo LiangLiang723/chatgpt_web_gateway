@@ -8,21 +8,21 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-1-complete
-STATUS=ready-for-phase-2-design
+PHASE=phase-2-design
+STATUS=ready-for-phase-2-plan
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-phase-2-sqlite-conversation-persistence-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-2-persistence-spec
+NEXT_TASK=write-phase-2-persistence-plan
 UPDATED_AT=2026-08-14
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 1 — Toolchain / Protocol / Docker（工具链 / 协议 / Docker）已完成。
-- **当前状态：** `ready-for-phase-2-design`
-- **活动计划：** 无；Phase 1 实施计划已完成，进入 Phase 2 前先建立 SQLite / Conversation persistence（持久化）spec 和 plan。
-- **下一个可执行任务：** 为 Phase 2“SQLite + Conversation 持久化”编写并批准 spec。
+- **当前阶段：** Phase 2 — SQLite + Conversation Persistence（持久化）设计已批准。
+- **当前状态：** `ready-for-phase-2-plan`
+- **活动计划：** 无；Phase 2 spec 已批准，下一步直接建立实施 plan。
+- **下一个可执行任务：** 编写并执行 Phase 2 SQLite / Repository / Conversation aggregate persistence 实施计划。
 - **当前 blocker（阻塞）：** 无。真实 ChatGPT 页面能力仍需要后续 Browser / Driver Phase 和显式 E2E（端到端）验证。
 
 ## Implemented Now（当前已实现）
@@ -35,6 +35,7 @@ UPDATED_AT=2026-08-14
 - ✅ 架构、API 兼容、测试、Git、Roadmap（路线图）文档。
 - ✅ `docs/superpowers/specs/` / `plans/` 工作流目录。
 - ✅ Phase 1 工具链、协议模型和正式 Docker 运行边界设计与实施计划。
+- ✅ Phase 2 `node:sqlite`、Migration、Repository 与 Conversation aggregate 持久化设计规格。
 - ✅ 文档链接、项目记忆、架构和版本一致性检查。
 - ✅ TypeScript / Vitest 产品代码与测试基础。
 
@@ -110,6 +111,7 @@ UPDATED_AT=2026-08-14
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-14：批准 Phase 2 SQLite / Conversation persistence 设计：`node:sqlite`、单向 checksum migration、UUID v4、Unix 毫秒、关系型核心 + JSON payload、单 `DatabaseSync` 与 aggregate transaction。
 - 2026-08-14：完成 Phase 1 实施：TypeScript/Fastify/TypeBox 工具链、认证、统一 Chat Completions / Responses Normalizer、基础 GET/POST 路由和 40 个确定性测试。
 - 2026-08-14：完成正式 `linux/amd64` Docker 运行基础与 noVNC maintenance overlay；Docker smoke 验证 Node 24、HTTP 认证、Bind Mount、非 root `PUID/PGID`、维护进程/端口隔离和 noVNC 页面。
 - 2026-08-14：固化 pnpm/Corepack 精确版本、pnpm 11 build-script allowlist 和整套“升级项目依赖”流程。
@@ -118,10 +120,11 @@ UPDATED_AT=2026-08-14
 
 ## Next Steps（下一步）
 
-1. Phase 2 spec：SQLite schema / migration、Conversation / Message / Tool Call / File / Attachment / Generated Image Repository 边界。
-2. Phase 2 plan：把持久化 spec 拆成可测试任务。
-3. 实现数据库迁移和完整会话保存/加载，在进程重启后恢复结构化状态。
-4. Phase 3 再实现正常运行的 Playwright Browser Manager、登录脚本、Selector Registry、ChatGPT Driver 与真实文本 E2E。
+1. Phase 2 plan：把已批准的 SQLite / Repository / Conversation aggregate spec 拆成可测试任务。
+2. 实现数据库打开、PRAGMA、checksum migration 和 `001_initial.sql`。
+3. 实现各 Repository 与 `ConversationStore`，证明 close → reopen 后完整结构化状态恢复。
+4. 把数据库生命周期接入 Gateway startup/shutdown，并扩展 Docker smoke 验证 `/data/gateway.db`。
+5. Phase 3 再实现正常运行的 Playwright Browser Manager、登录脚本、Selector Registry、ChatGPT Driver 与真实文本 E2E。
 
 ## Known Risks（已知风险）
 
