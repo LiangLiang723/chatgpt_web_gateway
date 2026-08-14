@@ -1,0 +1,38 @@
+# Dependencies / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime data
+data/*
+!data/.gitkeep
+
+# Browser / Playwright runtime state
+playwright-report/
+test-results/
+blob-report/
+.auth/
+
+# Logs / temp
+*.log
+.tmp/
+tmp/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local worktrees
+.worktrees/
+worktrees/

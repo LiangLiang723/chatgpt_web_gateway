@@ -1,0 +1,93 @@
+# OpenAI Compatible API（OpenAI 兼容接口）矩阵
+
+> 本文描述 **V1 已批准目标及实现后的预期兼容行为**。某项是否已经完成，必须再看 [`PROJECT_STATE.md`](PROJECT_STATE.md) 的 `Implemented Now（当前已实现）`。
+
+## 状态
+
+- ✅：V1 要求真实实现
+- 🟡：协议接收，但只能近似映射或明确忽略
+- ❌：V1 明确不支持
+
+## Endpoint（接口端点）
+
+| Endpoint | V1 |
+|---|---:|
+| `GET /health` | ✅ |
+| `GET /v1/models` | ✅ |
+| `POST /v1/chat/completions` | ✅ |
+| `POST /v1/responses` | ✅ |
+| `POST /v1/files` | ✅ |
+| `GET /v1/files` | ✅ |
+| `GET /v1/files/:id` | ✅ |
+| `GET /v1/files/:id/content` | ✅ |
+| `DELETE /v1/files/:id` | ✅ |
+| `POST /v1/images/generations` | ✅ |
+| Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ |
+
+## Chat Completions（聊天补全）
+
+| 能力 | V1 | 行为 |
+|---|---:|---|
+| `developer` / `system` | ✅ | 标准化为 Conversation 初始化/控制指令 |
+| `user` / `assistant` | ✅ | 参与上下文同步；历史不盲目重发 |
+| `tool` | ✅ | 转内部 Tool Result 格式 |
+| 字符串 `content` | ✅ | 标准化为文本 part |
+| `image_url` URL | ✅ | 下载后通过 ChatGPT 上传 |
+| `image_url` Base64 Data URL | ✅ | 解码、落盘、上传 |
+| `type: file` + `file_id` | ✅ | 查找本地 `/v1/files` 文件 |
+| Base64 文件 | ✅ | 解码、落盘、上传 |
+| `stream=true` | ✅ | 真 DOM Streaming（网页增量流） |
+| `tools` | ✅ | Prompt + Parser 模拟 Tool Calling |
+| `tool_choice=auto/none/required` | ✅ | 映射为 Gateway 工具策略 |
+| 指定 function（函数） | ✅ | 强约束指定工具 |
+| `response_format=json_object` | 🟡 | Prompt 约束，不声称原生 Structured Output（结构化输出） |
+| `response_format=json_schema` | 🟡 | Prompt 约束 + 本地校验；不是 OpenAI 模型级硬约束 |
+| `temperature/top_p/penalties/seed` | 🟡 | 接收但 V1 忽略 |
+| `max_tokens/max_completion_tokens` | 🟡 | 接收但 V1 不承诺精确限制 |
+| `image detail` | 🟡 | 接收但 V1 忽略 |
+| `logprobs` / `logit_bias` | ❌ | 稳定 unsupported 错误 |
+| 真实 Token Usage（令牌用量） | ❌ | 不伪造，未知时使用协议允许的 null / 缺失 |
+
+## Responses API（响应接口）
+
+必须映射到与 Chat Completions 相同的内部 `NormalizedRequest`。
+
+V1 目标：
+
+- `input` string
+- message array
+- `input_text`
+- `input_image`
+- `input_file`
+- tools
+- `stream=true`
+
+Chat Completions SSE（服务器发送事件）与 Responses SSE 使用独立协议 Encoder（编码器），但共享同一内部流事件。
+
+## Models（模型）
+
+默认只暴露：
+
+```text
+chatgpt-web
+```
+
+不伪装具体 OpenAI API 模型。未来允许配置 Alias（别名），但 Alias 只表示“路由到 chatgpt-web”。
+
+## Files（文件）
+
+文件元数据进入 SQLite，字节保存到 `data/files/`。Gateway 通过配置设置安全上限，ChatGPT 网页自身限制以实际上传结果为准。
+
+## Images Generation（图片生成）
+
+| 参数 | V1 |
+|---|---:|
+| `prompt` | ✅ |
+| `n=1` | ✅ |
+| `n>1` | ❌ |
+| `size` | 🟡 尽力映射 |
+| `quality` | 🟡 尽力映射 |
+| URL 输出 | ✅ |
+| Base64 输出 | ✅ |
+| Partial image Streaming（部分图片流式） | ❌ |
+| Image Edit（图片编辑） | ❌ |
