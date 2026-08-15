@@ -78,6 +78,21 @@ describe('PagePool', () => {
     await second.release();
   });
 
+  it('discards a leased page by closing it instead of returning it to idle', async () => {
+    const pool = createPagePool(context(), { maxOpenPages: 2 });
+    const lease = await pool.acquire();
+    const page = lease.page as unknown as FakePage;
+
+    await lease.release({ discard: true });
+    await lease.release({ discard: true });
+
+    expect(page.closed).toBe(true);
+    expect(page.closeCalls).toBe(1);
+    expect(pool.openCount).toBe(0);
+    expect(pool.leasedCount).toBe(0);
+    expect(pool.idleCount).toBe(0);
+  });
+
   it('makes release idempotent and removes pages that close while leased or idle', async () => {
     const pool = createPagePool(context(), { maxOpenPages: 2 });
     const lease = await pool.acquire();

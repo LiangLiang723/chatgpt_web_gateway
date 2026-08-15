@@ -59,10 +59,15 @@ export function createPagePool(context: BrowserContext, options: CreatePagePoolO
       let released = false;
       return {
         page,
-        async release() {
+        async release(releaseOptions = {}) {
           if (released) return;
           released = true;
           leased.delete(page);
+          if (releaseOptions.discard) {
+            removePage(page);
+            if (!page.isClosed()) await page.close();
+            return;
+          }
           if (closed || page.isClosed()) {
             removePage(page);
             return;

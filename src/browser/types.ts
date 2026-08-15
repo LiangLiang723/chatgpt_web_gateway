@@ -1,8 +1,12 @@
 import type { BrowserContext, Page } from 'playwright';
 
+export interface PageLeaseReleaseOptions {
+  discard?: boolean;
+}
+
 export interface PageLease {
   readonly page: Page;
-  release(): Promise<void>;
+  release(options?: PageLeaseReleaseOptions): Promise<void>;
 }
 
 export interface PagePool {

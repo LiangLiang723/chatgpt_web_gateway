@@ -13,6 +13,7 @@ describe('loadConfig', () => {
       pgid: 1000,
       dataDir: '/data',
       maxActivePages: 4,
+      pageIdleTimeoutMinutes: 30,
       chatgptProxyServer: undefined,
       novncPort: 6080,
       novncPassword: undefined,
@@ -35,6 +36,7 @@ describe('loadConfig', () => {
         PGID: '1300',
         DATA_DIR: '/srv/gateway',
         MAX_ACTIVE_PAGES: '7',
+        PAGE_IDLE_TIMEOUT_MINUTES: '12',
         CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
         NOVNC_PORT: '7777',
         NOVNC_PASSWORD: 'maintenance-secret',
@@ -48,6 +50,7 @@ describe('loadConfig', () => {
       pgid: 1300,
       dataDir: '/srv/gateway',
       maxActivePages: 7,
+      pageIdleTimeoutMinutes: 12,
       chatgptProxyServer: 'http://proxy.example:7890',
       novncPort: 7777,
       novncPassword: 'maintenance-secret',
@@ -66,6 +69,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MAX_ACTIVE_PAGES: '33' })).toThrow(
       /MAX_ACTIVE_PAGES/,
     );
+    expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '0' })).toThrow(
+      /PAGE_IDLE_TIMEOUT_MINUTES/,
+    );
+    expect(() =>
+      loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1441' }),
+    ).toThrow(/PAGE_IDLE_TIMEOUT_MINUTES/);
   });
 
   it('rejects unsupported UI modes', () => {

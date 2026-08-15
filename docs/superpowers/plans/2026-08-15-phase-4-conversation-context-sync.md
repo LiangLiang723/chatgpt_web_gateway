@@ -41,11 +41,11 @@
 - Existing no-argument `release()` behavior remains compatible.
 - Later Page-affinity code consumes explicit discard to make idle reclaim reduce `PagePool.openCount`.
 
-- [ ] **Step 1: Add failing config tests**
+- [x] **Step 1: Add failing config tests**
 
 Add assertions that the default config includes `pageIdleTimeoutMinutes: 30`, an explicit `PAGE_IDLE_TIMEOUT_MINUTES: '12'` becomes `12`, and `0` / values above `1440` are rejected.
 
-- [ ] **Step 2: Run the config test and confirm RED**
+- [x] **Step 2: Run the config test and confirm RED**
 
 Run:
 
@@ -55,7 +55,7 @@ corepack pnpm vitest run tests/unit/config.test.ts
 
 Expected failure: returned config has no `pageIdleTimeoutMinutes`.
 
-- [ ] **Step 3: Implement the config field**
+- [x] **Step 3: Implement the config field**
 
 Add to `AppConfigSchema`:
 
@@ -81,11 +81,11 @@ Pass through Compose:
 PAGE_IDLE_TIMEOUT_MINUTES: ${PAGE_IDLE_TIMEOUT_MINUTES:-30}
 ```
 
-- [ ] **Step 4: Re-run the config test and confirm GREEN**
+- [x] **Step 4: Re-run the config test and confirm GREEN**
 
 Run the same Vitest command and require PASS.
 
-- [ ] **Step 5: Add a failing Page Pool discard test**
+- [x] **Step 5: Add a failing Page Pool discard test**
 
 Extend `tests/unit/page-pool.test.ts` with a case that acquires a Page, calls:
 
@@ -95,7 +95,7 @@ await lease.release({ discard: true });
 
 and asserts the fake Page was closed and `openCount`, `leasedCount`, `idleCount` are all zero. Call release again and require idempotence.
 
-- [ ] **Step 6: Run the Page Pool test and confirm RED**
+- [x] **Step 6: Run the Page Pool test and confirm RED**
 
 Run:
 
@@ -105,7 +105,7 @@ corepack pnpm vitest run tests/unit/page-pool.test.ts
 
 Expected failure: current `release()` does not accept/perform discard.
 
-- [ ] **Step 7: Implement explicit discard**
+- [x] **Step 7: Implement explicit discard**
 
 Change the lease type to:
 
@@ -122,14 +122,14 @@ export interface PageLease {
 
 When `discard` is true, remove the Page from pool tracking and close it if it is still open instead of returning it to the idle set.
 
-- [ ] **Step 8: Run Task 1 tests and typecheck**
+- [x] **Step 8: Run Task 1 tests and typecheck**
 
 ```bash
 corepack pnpm vitest run tests/unit/config.test.ts tests/unit/page-pool.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 9: Update this plan checkbox state and commit**
+- [x] **Step 9: Update this plan checkbox state and commit**
 
 ```bash
 git add src/config src/browser tests/unit/config.test.ts tests/unit/page-pool.test.ts compose.yaml docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md

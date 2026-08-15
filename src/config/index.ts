@@ -54,6 +54,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pgid: parseInteger('PGID', env.PGID, 1000, 1),
     dataDir: requireNonEmpty('DATA_DIR', env.DATA_DIR ?? '/data'),
     maxActivePages: parseInteger('MAX_ACTIVE_PAGES', env.MAX_ACTIVE_PAGES, 4, 1, 32),
+    pageIdleTimeoutMinutes: parseInteger(
+      'PAGE_IDLE_TIMEOUT_MINUTES',
+      env.PAGE_IDLE_TIMEOUT_MINUTES,
+      30,
+      1,
+      1440,
+    ),
     chatgptProxyServer: parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),
     novncPassword: optionalNonEmpty(env.NOVNC_PASSWORD),
