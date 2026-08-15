@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前已实现：Phase 3 代码路径（真实 E2E 阻塞）
+## 当前已实现：Phase 3 Fresh 非流式文本闭环
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化；Phase 3 已实现 Browser / Driver / Fresh text execution 代码路径和确定性验收。开发环境需要代理访问 ChatGPT，代理 + virtual display 已打通真实 Guest 页面，当前 real E2E 只待 headed maintenance 完成人工 ChatGPT 登录/MFA：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化；Phase 3 已完成 Browser / Driver / Fresh text execution，并通过独立测试 Profile 的真实 authenticated ChatGPT Web E2E：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -33,7 +33,7 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - `corepack pnpm inspect:chatgpt` 与 `corepack pnpm test:e2e:chatgpt` 已提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 3 还不能标记完成。** DevSpace 直连 `chatgpt.com` 的 DNS/HTTPS 路径不可用，但代理 + Xvfb/full Chromium 已能稳定进入 HTTP 200 ChatGPT Guest 页面，真实 `inspect:chatgpt` 返回 `auth_required`。当前已启动独立 E2E Profile 的 noVNC headed browser，只待人工完成 ChatGPT 登录/MFA 后继续 authenticated Selector 和 Fresh 文本回答验收。
+**Phase 3 已完成真实验收。** 独立 E2E Profile 已通过人工登录，`inspect:chatgpt` 实际确认 `auth=authenticated` 且 Composer 唯一可定位；随后真实 `test:e2e:chatgpt` 同时通过 Fresh Driver challenge 与 Gateway HTTP → ChatGPT Web → Chat Completions challenge。该验收只证明 Phase 3 的 Fresh、非流式、纯文本能力，不代表后续 Conversation Sync / Streaming / Attachments / Tools / Images 已实现。
 
 尚未实现的核心能力包括 Phase 4 Conversation Engine / Context Sync、真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
 
@@ -92,7 +92,7 @@ docker compose up -d
 
 - 默认映射 Gateway `3000` 端口。
 - 默认 `UI_MODE=headless`。
-- **不会启动 noVNC / Xvfb / x11vnc / maintenance browser。**
+- **不会启动 x11vnc / websockify / noVNC / maintenance browser。** Xvfb 会作为 normal full Chromium 的虚拟显示启动。
 - **不会发布 noVNC 端口。**
 - 普通模式会启动 Xvfb + 产品级 full Chromium Persistent BrowserContext；不启动 x11vnc/websockify/noVNC，也不发布维护端口。
 
@@ -158,14 +158,14 @@ docker compose -f compose.yaml -f compose.novnc.yaml up -d
 
 如果 NAS 需要从其他设备访问，可以显式修改 `NOVNC_BIND`，但这会扩大访问面，应由部署网络、防火墙或反向代理保证安全。
 
-维护模式默认使用同一 `/data/browser-profile/`，因此与普通 `UI_MODE=headless` BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner；real E2E 可通过 `CHATGPT_PROFILE_DIR` 改用隔离测试 Profile。maintenance 登录浏览器直接启动同一 Playwright bundled Chromium binary，但不创建 Playwright BrowserContext、不开 `--remote-debugging-pipe`，只提供纯人工账号/MFA/安全验证 UI。maintenance 停机时会先请求 Chromium 退出，并清理经 hostname/PID 证明属于当前已退出 Chromium 的 stale `Singleton*` marker，避免切回 normal 后被旧 Profile lock 阻塞。完成登录或排障后恢复普通模式：
+维护模式默认使用同一 `/data/browser-profile/`，因此与普通 `UI_MODE=headless` BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner；real E2E 可通过 `CHATGPT_PROFILE_DIR` 改用隔离测试 Profile。maintenance 登录浏览器使用镜像内固定版本的 **Google Chrome Stable**，由 Node 直接 spawn，不创建 Playwright BrowserContext、不开 `--remote-debugging-pipe`，只提供纯人工账号/MFA/安全验证 UI。maintenance overlay 使用 vendored Playwright seccomp profile，让非 root Chrome 保持 Linux sandbox；不会通过 `SYS_ADMIN` 或 `--no-sandbox` 放宽运行边界。maintenance 停机时会请求 Chrome 退出，并清理经 hostname/PID 证明属于当前已退出 Chrome 的 stale `Singleton*` marker，避免切回 normal 后被旧 Profile lock 阻塞。完成登录或排障后恢复普通模式：
 
 ```bash
 docker compose -f compose.yaml -f compose.novnc.yaml down
 docker compose up -d
 ```
 
-> 当前 maintenance browser 已通过本地 Docker smoke 验证能以 headed Chromium 启动；**尚未使用真实 ChatGPT 账号完成登录 E2E**。
+> maintenance Google Chrome Stable 已通过真实 ChatGPT 账号人工登录验证；随后同一隔离 Profile 已由 Phase 3 `inspect:chatgpt` 与完整 real E2E 成功复用。
 
 ## 配置摘要
 
@@ -202,7 +202,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-`verify` 不访问真实 ChatGPT；Docker smoke 也不访问 `chatgpt.com`，只验证 headless/maintenance Chromium、HTTP、SQLite、Profile owner 和运行用户边界。
+`verify` 不访问真实 ChatGPT；Docker smoke 也不访问 `chatgpt.com`，只验证 normal Playwright Chromium、maintenance Google Chrome Stable、sandbox/seccomp、HTTP、SQLite、RFB、Profile owner 和运行用户边界。
 
 真实 ChatGPT 诊断/E2E 必须显式提供**独立于生产 Profile**的目录：
 
@@ -224,7 +224,7 @@ corepack pnpm test:e2e:chatgpt
 - Claude / Gemini / Grok 等其他 Provider
 - Anthropic Compatible API
 - ChatGPT 私有 `/backend-api` 逆向调用
-- Google Chrome / Edge / Firefox / WebKit 兼容层
+- Google Chrome / Edge / Firefox / WebKit 的**产品自动化兼容层**；maintenance-only 的固定 Google Chrome Stable 仅用于人工登录，不改变产品 Driver 仍只面向 Playwright bundled Chromium
 - 把 noVNC 作为正常运行核心依赖
 - Audio、Embeddings、Realtime、Batches、Fine-tuning、Vector Stores 等无法自然映射到 ChatGPT Web 的接口
 
@@ -246,7 +246,7 @@ OpenAI Compatible Client / Agent
        Phase3Executor             ← 已实现 Fresh-only；Phase 4 将扩展为 Conversation Engine
               │
               ▼
-        ChatGPT Driver            ← 已实现代码路径，真实网页 E2E 尚未通过
+        ChatGPT Driver            ← Phase 3 Fresh 非流式纯文本 real E2E 已通过
               │
               ▼
      Playwright Chromium

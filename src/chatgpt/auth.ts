@@ -26,9 +26,9 @@ function throwAmbiguous(definition: SelectorDefinition<'unique'>, candidateName:
   });
 }
 
-export async function probeAuth(
+async function inspectAuthState(
   page: Page,
-  selectors: ChatGptAuthSelectors = defaultSelectors,
+  selectors: ChatGptAuthSelectors,
 ): Promise<ChatGptAuthState> {
   const composer = await inspectUnique(page, selectors.composer);
   if (composer.status === 'unique') return { state: 'authenticated' };
@@ -43,4 +43,28 @@ export async function probeAuth(
   }
 
   return { state: 'unknown', reason: 'composer_and_login_indicator_missing' };
+}
+
+async function waitForAuthSignal(page: Page, selectors: ChatGptAuthSelectors): Promise<void> {
+  const candidates = [...selectors.composer.candidates, ...selectors.loginIndicator.candidates];
+  try {
+    await Promise.any(
+      candidates.map((candidate) =>
+        candidate.locate(page).waitFor({ state: 'attached', timeout: 10_000 }),
+      ),
+    );
+  } catch {
+    // A second strict inspection below decides whether the page is still unknown.
+  }
+}
+
+export async function probeAuth(
+  page: Page,
+  selectors: ChatGptAuthSelectors = defaultSelectors,
+): Promise<ChatGptAuthState> {
+  const initialState = await inspectAuthState(page, selectors);
+  if (initialState.state !== 'unknown') return initialState;
+
+  await waitForAuthSignal(page, selectors);
+  return inspectAuthState(page, selectors);
 }

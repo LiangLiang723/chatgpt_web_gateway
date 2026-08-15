@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-3-implementation
-STATUS=blocked
+PHASE=phase-3-complete
+STATUS=ready-for-phase-4-design
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-3-browser-driver.md
-NEXT_TASK=complete-phase-3-manual-auth-and-real-e2e
+ACTIVE_PLAN=none
+NEXT_TASK=write-phase-4-context-sync-spec
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
-- **当前状态：** `blocked`
-- **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 使用已启动的隔离 E2E noVNC Profile 完成 ChatGPT 人工登录/MFA，然后重跑 `inspect:chatgpt` 和完整 Phase 3 real E2E。
-- **当前 blocker（阻塞）：** DevSpace 直连 `chatgpt.com` 受错误 DNS/网络路径影响；代理 + Xvfb/full Chromium 已解决真实 Guest 页面可达性，真实 inspection 已稳定返回 `auth_required`。人工登录时 `auth.openai.com` Turnstile 在 Playwright-controlled maintenance Chromium 中发生重复 challenge，因此 maintenance 登录路径已改成直接 spawn bundled Chromium（无 `--remote-debugging-pipe`、不创建 Playwright BrowserContext）；隔离 `/data/e2e-browser-profile` 的新实例已启动，当前只待人工重新完成安全验证/ChatGPT 登录后校准 authenticated Selector 并运行 Fresh Driver / Gateway HTTP challenge。
+- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）完成。
+- **当前状态：** `ready-for-phase-4-design`
+- **活动计划：** 无；Phase 3 计划已关闭。
+- **下一个可执行任务：** 编写 Phase 4 Conversation / Context Sync 设计规格。
+- **Phase 3 验收事实：** 独立 E2E Profile 已通过 maintenance Google Chrome Stable 人工登录；产品 Playwright Chromium 随后实际完成 authenticated `inspect:chatgpt`、Fresh Driver challenge 和 Gateway HTTP → ChatGPT Web → Chat Completions challenge。当前无 Phase 3 blocker。
 
 ## Implemented Now（当前已实现）
 
@@ -59,14 +59,14 @@ UPDATED_AT=2026-08-15
 - ✅ 真实文件 SQLite close → reopen 后 Conversation aggregate 与独立 File metadata 恢复。
 - ✅ Docker 镜像包含 migrations；smoke 验证数据库 `PUID/PGID` owner、migration history 和 Bind Mount restart 持久性。
 - ✅ Phase 3 BrowserManager / bounded Page Pool 与 `MAX_ACTIVE_PAGES` 配置已接入 Gateway runtime；可选 `CHATGPT_PROXY_SERVER` 同时作用于 normal、maintenance、inspect 和 real E2E Chromium，拒绝在 proxy URL 内携带账号密码。
-- ✅ ChatGPT Selector Registry 与 Auth Probe 核心：unique/collection、fallback、missing/ambiguous、authenticated/auth_required/unknown；真实 DOM 尚待 E2E 校准。
-- ✅ Fresh ChatGPT text Driver 核心与 Completion Observer：Assistant baseline/new-turn ownership、生成状态与稳定文本采样；真实网页尚待 E2E 验证。
+- ✅ ChatGPT Selector Registry 与 Auth Probe：unique/collection、fallback、missing/ambiguous、authenticated/auth_required/unknown；真实 authenticated DOM 已校准，Auth Probe 会在首次 unknown 时等待 Composer/Login signal 挂载后重新 strict probe。
+- ✅ Fresh ChatGPT text Driver 与 Completion Observer：Assistant baseline/new-turn ownership、生成状态与稳定文本采样；真实网页 Driver challenge 已通过。
 - ✅ Phase3Executor Fresh-only capability boundary、JSON instruction envelope 与 Page lease finally-release 已接入生产 POST runtime。
 - ✅ Chat Completions / Responses 非流式文本编码与 stable execution error → OpenAI-style HTTP error 映射。
 - ✅ Headless Gateway runtime 已注入 BrowserManager + Phase3Executor；`UI_MODE=novnc` 明确禁用产品 BrowserManager 并返回 `browser_maintenance_mode`。
-- ✅ `inspect:chatgpt` 与 `test:e2e:chatgpt` 显式真实 E2E harness、安全隔离 Profile 门槛和可选诊断产物边界；支持显式代理。代理下真实 inspect 已进入 Cloudflare challenge，当前待人工登录后继续验收。
+- ✅ `inspect:chatgpt` 与 `test:e2e:chatgpt` 显式真实 E2E harness、安全隔离 Profile 门槛和可选诊断产物边界；支持显式代理，authenticated inspect / Driver / Gateway HTTP real E2E 均已通过。
 - ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker smoke 已验证普通 headless 与 maintenance headed Chromium 的 Profile 单 owner、PUID/PGID 和 restart 边界。
-- ✅ ChatGPT Driver（网页驱动）代码已实现 Fresh 非流式纯文本路径；当前 ChatGPT DOM/登录态/真实问答尚未通过 real E2E 验收。
+- ✅ ChatGPT Driver（网页驱动）Fresh 非流式纯文本路径已完成，并通过真实 ChatGPT DOM/登录态/问答 E2E 验收。
 - ❌ Context Sync（上下文同步）。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
@@ -121,14 +121,16 @@ UPDATED_AT=2026-08-15
 - `/data/browser-profile/` 是 normal BrowserManager 与 maintenance browser 共用但互斥占用的持久 Profile 边界；Docker smoke 验证两种模式都只有一个 browser owner。
 - `/health` 无需认证；所有 `/v1/*` 默认要求 Gateway Bearer API Key。
 - `X-Conversation-Key` 是受控兼容扩展；协议层负责标准化，Phase3Executor 看到该 key 会明确返回 `conversation_sync_not_implemented`，不静默忽略。
-- Phase 3 使用一个 Persistent BrowserContext + bounded Page Pool；Selector/Auth/Driver/Completion 都已实现确定性边界。真实 Guest 页面已通过代理 + virtual display 验证 `auth_required`，authenticated selector/login/answer 仍待 headed maintenance 完成人工账号登录后验证。
+- Phase 3 使用一个 Persistent BrowserContext + bounded Page Pool；Selector/Auth/Driver/Completion 已同时具备确定性测试与真实 authenticated E2E 证据。maintenance 使用固定 Google Chrome Stable 完成人工登录，normal 产品路径继续由 Playwright bundled Chromium 驱动网页。
 - 后续仍保持 Context Sync `FRESH | APPEND | RESTORE | REBUILD`、SQLite 为 Conversation 事实来源、约 200ms DOM polling + Stable Prefix Streaming。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-15：人工登录进一步暴露 `auth.openai.com` Turnstile 在 Playwright-controlled maintenance Chromium 中重复 challenge；maintenance browser 已改为 Node 直接 spawn 同一 bundled Chromium binary，仅保留 Profile/proxy/人工 UI，不创建 Playwright BrowserContext、不带 `--remote-debugging-pipe`。Docker smoke 新增该负向断言并通过，最新镜像 `sha256:38877d61…` 已用于真实 6088 E2E Profile 重试。
+- 2026-08-15：Phase 3 真实验收完成：独立 Profile 通过固定 Google Chrome Stable 151.0.7922.137 人工登录；真实 `inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`，完整 `test:e2e:chatgpt` 返回 `driverChallenge=true` / `gatewayChallenge=true`。authenticated 实测发现 Composer 延迟挂载，Auth Probe 已用 Locator attachment wait + strict re-probe 修复并有红→绿单测。
+- 2026-08-15：maintenance 登录路径正式切换到固定 Google Chrome Stable，镜像以 SHA256 固定 deb；Compose 使用 vendored Playwright seccomp profile，Docker smoke 验证非 root Chrome 保持 sandbox、`Seccomp=2`、无 `CAP_SYS_ADMIN`、无 `--no-sandbox` / `--remote-debugging-pipe`。当前正式镜像验证基线为 `sha256:1ceb828d…`。
+- 2026-08-15：人工登录曾暴露 `auth.openai.com` Turnstile 在 Chrome for Testing 中重复 challenge；真实 A/B 证明 Google Chrome Stable 可正常完成人工安全验证，因此 maintenance-only 浏览器与产品 Playwright Chromium 明确分离。
 - 2026-08-15：修复 real noVNC 登录入口长期停在 `Connecting...`：根因是 Ubuntu x11vnc `0.9.16` 默认单线程在 Xvfb 下高 CPU 且不发送 RFB banner；`-threads` A/B 实测约 104ms 返回 `RFB 003.008`。Docker smoke 新增真实 `/websockify` RFB banner 验证，新镜像 `sha256:d2cf5c2c…` 通过；真实 6088 noVNC 页面已验证进入 `Credentials are required` 密码状态。
 - 2026-08-15：maintenance mode switch 增加 PersistentContext readiness handshake、有序 shutdown 和受 hostname/PID 约束的 stale Chromium `Singleton*` 清理；新镜像 `sha256:99a0c44b…` Docker smoke 验证 maintenance `down` 后测试 Profile 无 Singleton marker，人工登录后可安全切回 normal runtime。
 - 2026-08-15：真实 Cloudflare 对照验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT Guest 页面并由 Auth Probe 报告 `auth_required`。normal `UI_MODE=headless` 因此实现为“无暴露 UI 的 Xvfb + full Chromium”；确定性 `verify` 继续通过 26 个测试文件 / 130 个测试，Docker smoke 通过 normal/maintenance virtual display、proxy/Profile single-owner、HTTP/SQLite/restart 验证。
@@ -146,16 +148,15 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 在已启动的隔离 noVNC E2E Profile 中完成人工 ChatGPT 登录/MFA；不向 Gateway 提供账号密码或 MFA。
-2. 使用相同独立 Profile + `CHATGPT_PROXY_SERVER` 运行 `corepack pnpm inspect:chatgpt`，校准当前真实 Selector / Auth 状态。
-3. 运行 `corepack pnpm test:e2e:chatgpt`，完成 Fresh Driver challenge 与 Gateway HTTP challenge。
-4. 只有上述 real E2E 全部通过后，才关闭 Phase 3 并进入 Phase 4 Context Sync 设计。
+1. 编写 Phase 4 Conversation / Context Sync 设计规格。
+2. 设计 Conversation Key lifecycle、同会话 Queue、跨会话并行与 `FRESH | APPEND | RESTORE | REBUILD`。
+3. 继续保持 Phase 3 real E2E 为显式回归门槛，不把它混入确定性 `verify`。
 
 ## Known Risks（已知风险）
 
-- **真实 ChatGPT Web E2E 已启动但未通过。** 代理 + Xvfb/full Chromium 已解决网络/Cloudflare 页面访问并验证 Guest `auth_required`；在人工账号登录完成前仍不能证明 authenticated Selector 或 Fresh 文本问答可用。
-- maintenance browser 已通过 Docker smoke 验证 proxy + 隔离 E2E Profile 运行边界，并已启动真实 ChatGPT 页面；首次人工登录仍在进行中。
-- 当前 POST 端点已经接入 Phase3Executor/Browser/Driver 的 Fresh 非流式纯文本路径，但真实 `chatgpt.com` E2E 尚未通过；Conversation persistence 仍未接入运行时 Conversation Engine，Context Sync 属于 Phase 4。
+- Phase 3 真实 ChatGPT Web E2E 已通过，但网页 DOM、Cloudflare 和认证流程属于外部变化面；未来升级 Playwright / Chrome 或 ChatGPT UI 后仍需重跑显式 real E2E。
+- maintenance Google Chrome Stable 与产品 Playwright Chromium 当前主版本一致；升级其中任一浏览器时必须重新验证 Profile 兼容、人工登录和产品 real E2E。
+- 当前 POST 端点只完成 Fresh 非流式纯文本闭环；Conversation persistence 尚未接入运行时 Conversation Engine，Context Sync 属于 Phase 4。
 - 当前 Docker 验收矩阵只有 `linux/amd64`，未验证 ARM64。
 - ChatGPT 网页 DOM 会变化；后续 Selector 必须集中并有诊断工具。
 - Tool Calling 是 Gateway 的 Prompt + Parser 模拟层，不应伪装成 ChatGPT Web 原生工具协议。

@@ -7,7 +7,12 @@ import type { SelectorDefinition } from '../../src/chatgpt/selector-registry.js'
 const page = {} as Page;
 
 function locator(count: number): Locator {
-  return { count: async () => count } as unknown as Locator;
+  return {
+    count: async () => count,
+    waitFor: async () => {
+      if (count === 0) throw new Error('timeout');
+    },
+  } as unknown as Locator;
 }
 
 function unique(name: string, counts: number[]): SelectorDefinition<'unique'> {
@@ -29,6 +34,46 @@ describe('ChatGPT auth probe', () => {
         loginIndicator: unique('login', [0]),
       }),
     ).resolves.toEqual({ state: 'authenticated' });
+  });
+
+  it('waits for the composer to mount before reporting an unknown auth state', async () => {
+    let composerCount = 0;
+    const composer: SelectorDefinition<'unique'> = {
+      name: 'composer',
+      cardinality: 'unique',
+      candidates: [
+        {
+          name: 'composer-delayed',
+          locate: () =>
+            ({
+              count: async () => composerCount,
+              waitFor: async () => {
+                composerCount = 1;
+              },
+            }) as unknown as Locator,
+        },
+      ],
+    };
+    const loginIndicator: SelectorDefinition<'unique'> = {
+      name: 'login',
+      cardinality: 'unique',
+      candidates: [
+        {
+          name: 'login-missing',
+          locate: () =>
+            ({
+              count: async () => 0,
+              waitFor: async () => {
+                throw new Error('timeout');
+              },
+            }) as unknown as Locator,
+        },
+      ],
+    };
+
+    await expect(probeAuth(page, { composer, loginIndicator })).resolves.toEqual({
+      state: 'authenticated',
+    });
   });
 
   it('reports auth_required only when an explicit login indicator is unique', async () => {

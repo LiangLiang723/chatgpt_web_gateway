@@ -9,6 +9,7 @@ blob-report/
 .worktrees/
 worktrees/
 pnpm-lock.yaml
+docker/seccomp_profile.json
 scripts/check-architecture.mjs
 scripts/check-docs.mjs
 scripts/check-project-memory.mjs

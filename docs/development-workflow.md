@@ -54,6 +54,7 @@
 
 - Node LTS / Docker runtime baseline。
 - Playwright 官方基础镜像、Playwright package 与 bundled Chromium。
+- maintenance-only Google Chrome Stable pin / SHA256，以及 vendored Playwright seccomp profile。
 - pnpm。
 - TypeScript、Fastify、TypeBox / Ajv。
 - Vitest、ESLint、Prettier。
@@ -63,14 +64,15 @@
 
 ```text
 读取当前版本与官方兼容信息
-→ 确认 Node / Playwright / Chromium / pnpm 组合
+→ 确认 Node / Playwright / bundled Chromium / maintenance Chrome Stable / pnpm 组合
 → 分层升级并处理 breaking changes
-→ 更新 packageManager / engines / Docker image pins
+→ 更新 packageManager / engines / Docker image pins；如更新 maintenance Chrome，同步更新固定 deb 版本与 SHA256
 → 刷新 pnpm-lock.yaml 并检查异常解析变化
 → typecheck / lint / format:check / test / build / verify
 → 重建完整 Docker 镜像
 → 核对容器内实际版本
-→ Docker smoke test
+→ Docker smoke test（含 maintenance Chrome sandbox/seccomp、RFB、Profile mode-switch）
+→ 如 Playwright / bundled Chromium / maintenance Chrome 任一变化，显式重跑真实登录/Profile 兼容与 ChatGPT E2E
 → 项目记忆与版本文档回写判断
 → git diff --check + staged diff
 → 按提交规范提交

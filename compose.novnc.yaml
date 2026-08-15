@@ -1,5 +1,7 @@
 services:
   gateway:
+    security_opt:
+      - seccomp=./docker/seccomp_profile.json
     environment:
       UI_MODE: novnc
       NOVNC_PASSWORD: ${NOVNC_PASSWORD:?Set NOVNC_PASSWORD before enabling maintenance mode}

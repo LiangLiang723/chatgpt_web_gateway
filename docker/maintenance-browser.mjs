@@ -3,8 +3,6 @@ import { lstatSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import path from 'node:path';
 
-import { chromium } from 'playwright';
-
 import { parseChatGptProxyServer } from '../dist/config/proxy.js';
 
 const dataDir = path.resolve(process.env.DATA_DIR ?? '/data');
@@ -21,6 +19,7 @@ const proxyServer = parseChatGptProxyServer(process.env.CHATGPT_PROXY_SERVER);
 const readyFile = '/tmp/maintenance-browser.ready';
 const pidFile = '/tmp/maintenance-browser.pid';
 const lockPath = path.join(profileDir, 'SingletonLock');
+const maintenanceBrowserExecutable = '/usr/bin/google-chrome';
 
 process.once('exit', () => {
   rmSync(readyFile, { force: true });
@@ -54,7 +53,6 @@ function removeOwnStaleSingletonFiles() {
 }
 
 const chromeArgs = [
-  '--no-sandbox',
   '--disable-dev-shm-usage',
   `--user-data-dir=${profileDir}`,
   '--no-first-run',
@@ -80,7 +78,7 @@ function requestShutdown(signal) {
 process.once('SIGTERM', () => requestShutdown('SIGTERM'));
 process.once('SIGINT', () => requestShutdown('SIGINT'));
 
-browser = spawn(chromium.executablePath(), chromeArgs, {
+browser = spawn(maintenanceBrowserExecutable, chromeArgs, {
   stdio: 'inherit',
 });
 

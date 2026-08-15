@@ -253,8 +253,38 @@ function assertBrowserMode(id, maintenance) {
   if (!owner.args.includes(`--proxy-server=${env.CHATGPT_PROXY_SERVER}`)) {
     throw new Error(`Chromium did not receive CHATGPT_PROXY_SERVER: ${owner.args}`);
   }
-  if (maintenance && owner.args.includes('--remote-debugging-pipe')) {
-    throw new Error(`Maintenance Chromium must not be Playwright-controlled: ${owner.args}`);
+  if (maintenance) {
+    if (!owner.args.startsWith('/usr/bin/google-chrome ')) {
+      throw new Error(`Maintenance browser must use Google Chrome Stable: ${owner.args}`);
+    }
+    if (owner.args.includes('--no-sandbox')) {
+      throw new Error(
+        `Maintenance Google Chrome must keep the Chromium sandbox enabled: ${owner.args}`,
+      );
+    }
+    if (owner.args.includes('--remote-debugging-pipe')) {
+      throw new Error(`Maintenance Google Chrome must not be Playwright-controlled: ${owner.args}`);
+    }
+    const chromeVersion = runDocker(['exec', id, 'google-chrome', '--version'], { quiet: true });
+    if (chromeVersion !== 'Google Chrome 151.0.7922.137') {
+      throw new Error(`Unexpected maintenance Google Chrome version: ${chromeVersion}`);
+    }
+    const securityStatus = runDocker(
+      ['exec', id, 'sh', '-lc', `grep -E '^(CapEff|Seccomp):' /proc/${owner.pid}/status`],
+      { quiet: true },
+    );
+    const capEff = securityStatus.match(/^CapEff:\s*([0-9a-f]+)$/m)?.[1];
+    const seccomp = securityStatus.match(/^Seccomp:\s*(\d+)$/m)?.[1];
+    if (!capEff || (BigInt(`0x${capEff}`) & (1n << 21n)) !== 0n) {
+      throw new Error(
+        `Maintenance Google Chrome must not receive CAP_SYS_ADMIN: ${securityStatus}`,
+      );
+    }
+    if (seccomp !== '2') {
+      throw new Error(
+        `Maintenance Google Chrome must run under seccomp filtering: ${securityStatus}`,
+      );
+    }
   }
 
   const identity = runDocker(
@@ -335,6 +365,13 @@ async function main() {
   }
 
   const maintenance = serviceConfig(true);
+  const securityOptions = maintenance.security_opt ?? [];
+  if (!securityOptions.some((value) => String(value).includes('seccomp_profile.json'))) {
+    throw new Error('Maintenance Compose must apply the vendored Playwright seccomp profile');
+  }
+  if ((maintenance.cap_add ?? []).some((value) => String(value).toUpperCase() === 'SYS_ADMIN')) {
+    throw new Error('Maintenance Compose must not add SYS_ADMIN');
+  }
   const novncMapping = publishedPort(maintenance, novncPort);
   if (!novncMapping) {
     throw new Error('Maintenance Compose overlay does not publish the configured noVNC port');

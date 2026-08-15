@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Keep `playwright@1.62.1` matched to `mcr.microsoft.com/playwright:v1.62.1-noble`; do not upgrade dependencies in this phase.
-- Use only Playwright bundled Chromium; no external Chrome/Edge executable path or private ChatGPT `/backend-api` calls.
+- Product BrowserManager/Driver use only Playwright bundled Chromium; maintenance-only manual login may use the pinned Google Chrome Stable packaged in the same image. No arbitrary external browser executable path or private ChatGPT `/backend-api` calls.
 - Production profile is always `join(DATA_DIR, 'browser-profile')`.
 - `UI_MODE=headless` owns the production Profile through `BrowserManager`; `UI_MODE=novnc` must not start the product BrowserManager.
 - Default `MAX_ACTIVE_PAGES=4`; Phase 3 does not implement queueing, idle eviction, conversation affinity, URL restore, or Context Sync.
@@ -1008,7 +1008,7 @@ Assert HTTP 200 and challenge token in `choices[0].message.content`.
 
 Do not add it to `verify`.
 
-- [!] **Step 7: Run real inspect/auth E2E — Guest auth verified; blocked only on isolated Profile manual ChatGPT login/MFA**
+- [x] **Step 7: Run real inspect/auth E2E**
 
 Run only with explicit environment available in the workspace:
 
@@ -1020,9 +1020,9 @@ Expected for completion: authenticated + current selector diagnostics healthy.
 
 If no authenticated isolated Profile exists, record `auth_required` as the real Phase 3 blocker; do not fake login.
 
-2026-08-15 execution evidence: direct DevSpace DNS/HTTPS path to `chatgpt.com` was unusable (`ETIMEDOUT` / 60s Playwright navigation timeout), while the user-provided LAN proxy restores reachability. Real comparison then showed Playwright headless-shell and Chromium new-headless both remain on Cloudflare `Just a moment...` for 30 seconds, but Xvfb + full Chromium (`headless:false`) returns HTTP 200 and reaches the normal ChatGPT Guest page. Phase 3 normal `UI_MODE=headless`, inspect and real E2E were therefore changed to virtual-display full Chromium; no x11vnc/noVNC is exposed in normal mode. A real proxy-backed `corepack pnpm inspect:chatgpt` now reaches `https://chatgpt.com/` and reports stable `auth_required`, proving Cloudflare/network and Guest Auth Probe behavior. The remaining criterion is an authenticated isolated Profile, so a headed noVNC instance using `/data/e2e-browser-profile` is live for the required human ChatGPT login/MFA step.
+2026-08-15 execution evidence: direct DevSpace DNS/HTTPS path to `chatgpt.com` was unusable, so the explicit proxy path was used. Real comparison showed normal `UI_MODE=headless` must use Xvfb + full Playwright Chromium. For manual auth, Chrome for Testing repeatedly looped `auth.openai.com` Turnstile, while Google Chrome Stable 151.0.7922.137 completed human verification using a clean isolated Profile. That authenticated Profile was then reused by the product Playwright Chromium. The first authenticated inspect exposed a real readiness race: `#prompt-textarea` existed after page mount but the immediate Auth Probe returned unknown. A red unit test was added, Auth Probe was changed to await Composer/Login Locator attachment and re-run strict inspection, and real `inspect:chatgpt` then returned `auth=authenticated` with `composer=unique`.
 
-- [!] **Step 8: Run full real Phase 3 E2E — pending the same isolated Profile manual login**
+- [x] **Step 8: Run full real Phase 3 E2E**
 
 ```bash
 E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> CHATGPT_PROXY_SERVER=<proxy-origin> corepack pnpm test:e2e:chatgpt
@@ -1032,7 +1032,7 @@ Expected for completion: auth inspection PASS, Fresh Driver challenge PASS, Gate
 
 If blocked by auth/network/CAPTCHA/current DOM, update `PROJECT_STATE` to Phase 3 blocked with exact evidence and continue Task 9 documentation/verification without falsely closing Phase 3.
 
-2026-08-15 execution evidence: the original full E2E run failed before auth inspection on direct network access. Proxy + virtual-display full Chromium now reaches the real Guest page and `inspect:chatgpt` reports `auth_required`; full E2E must wait until the isolated headed Profile has completed ChatGPT manual login/MFA. Driver challenge and Gateway HTTP challenge remain unverified until then.
+2026-08-15 execution evidence: after authenticated inspect passed, the full explicit command completed with `{ "auth": "authenticated", "composer": "unique", "driverChallenge": true, "gatewayChallenge": true }`. This proves both a real Fresh Driver answer and a real Gateway HTTP → ChatGPT Web → Chat Completions challenge on the isolated authenticated Profile.
 
 - [x] **Step 9: Update plan/state and commit Task 8 implementation/evidence**
 
@@ -1088,14 +1088,14 @@ Current evidence by criterion:
 16. `inspect:chatgpt` exists; safety tests reject missing/production E2E Profile.
 17. Inspect tests prove screenshot/HTML only when diagnostics dir is explicit.
 18. After proxy support, fresh deterministic `corepack pnpm verify` passed with 26 test files / 130 tests.
-19. Latest Docker build succeeded as image `sha256:38877d61e08ff0ce120e9724c88f688345f7c19b3f86f26f4270779e6b097f9c`; fresh Docker smoke proves normal `UI_MODE=headless` runs Xvfb + full Chromium without noVNC, normal/maintenance both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, HTTP/SQLite/restart checks still pass, maintenance `/websockify` returns a real `RFB 003.008` banner, maintenance Chromium has no `--remote-debugging-pipe`, and maintenance `down` leaves no Chromium `Singleton*` marker after the supervised shutdown path. Real debugging proved x11vnc 0.9.16 requires `-threads` in this Xvfb environment; default single-thread mode stalls the RFB handshake at high CPU.
-20. **BLOCKED:** proxy-backed Xvfb/full-Chromium real inspection validates Guest `auth_required`. The first manual login attempt reached `auth.openai.com` but repeated Turnstile challenge while maintenance Chromium was Playwright-controlled; maintenance has now been switched to direct bundled Chromium without Playwright BrowserContext/remote debugging, and the same isolated Profile is live for a fresh manual verification attempt before authenticated composer/selector calibration.
-21. **BLOCKED:** real Fresh Driver challenge awaits criterion 20 manual auth.
-22. **BLOCKED:** real Gateway HTTP challenge awaits criterion 20 manual auth.
-23. README/API/architecture/testing/PROJECT_STATE and the governing spec are updated for optional proxy + isolated maintenance E2E Profile behavior.
-24. `PROJECT_STATE` remains `phase-3-implementation / blocked` with the exact manual-auth + real-E2E next task.
+19. Current Docker build succeeded as image `sha256:1ceb828db96cac3058cf7bafb7dacff36cccc85e75005f617d20ec4f959c897f`; Docker smoke proves normal `UI_MODE=headless` runs Xvfb + full Playwright Chromium without noVNC, maintenance uses pinned Google Chrome Stable 151.0.7922.137, both receive the configured proxy, HTTP/SQLite/restart checks pass, `/websockify` returns a real `RFB 003.008` banner, maintenance Chrome has neither `--remote-debugging-pipe` nor `--no-sandbox`, runs under seccomp filtering without `CAP_SYS_ADMIN`, and maintenance `down` leaves no Chromium `Singleton*` marker. x11vnc 0.9.16 remains pinned to `-threads` because default single-thread mode stalls RFB at high CPU.
+20. **PASS:** isolated authenticated Profile real `inspect:chatgpt` returned `auth=authenticated` and `composer=unique` after the Auth Probe readiness fix.
+21. **PASS:** real Fresh Driver challenge completed successfully (`driverChallenge=true`).
+22. **PASS:** real Gateway HTTP → ChatGPT Web → Chat Completions challenge completed successfully (`gatewayChallenge=true`).
+23. README/API/architecture/testing/PROJECT_STATE and the governing spec are being finalized for the passed Phase 3 state plus maintenance Stable Chrome/sandbox boundary.
+24. With criteria 20–22 now passed, Phase 3 is eligible for completion after the final-HEAD verification rerun and project-state/plan closure.
 
-Criteria 20–22 are unmet, therefore Phase 3 is not eligible for completion.
+All acceptance criteria required for real capability are now satisfied; only final-HEAD verification and governance closure remain.
 
 - [x] **Step 2: Apply documentation writeback**
 
@@ -1127,7 +1127,7 @@ corepack pnpm docker:smoke
 
 Expected: PASS.
 
-- [!] **Step 5: If Phase 3 is eligible for completion, rerun real E2E on final HEAD — waiting for isolated Profile manual auth**
+- [x] **Step 5: Rerun real E2E on final implementation HEAD**
 
 ```bash
 E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> CHATGPT_PROXY_SERVER=<proxy-origin> corepack pnpm test:e2e:chatgpt
@@ -1137,7 +1137,7 @@ Expected: PASS. A previous E2E run before final code/docs changes is not suffici
 
 If the real E2E cannot run/pass, keep blocked state and report the exact unverified external condition.
 
-Current decision: proxy-backed Xvfb/full-Chromium page access and Guest Auth Probe are verified and the isolated noVNC Profile is live, but Phase 3 is still not eligible for completion until the human ChatGPT login/MFA step finishes. Immediately after that step, rerun `inspect:chatgpt` and the full real E2E on the same isolated Profile and current proxy.
+2026-08-15 final execution evidence: after final code/state documentation writeback, `inspect:chatgpt` again returned `auth=authenticated` / `composer=unique`, and `test:e2e:chatgpt` again returned `driverChallenge=true` / `gatewayChallenge=true` on the same isolated Profile. Phase 3 is eligible for closure.
 
 - [x] **Step 6: Run Git hygiene checks**
 
@@ -1178,7 +1178,7 @@ If blocked:
 📝 记录 Phase 3 实现与真实 E2E 阻塞状态
 ```
 
-- [!] **Step 8: Close plan only if eligible — blocked; keep this plan active until real E2E passes**
+- [x] **Step 8: Close Phase 3 plan after final-HEAD verification**
 
 If complete, mark all plan checkboxes `[x]`, set `ACTIVE_PLAN=none`, commit:
 
@@ -1188,6 +1188,8 @@ If complete, mark all plan checkboxes `[x]`, set `ACTIVE_PLAN=none`, commit:
 
 If blocked, do **not** mark blocked E2E steps complete and do not close the plan.
 
+2026-08-15 closure evidence: deterministic `verify` passed with 26 test files / 131 tests; fresh Docker build produced `sha256:1ceb828db96cac3058cf7bafb7dacff36cccc85e75005f617d20ec4f959c897f`, Docker smoke passed Stable Chrome sandbox/seccomp/RFB/Profile-shutdown plus normal runtime checks, and final real inspect/E2E both passed. `PROJECT_STATE` is therefore closed as `phase-3-complete / ready-for-phase-4-design` with `ACTIVE_PLAN=none`.
+
 - [x] **Step 9: Push feature branch normally**
 
 ```bash
@@ -1196,4 +1198,4 @@ git push -u origin phase-3-browser-driver
 
 No force-push, no merge to default branch, no Docker Registry image, no GitHub Release unless separately requested.
 
-2026-08-15 execution evidence: `git push -u origin phase-3-browser-driver` succeeded; the local branch now tracks `origin/phase-3-browser-driver`. The plan remains active because Steps 7–8 real authenticated E2E are still blocked on manual login.
+2026-08-15 execution evidence: `git push -u origin phase-3-browser-driver` succeeded; the local branch tracks `origin/phase-3-browser-driver`. Additional Phase 3 completion changes will be pushed normally after final-HEAD verification and plan closure.

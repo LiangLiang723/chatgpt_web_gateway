@@ -28,13 +28,13 @@
 
 ## Phase 3：Playwright Chromium + 最小 ChatGPT Driver
 
-状态：**实现完成；代理 + virtual display 已恢复真实 Guest 页面并验证 `auth_required`，当前真实 E2E 只阻塞在隔离 headed Profile 的人工 ChatGPT 登录/MFA，尚未验收完成**。
+状态：**完成**。
 
 交付：Persistent BrowserContext、manual maintenance login 边界、bounded Page Pool、Selector Registry（选择器注册表）、Auth Probe、`inspect:chatgpt`、Fresh 非流式纯文本 Driver、Chat Completions / Responses 文本响应编码和显式 real E2E harness。
 
-当前已通过确定性 `verify` 与 Docker normal/maintenance Chromium smoke；真实 E2E 已实际启动。直连路径不可用，但 `CHATGPT_PROXY_SERVER` + Xvfb/full Chromium 已进入真实 ChatGPT Guest 页面并验证 `auth_required`；只需隔离 headed Profile 完成人工账号登录/MFA 后继续 authenticated Selector/问答验收。
+确定性 `verify`、Docker normal/maintenance smoke 与真实 ChatGPT E2E 均已通过。独立 Profile 由 maintenance Google Chrome Stable 人工登录；随后产品 Playwright Chromium 实际完成 authenticated auth/selector inspection、Fresh Driver 文本 challenge，以及 Gateway HTTP → ChatGPT Web → Chat Completion challenge。
 
-验收：真实 E2E 能完成 auth/selector inspection、一次 Fresh Driver 文本一问一答，以及至少一次 Gateway HTTP → ChatGPT Web → Chat Completion。未满足前不得进入 Phase 4 实施。
+验收：真实 E2E 已完成 auth/selector inspection、一次 Fresh Driver 文本一问一答，以及至少一次 Gateway HTTP → ChatGPT Web → Chat Completion。Phase 3 验收关闭后进入 Phase 4 Context Sync 设计。
 
 ## Phase 4：Conversation + Context Sync
 
