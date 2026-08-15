@@ -95,6 +95,10 @@ interface NormalizedRequest {
 
 同一 Conversation 请求串行，不同 Conversation 可以并行。禁止全局锁串行所有用户。
 
+Phase 4 当前实现把 SQLite `ConversationStore` 中最后一次**成功同步**的完整 aggregate 作为本地事实源。Planner 是纯函数：只有 instructions 与持久化消息前缀完全一致、并且当前请求恰好比已同步历史多一个最终 `user` turn 时才允许 APPEND/RESTORE；instructions 变化、历史修改/回滚/分叉、缺失可恢复 URL 或其他前缀不一致都选择 REBUILD。未提供 `X-Conversation-Key` 时请求保持 ephemeral FRESH，不自动生成 key，也不把两个无 key 请求猜成同一 Conversation。
+
+有稳定 key 的请求通过 keyed Queue 串行化。成功执行后一次性保存“当前请求完整历史 + 新 Assistant 回复 + ChatGPT conversation URL”；网页/Driver/持久化失败不会覆盖最后一个成功快照。APPEND 的 warm Page 导航身份不可信时先尝试 RESTORE 原 `/c/...` URL；只有稳定 `conversation_restore_failed` 才允许升级为 RESTORE/REBUILD，普通认证、Selector、浏览器错误不会被伪装成重建成功。
+
 ## Container Runtime（容器运行时）
 
 Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
@@ -120,7 +124,7 @@ Playwright
           └── Page C → Conversation C
 ```
 
-Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/关闭；Conversation Queue、idle Page 回收和 conversation URL restore 从 Phase 4 实现。SQLite 保留会话状态，后续恢复时再重新打开 conversation URL。
+Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增加 Conversation → Page affinity、idle timeout 与容量压力下的 LRU idle eviction。默认 `PAGE_IDLE_TIMEOUT_MINUTES=30`，只回收 idle affinity，不抢占 active Conversation。Conversation 请求失败时对应 lease 会 discard，避免把未知状态 Page 继续绑定给该 key；本地 SQLite 状态仍保留，因此后续可通过 conversation URL RESTORE。
 
 故障恢复逐级升级：
 
@@ -137,11 +141,11 @@ Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
 
-Phase 3 已实现 Fresh-only text Driver：每次请求先导航到 ChatGPT Fresh 起点，Auth Probe 区分 `authenticated | auth_required | unknown`，发送前记录 Assistant Turn baseline，发送后只观察 index=`baseline` 的新 Assistant Turn。完成判断使用 generating/stop/thinking 可观察状态 + 非空文本连续稳定采样；固定约 250ms 只是 polling cadence，不把任意 sleep 或 `networkidle` 当作完成证据。
+Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航目标扩展为 `fresh | current | restore`。`fresh` 导航 ChatGPT 新会话起点，`current` 要求当前 Page 仍属于预期 Conversation identity，`restore` 显式打开持久化 `/c/...` URL 并校验恢复后的 identity。所有 target 最终仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer；完成判断使用 generating/stop/thinking 可观察状态 + 非空文本连续稳定采样，固定约 250ms 只是 polling cadence，不把任意 sleep 或 `networkidle` 当作完成证据。
 
 Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。
 
-Phase 3 Executor 只接受 Fresh、非流式、纯文本请求；system/developer/user 通过一次 JSON-serialized prompt envelope 近似映射。Conversation Key/历史属于 Phase 4，Streaming/附件/Tools/Structured Output 属于后续 Phase。
+Phase 4 Conversation Executor 接受非流式纯文本多轮请求，要求最终消息为非空 `user`。FRESH/REBUILD 使用一次 JSON-serialized full-context prompt envelope；APPEND/RESTORE 只提交新增 user turn，不重复灌入已同步历史。system/developer 仍是 ChatGPT Web 上的 prompt 近似映射，不声称网页具有 OpenAI 原生 privilege channel。Streaming、附件、Tools、Structured Output 与 image execution 仍属于后续 Phase，并以稳定 `unsupported_phase4_request` 明确拒绝。
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
@@ -247,7 +251,7 @@ Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前�
 
 `GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
 
-兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`；未提供时保持 `undefined`，自动会话策略由后续 Conversation / Context Sync 阶段实现。
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`。Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、同 key Queue 与 Page affinity；未提供时仍保持 `undefined` 并执行 ephemeral FRESH。Gateway 不自动创建、推断或跨请求绑定匿名 Conversation identity。
 
 ## 错误边界
 

@@ -689,27 +689,27 @@ UPDATED_AT=2026-08-15
 
 - If real E2E is externally blocked, keep Phase 4 active/incomplete, record the blocker and point `NEXT_TASK` to the smallest executable unblock/retest action.
 
-- [ ] **Step 1: Run project-memory Writeback Decision**
+- [x] **Step 1: Run project-memory Writeback Decision**
 
 Update only current facts: implemented Phase 4 behavior, API compatibility, architecture, testing evidence, runtime config, roadmap status and next task.
 
-- [ ] **Step 2: Mark every completed plan checkbox and append closure evidence**
+- [x] **Step 2: Mark every completed plan checkbox and append closure evidence**
 
 Do not mark a check that lacks current-run evidence.
 
-- [ ] **Step 3: Run focused tests after final code/doc edits**
+- [x] **Step 3: Run focused tests after final code/doc edits**
 
 ```bash
 corepack pnpm vitest run tests/unit/context-sync.test.ts tests/unit/conversation-queue.test.ts tests/unit/conversation-pages.test.ts tests/unit/chatgpt-driver.test.ts tests/unit/conversation-executor.test.ts tests/integration/conversation-context-sync.test.ts tests/integration/runtime-browser.test.ts
 ```
 
-- [ ] **Step 4: Run full deterministic repository verification**
+- [x] **Step 4: Run full deterministic repository verification**
 
 ```bash
 corepack pnpm verify
 ```
 
-- [ ] **Step 5: Run repository governance checks explicitly**
+- [x] **Step 5: Run repository governance checks explicitly**
 
 ```bash
 node scripts/check-project-memory.mjs
@@ -718,7 +718,7 @@ node scripts/check-architecture.mjs
 node scripts/check-version.mjs
 ```
 
-- [ ] **Step 6: Run Git safety checks**
+- [x] **Step 6: Run Git safety checks**
 
 ```bash
 git status --short --branch
@@ -729,7 +729,7 @@ git diff --staged
 
 Verify no browser Profile, Cookie, SQLite DB, real uploads, generated media, logs or credentials are staged.
 
-- [ ] **Step 7: Commit final docs/state**
+- [x] **Step 7: Commit final docs/state**
 
 ```bash
 git add README.md .env.example docs/PROJECT_STATE.md docs/architecture.md docs/api-compatibility.md docs/testing.md docs/roadmap.md docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
@@ -747,3 +747,5 @@ git push -u origin phase-4-context-sync
 ```
 
 Report the actual commit(s), push result, deterministic verification, Docker smoke, real E2E result and any unverified boundary.
+
+2026-08-15 Task 8 evidence before Git finalization: project-memory Writeback Decision updated `PROJECT_STATE`, architecture, API compatibility, testing, roadmap and README to the blocked-but-implemented Phase 4 state. Focused Conversation/Driver/E2E-profile checks passed with 8 test files / 46 tests. Final `corepack pnpm verify` passed with 33 test files / 177 tests plus format, lint, typecheck, build and repository checks. The four governance scripts also passed explicitly. Phase 4 remains intentionally active because Task 7 Step 6 is blocked at real ChatGPT `auth_required`; the smallest next task is manual re-authentication of the isolated E2E Profile followed by rerunning `test:e2e:chatgpt:phase4`.

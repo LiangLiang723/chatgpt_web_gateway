@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前已实现：Phase 3 Fresh 非流式文本闭环
+## 当前已实现：Phase 4 Conversation + Context Sync 代码闭环
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化；Phase 3 已完成 Browser / Driver / Fresh text execution，并通过独立测试 Profile 的真实 authenticated ChatGPT Web E2E：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E；Phase 4 的 Conversation + Context Sync 运行时代码与确定性/Docker 验证也已完成：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -27,15 +27,16 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - 真实文件数据库已通过 save → close → reopen → load 恢复测试。
 - Docker smoke 已验证 `/data/gateway.db`、migration history、`PUID/PGID` owner 和容器 restart 后持续可用。
 - 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
-- bounded Page Pool、Selector Registry、Auth Probe、Fresh ChatGPT text Driver 和非流式 completion observer 已实现。
-- `Phase3Executor` 只允许 Fresh、非流式、纯文本请求；历史会话/Conversation Key 明确返回 Phase 4 未实现，Streaming/附件/Tools/Structured Output 等未来能力明确拒绝。
-- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入 Browser/Driver 执行链，并分别编码 OpenAI-style 非流式文本响应；不会伪造 token usage。
-- `corepack pnpm inspect:chatgpt` 与 `corepack pnpm test:e2e:chatgpt` 已提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
+- bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 支持 `fresh | current | restore` Conversation target。
+- Phase 4 Conversation Executor 已实现 `FRESH | APPEND | RESTORE | REBUILD`、同 key Queue、跨 key 并行、Conversation Page affinity、idle 回收和 SQLite 成功快照持久化。
+- `X-Conversation-Key` 存在时保持稳定 Conversation lifecycle；未提供时请求保持 ephemeral Fresh，不自动生成/猜测会话身份。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入 Conversation/Browser/Driver 执行链，并分别编码 OpenAI-style 非流式文本响应；不会伪造 token usage。Streaming/附件/Tools/Structured Output/image execution 仍明确拒绝。
+- `corepack pnpm inspect:chatgpt`、`corepack pnpm test:e2e:chatgpt` 与 `corepack pnpm test:e2e:chatgpt:phase4` 提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 3 已完成真实验收。** 独立 E2E Profile 已通过人工登录，`inspect:chatgpt` 实际确认 `auth=authenticated` 且 Composer 唯一可定位；随后真实 `test:e2e:chatgpt` 同时通过 Fresh Driver challenge 与 Gateway HTTP → ChatGPT Web → Chat Completions challenge。该验收只证明 Phase 3 的 Fresh、非流式、纯文本能力，不代表后续 Conversation Sync / Streaming / Attachments / Tools / Images 已实现。
+**Phase 3 已完成真实验收；Phase 4 尚未关闭真实验收。** Phase 3 时独立 E2E Profile 已人工登录并通过 `inspect:chatgpt`、Fresh Driver challenge 与 Gateway HTTP challenge。Phase 4 当前 `verify`、Docker smoke 和显式三轮 real E2E harness 均已准备完成，但 2026-08-15 实际运行 Phase 4 real E2E 时隔离 Profile 第 1 轮返回 `auth_required`；需要通过 maintenance Google Chrome Stable 重新人工认证后再重跑 APPEND + restart RESTORE 验收。
 
-尚未实现的核心能力包括 Phase 4 Conversation Engine / Context Sync、真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
+尚未实现的核心能力包括真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
 
 ## V1 批准范围
 
@@ -178,7 +179,8 @@ docker compose up -d
 | `DATA_PATH` | `./data` | 宿主机 Bind Mount 路径 |
 | `PUID` | `1000` | 长期业务进程 UID |
 | `PGID` | `1000` | 长期业务进程 GID |
-| `MAX_ACTIVE_PAGES` | `4` | Phase 3 Page Pool 最大打开 Page 数；当前不排队等待 |
+| `MAX_ACTIVE_PAGES` | `4` | Page Pool 最大打开 Page 数；不同 Conversation 可并行直到容量上限 |
+| `PAGE_IDLE_TIMEOUT_MINUTES` | `30` | Conversation Page affinity 空闲回收时间；容量压力下可提前回收 LRU idle Page |
 | `CHATGPT_PROXY_SERVER` | 空 | 可选 ChatGPT 浏览器代理；支持 `http` / `https` / `socks5`，URL 内禁止账号密码 |
 | `NOVNC_BIND` | `127.0.0.1` | noVNC 宿主机绑定地址 |
 | `NOVNC_PORT` | `6080` | noVNC 端口 |
@@ -215,6 +217,11 @@ E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:phase4
 ```
 
 测试 Profile 需要通过人工方式完成 ChatGPT 登录；工具不会自动填写账号密码、MFA 或 CAPTCHA。需要代理的环境通过 `CHATGPT_PROXY_SERVER` 显式配置；如果要用 noVNC 给隔离测试 Profile 登录，可在 maintenance overlay 中同时设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile`。真实 E2E 只有人工登录完成并实际通过后才算验收。
@@ -243,10 +250,10 @@ OpenAI Compatible Client / Agent
        NormalizedRequest
               │
               ▼
-       Phase3Executor             ← 已实现 Fresh-only；Phase 4 将扩展为 Conversation Engine
+      Conversation Engine         ← Phase 4 已实现 Queue + Context Sync + SQLite lifecycle
               │
               ▼
-        ChatGPT Driver            ← Phase 3 Fresh 非流式纯文本 real E2E 已通过
+        ChatGPT Driver            ← Fresh/Current/Restore；Phase 4 real E2E 待重新认证后验收
               │
               ▼
      Playwright Chromium
@@ -276,7 +283,7 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-当前 Phase 3 开发实现不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
+当前 Phase 4 开发实现不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
 
 ## 开源协议
 

@@ -38,9 +38,11 @@
 
 ## Phase 4：Conversation + Context Sync
 
-交付：Conversation Key、同会话 Queue、跨会话并行、`FRESH | APPEND | RESTORE | REBUILD`、Page idle（空闲）回收和 URL 恢复。
+状态：**代码实现完成，真实 E2E 验收被隔离 Profile 失效登录态阻塞**。
 
-验收：第二轮不重复灌入第一轮完整历史；进程重启可 RESTORE。
+交付：Conversation Key、同会话 Queue、跨会话并行、`FRESH | APPEND | RESTORE | REBUILD`、Page idle（空闲）回收和 URL 恢复。当前这些能力已完成 Unit/Integration、runtime wiring 与 Docker smoke；显式 Phase 4 real E2E harness 也已实现。
+
+验收：第二轮不重复灌入第一轮完整历史；进程重启可 RESTORE。当前确定性 fake-Driver/SQLite 测试已证明这两个行为，但 2026-08-15 real E2E 在第 1 轮返回 `auth_required`，需先人工重新认证隔离 E2E Profile 后重跑，未通过前不进入 Phase 5。
 
 ## Phase 5：真 Streaming
 
