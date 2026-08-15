@@ -536,7 +536,7 @@ git commit -m "✨ 接入持久化 Conversation 执行引擎"
 - Runtime owns and closes one Conversation Page manager before BrowserManager close.
 - Maintenance mode behavior remains unchanged.
 
-- [ ] **Step 1: Write failing runtime wiring tests**
+- [x] **Step 1: Write failing runtime wiring tests**
 
 Extend runtime tests to require:
 
@@ -546,17 +546,17 @@ Extend runtime tests to require:
 
 Expose constructor injection points only when needed for deterministic tests; do not add public runtime config abstractions beyond the task.
 
-- [ ] **Step 2: Run runtime tests and confirm RED**
+- [x] **Step 2: Run runtime tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/integration/runtime-browser.test.ts
 ```
 
-- [ ] **Step 3: Wire the new runtime**
+- [x] **Step 3: Wire the new runtime**
 
 Replace `createPhase3Executor()` in normal headless runtime with the Phase 4 queue/Page manager/executor stack. Keep Phase 3 executor source only if still directly covered by historical unit tests; it is no longer production wiring.
 
-- [ ] **Step 4: Write failing HTTP integration tests**
+- [x] **Step 4: Write failing HTTP integration tests**
 
 Use `buildServer` or runtime with fake Driver boundaries to prove both Chat Completions and Responses:
 
@@ -569,24 +569,24 @@ Use `buildServer` or runtime with fake Driver boundaries to prove both Chat Comp
 
 Use deferred Driver calls for concurrency assertions instead of wall-clock sleeps.
 
-- [ ] **Step 5: Run HTTP integration tests and confirm RED**
+- [x] **Step 5: Run HTTP integration tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/integration/conversation-context-sync.test.ts
 ```
 
-- [ ] **Step 6: Add only the minimal injection/wiring required for GREEN**
+- [x] **Step 6: Add only the minimal injection/wiring required for GREEN**
 
 Do not duplicate protocol logic in Chat Completions/Responses routes. Both continue to call the shared `NormalizedExecutionHandler`.
 
-- [ ] **Step 7: Run Task 6 focused integration tests**
+- [x] **Step 7: Run Task 6 focused integration tests**
 
 ```bash
 corepack pnpm vitest run tests/integration/runtime-browser.test.ts tests/integration/conversation-context-sync.test.ts tests/integration/post-routes.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 8: Update plan and commit**
+- [x] **Step 8: Update plan and commit**
 
 ```bash
 git add src/runtime.ts tests/integration/runtime-browser.test.ts tests/integration/conversation-context-sync.test.ts docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md

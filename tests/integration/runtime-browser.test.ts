@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { BrowserManager, PagePool } from '../../src/browser/types.js';
 import { loadConfig } from '../../src/config/index.js';
+import type { ConversationPageManager } from '../../src/conversations/conversation-pages.js';
 import { createGatewayRuntime } from '../../src/runtime.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
 
@@ -23,7 +24,23 @@ function temp() {
   return paths;
 }
 
-function fakeBrowserManager(close = vi.fn(async () => undefined)): BrowserManager {
+function fakeConversationPageManager(
+  close: () => Promise<void> = vi.fn(async (): Promise<void> => undefined),
+): ConversationPageManager {
+  return {
+    affinityCount: 0,
+    hasWarmPage: vi.fn(() => false),
+    acquire: vi.fn(async () => {
+      throw new Error('not used by runtime composition test');
+    }),
+    sweepIdle: vi.fn(async () => undefined),
+    close,
+  };
+}
+
+function fakeBrowserManager(
+  close: () => Promise<void> = vi.fn(async (): Promise<void> => undefined),
+): BrowserManager {
   const pages: PagePool = {
     openCount: 0,
     leasedCount: 0,
@@ -42,7 +59,7 @@ function fakeBrowserManager(close = vi.fn(async () => undefined)): BrowserManage
 }
 
 describe('Gateway Browser runtime composition', () => {
-  it('opens persistence before launching the headless product BrowserManager', async () => {
+  it('opens persistence before BrowserManager and wires configured Conversation Page idle timeout', async () => {
     const paths = temp();
     const dataDir = join(paths.root, 'data');
     const browser = fakeBrowserManager();
@@ -50,16 +67,20 @@ describe('Gateway Browser runtime composition', () => {
       expect(existsSync(join(dataDir, 'gateway.db'))).toBe(true);
       return browser;
     });
+    const conversationPages = fakeConversationPageManager();
+    const createConversationPageManager = vi.fn(() => conversationPages);
     const config = loadConfig({
       GATEWAY_API_KEY: 'test-key',
       DATA_DIR: dataDir,
       CHATGPT_PROXY_SERVER: 'http://proxy.example:7890',
+      PAGE_IDLE_TIMEOUT_MINUTES: '12',
     });
 
     const runtime = await createGatewayRuntime({
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager,
+      createConversationPageManager,
       logger: false,
     });
     runtimes.push(runtime);
@@ -69,7 +90,12 @@ describe('Gateway Browser runtime composition', () => {
       maxActivePages: 4,
       proxyServer: 'http://proxy.example:7890',
     });
+    expect(createConversationPageManager).toHaveBeenCalledWith({
+      pagePool: browser.pages,
+      idleTimeoutMs: 12 * 60_000,
+    });
     expect(runtime.browser).toBe(browser);
+    expect(runtime.conversationPages).toBe(conversationPages);
   });
 
   it('supports an explicit test-only Browser Profile override', async () => {
@@ -83,6 +109,7 @@ describe('Gateway Browser runtime composition', () => {
       migrationsDir: paths.migrationsDir,
       browserProfileDir: profileDir,
       createBrowserManager,
+      createConversationPageManager: () => fakeConversationPageManager(),
       logger: false,
     });
     runtimes.push(runtime);
@@ -93,9 +120,10 @@ describe('Gateway Browser runtime composition', () => {
     });
   });
 
-  it('does not start the product BrowserManager in noVNC maintenance mode', async () => {
+  it('does not start BrowserManager or Conversation Pages in noVNC maintenance mode', async () => {
     const paths = temp();
     const createBrowserManager = vi.fn(async () => fakeBrowserManager());
+    const createConversationPageManager = vi.fn(() => fakeConversationPageManager());
     const config = loadConfig({
       GATEWAY_API_KEY: 'test-key',
       DATA_DIR: join(paths.root, 'data'),
@@ -106,12 +134,15 @@ describe('Gateway Browser runtime composition', () => {
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager,
+      createConversationPageManager,
       logger: false,
     });
     runtimes.push(runtime);
 
     expect(createBrowserManager).not.toHaveBeenCalled();
+    expect(createConversationPageManager).not.toHaveBeenCalled();
     expect(runtime.browser).toBeUndefined();
+    expect(runtime.conversationPages).toBeUndefined();
 
     const response = await runtime.app.inject({
       method: 'POST',
@@ -123,21 +154,36 @@ describe('Gateway Browser runtime composition', () => {
     expect(response.json().error.code).toBe('browser_maintenance_mode');
   });
 
-  it('closes Fastify and Browser before persistence and remains idempotent', async () => {
+  it('closes Fastify, Conversation Pages, Browser, then persistence and remains idempotent', async () => {
     const paths = temp();
-    const closeBrowser = vi.fn(async () => undefined);
+    const order: string[] = [];
+    let runtime!: Awaited<ReturnType<typeof createGatewayRuntime>>;
+    const closePages = vi.fn(async () => {
+      order.push('pages');
+      expect(runtime.persistence.database.prepare('SELECT 1').get()).toBeDefined();
+    });
+    const closeBrowser = vi.fn(async () => {
+      order.push('browser');
+      expect(runtime.persistence.database.prepare('SELECT 1').get()).toBeDefined();
+    });
     const browser = fakeBrowserManager(closeBrowser);
     const config = loadConfig({ GATEWAY_API_KEY: 'test-key', DATA_DIR: join(paths.root, 'data') });
-    const runtime = await createGatewayRuntime({
+    runtime = await createGatewayRuntime({
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager: async () => browser,
+      createConversationPageManager: () => fakeConversationPageManager(closePages),
       logger: false,
+    });
+    runtime.app.addHook('onClose', async () => {
+      order.push('app');
     });
 
     await runtime.close();
     await runtime.close();
 
+    expect(order).toEqual(['app', 'pages', 'browser']);
+    expect(closePages).toHaveBeenCalledTimes(1);
     expect(closeBrowser).toHaveBeenCalledTimes(1);
     expect(() => runtime.persistence.database.prepare('SELECT 1').get()).toThrow();
   });
