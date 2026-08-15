@@ -1188,10 +1188,12 @@ If complete, mark all plan checkboxes `[x]`, set `ACTIVE_PLAN=none`, commit:
 
 If blocked, do **not** mark blocked E2E steps complete and do not close the plan.
 
-- [ ] **Step 9: Push feature branch normally**
+- [x] **Step 9: Push feature branch normally**
 
 ```bash
 git push -u origin phase-3-browser-driver
 ```
 
 No force-push, no merge to default branch, no Docker Registry image, no GitHub Release unless separately requested.
+
+2026-08-15 execution evidence: `git push -u origin phase-3-browser-driver` succeeded; the local branch now tracks `origin/phase-3-browser-driver`. The plan remains active because Steps 7–8 real authenticated E2E are still blocked on manual login.
