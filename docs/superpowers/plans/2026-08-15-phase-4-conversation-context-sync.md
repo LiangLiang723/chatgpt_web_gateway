@@ -420,7 +420,7 @@ export interface ConversationQueue {
 export function createConversationQueue(): ConversationQueue;
 ```
 
-- [ ] **Step 1: Write request capability tests**
+- [x] **Step 1: Write request capability tests**
 
 Accept pure non-streaming text `user/assistant` histories. Reject each separately with `unsupported_phase4_request`:
 
@@ -439,7 +439,7 @@ Reject no trailing user / assistant-final full history with `invalid_conversatio
 
 Assert exactly one user Message is classified incremental; any multi-message accepted text request is full.
 
-- [ ] **Step 2: Write queue concurrency tests**
+- [x] **Step 2: Write queue concurrency tests**
 
 Use deferred Promises to assert:
 
@@ -452,7 +452,7 @@ expect(events).toEqual(['a1-start', 'a1-end', 'a2-start']);
 
 Also prove `key-a` and `key-b` both enter before either deferred Promise resolves, and a rejected first `key-a` work does not block the second.
 
-- [ ] **Step 3: Run red**
+- [x] **Step 3: Run red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/phase4-request-context.test.ts tests/unit/conversation-queue.test.ts
@@ -460,11 +460,11 @@ corepack pnpm exec vitest run tests/unit/phase4-request-context.test.ts tests/un
 
 Expected: FAIL because files do not exist.
 
-- [ ] **Step 4: Implement capability adapter**
+- [x] **Step 4: Implement capability adapter**
 
 Keep API knowledge here, not in `context/`. Convert accepted messages into canonical single text strings using the Task 2 helpers. Do not silently drop tool/attachment content.
 
-- [ ] **Step 5: Implement Promise-tail FIFO**
+- [x] **Step 5: Implement Promise-tail FIFO**
 
 Required pattern:
 
@@ -482,7 +482,7 @@ return current;
 
 `close()` marks the queue closed so new `run()` calls reject with a stable internal Error; already queued work drains.
 
-- [ ] **Step 6: Run green**
+- [x] **Step 6: Run green**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/phase4-request-context.test.ts tests/unit/conversation-queue.test.ts
@@ -490,12 +490,14 @@ corepack pnpm exec vitest run tests/unit/phase4-request-context.test.ts tests/un
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/conversations/errors.ts src/conversations/request-context.ts src/conversations/conversation-queue.ts tests/unit/phase4-request-context.test.ts tests/unit/conversation-queue.test.ts
  git commit -m "✨ 增加同会话 FIFO 与 Phase 4 请求边界"
 ```
+
+2026-08-15 execution evidence: the Request Adapter suite first failed on missing modules and the Queue close test failed on missing `close()`. After implementation, 2 files / 17 tests passed and `corepack pnpm typecheck` passed. The queue timing tests were adjusted to avoid assuming a one-microtask implementation detail of the approved Promise-tail pattern.
 
 ---
 

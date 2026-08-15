@@ -30,6 +30,7 @@ describe('ConversationQueue', () => {
     });
 
     await Promise.resolve();
+    await Promise.resolve();
     expect(events).toEqual(['first:start']);
 
     firstGate.resolve();
@@ -52,6 +53,7 @@ describe('ConversationQueue', () => {
       await betaGate.promise;
     });
 
+    await Promise.resolve();
     await Promise.resolve();
     expect(started).toEqual(new Set(['alpha', 'beta']));
 
@@ -76,6 +78,28 @@ describe('ConversationQueue', () => {
     await expect(failed).rejects.toThrow('boom');
     await expect(recovered).resolves.toBe('ok');
     expect(events).toEqual(['failed', 'recovered']);
+  });
+
+  it('lets already queued work drain after close while rejecting new work', async () => {
+    const queue = createConversationQueue();
+    const gate = deferred();
+    const events: string[] = [];
+
+    const first = queue.run('alpha', async () => {
+      events.push('first:start');
+      await gate.promise;
+      events.push('first:end');
+    });
+    const second = queue.run('alpha', async () => {
+      events.push('second:start');
+    });
+    await Promise.resolve();
+
+    queue.close();
+    await expect(queue.run('beta', async () => undefined)).rejects.toThrow(/queue is closed/i);
+    gate.resolve();
+    await Promise.all([first, second]);
+    expect(events).toEqual(['first:start', 'first:end', 'second:start']);
   });
 
   it('removes per-key bookkeeping after the last waiter completes', async () => {
