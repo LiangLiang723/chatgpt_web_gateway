@@ -8,21 +8,21 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-3-complete
-STATUS=ready-for-phase-4-design
+PHASE=phase-4-implementation
+STATUS=implementing-phase-4-context-sync
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-3-browser-driver-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=write-phase-4-context-sync-spec
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
+NEXT_TASK=execute-phase-4-context-sync-plan
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）完成。
-- **当前状态：** `ready-for-phase-4-design`
-- **活动计划：** 无；Phase 3 计划已关闭。
-- **下一个可执行任务：** 编写 Phase 4 Conversation / Context Sync 设计规格。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Phase 3 已完成并作为浏览器/Driver 基线。
+- **当前状态：** `implementing-phase-4-context-sync`
+- **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
+- **下一个可执行任务：** 按活动计划从 Task 1 开始实施 Context Sync、Conversation Queue、Page affinity、URL RESTORE 与运行时接线。
 - **Phase 3 验收事实：** 独立 E2E Profile 已通过 maintenance Google Chrome Stable 人工登录；产品 Playwright Chromium 随后实际完成 authenticated `inspect:chatgpt`、Fresh Driver challenge 和 Gateway HTTP → ChatGPT Web → Chat Completions challenge。当前无 Phase 3 blocker。
 
 ## Implemented Now（当前已实现）
@@ -148,9 +148,9 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 编写 Phase 4 Conversation / Context Sync 设计规格。
-2. 设计 Conversation Key lifecycle、同会话 Queue、跨会话并行与 `FRESH | APPEND | RESTORE | REBUILD`。
-3. 继续保持 Phase 3 real E2E 为显式回归门槛，不把它混入确定性 `verify`。
+1. 执行 Phase 4 活动计划的 Context Sync / Queue / Page affinity / Driver target / Conversation Engine Tasks。
+2. 完成确定性 `verify`、Docker smoke 与显式 Phase 4 real ChatGPT E2E。
+3. 只有真实多轮 APPEND + restart RESTORE 验收通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 
 ## Known Risks（已知风险）
 
