@@ -11,6 +11,10 @@
 - OpenAI Schema（结构）→ `NormalizedRequest`。
 - `FRESH | APPEND | RESTORE | REBUILD`。
 - Message canonicalization（消息规范化）与 fingerprint（指纹）。
+- Phase 4 request mode：single-user incremental 与 full-history deterministic classification。
+- Phase 4 clean/in_flight checkpoint、history/instructions divergence 与 REBUILD reason。
+- Phase 4 same-key FIFO：reject 不 poison queue、different key 可 overlap、queue entry cleanup。
+- Phase 4 Conversation Page affinity、capacity-pressure LRU、busy protection、idle timeout 和 transient unkeyed lease。
 - Stable Prefix（稳定前缀）。
 - Tool Prompt / Tool Parser。
 - MIME（媒体类型）、Base64、URL 输入解析。
@@ -19,11 +23,15 @@
 - SQLite PRAGMA、checksum migration、失败 migration rollback。
 - Conversation / Message / Tool Call / Attachment / File / Generated Image Repository 约束与 JSON round-trip。
 - `ConversationStore` aggregate validation 与同步事务边界。
+- Phase 4 checkpoint migration / metadata-only in-flight update / final clean aggregate transaction（实现后）。
 - Phase 3 Page Pool capacity/reuse/close、BrowserManager lifecycle、Selector Registry unique/collection/fallback/missing/ambiguous。
 - Auth Probe authenticated/auth_required/unknown、Fresh Driver turn ownership、completion stable sampling/timeout。
 - Phase3Executor Fresh-only capability validation、JSON instruction envelope 和 lease `finally` release。
+- Phase 4 Driver target：Fresh preparation、safe Conversation URL restore、current-page send 分离；foreign-origin URL 不得导航。
 - Chat Completions / Responses 非流式文本 Encoder 与 stable Browser/Driver/API error mapping。
 - Chat Completions / Responses SSE Encoder（流式编码器，Phase 5 目标）。
+
+当前 Phase 4 仍处于 design complete / implementation not started；上述 Phase 4 项是已批准实施验收要求，不是当前已有测试通过声明。
 
 ## Integration（集成测试）
 
@@ -34,8 +42,12 @@
 - Phase 2：Gateway runtime 在 Fastify readiness 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 幂等关闭 SQLite。
 - Phase 3：Gateway runtime headless → BrowserManager → Phase3Executor；maintenance 模式不启动产品 BrowserManager。
 - Phase 3：POST route → Normalizer → injected/fake Phase3 execution result → Chat Completions / Responses Encoder，全程不访问真实 ChatGPT。
-- 后续：API → Normalizer → Conversation Engine → fake ChatGPT Driver。
-- Phase 4 Conversation Queue（队列）与 Page affinity/restore。
+- Phase 4 target：API → Normalizer → Conversation Queue → Context Planner → Conversation Engine → fake ChatGPT Driver → SQLite aggregate。
+- Phase 4 target：首次 keyed FRESH 后，full-history exact prefix 和 single-user incremental 都只 APPEND 当前 user。
+- Phase 4 target：Page affinity 丢失 / persistence close→reopen 后 RESTORE；`not_restorable` 自动 REBUILD。
+- Phase 4 target：history divergence、instructions change、in_flight/count mismatch 都 REBUILD。
+- Phase 4 target：网页 write 之后模拟失败时 DB 保持 in_flight，下一请求收敛 REBUILD。
+- Phase 4 target：same-key 并发 FIFO，不同 key 在 Page capacity 内并行。
 - 文件元数据 + 文件系统。
 - Client abort（客户端断开）→ stop generation。
 
@@ -64,22 +76,27 @@ corepack pnpm test:e2e:chatgpt
 
 1. 登录状态检查。
 2. 普通文本一问一答。
-3. 多轮 APPEND。
-4. Gateway 重启后 RESTORE。
-5. 长回复真 Streaming。
-6. Markdown / 代码块 Streaming。
-7. 图片输入。
-8. PDF / TXT / DOCX / XLSX 代表性文件输入。
-9. Tool Calling 单工具和多工具。
-10. Tool Result 回传后继续回答。
-11. ChatGPT 图片生成。
-12. Page 回收后重新打开原 Conversation URL。
+3. Phase 4 keyed FRESH + full-history APPEND：第二轮继续同一 ChatGPT URL，并检查第二个 Web user turn 只含当前 challenge，不含第一轮历史文本。
+4. Phase 4 Gateway restart RESTORE：同一 SQLite data dir / E2E Profile 重启后，single-user incremental 请求继续原 ChatGPT URL，并能使用此前上下文。
+5. Phase 4 divergence REBUILD：同 key full history 修改后本地 key/UUID 不变、ChatGPT URL 改为新 Conversation，并按修改后的 authoritative history 回答。
+6. Page 回收后重新打开原 Conversation URL。
+7. 长回复真 Streaming。
+8. Markdown / 代码块 Streaming。
+9. 图片输入。
+10. PDF / TXT / DOCX / XLSX 代表性文件输入。
+11. Tool Calling 单工具和多工具。
+12. Tool Result 回传后继续回答。
+13. ChatGPT 图片生成。
+
+Phase 4 的真实 E2E 必须在实现完成后显式运行；本设计提交本身没有执行或通过这些场景。
 
 ## DOM 诊断
 
 Phase 3 已提供 `corepack pnpm inspect:chatgpt`。当前至少报告 URL、Auth State（认证状态）、Composer、Send Button、Assistant Turn collection 和 Stop Control 的结构化状态；后续附件 Phase 再把 File Input 纳入诊断 contract。
 
 默认不保存用户页面。只有显式设置 `CHATGPT_DIAGNOSTICS_DIR` 时才保存受控 screenshot（截图）和 HTML/DOM snapshot（网页快照）；这些诊断产物与 E2E Profile 都被 Git hygiene 排除。
+
+Phase 4 real E2E 可以在测试进程内读取已集中定义的 user-turn collection 来证明 APPEND 没有把旧完整历史再次提交；这类 live assertion 不等于默认保存用户 DOM artifact。
 
 ## 仓库治理检查
 
@@ -111,13 +128,15 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - 当前 Ubuntu x11vnc `0.9.16` 必须使用 `-threads`；真实故障复现表明默认单线程模式会持续高 CPU 且不发送 RFB banner。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
-- `schema_migrations` 包含且只包含一次 `001_initial` 当前基线。
+- 当前 Phase 3 基线下 `schema_migrations` 包含且只包含一次 `001_initial`。
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 - 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
 - maintenance overlay 存在且只存在一个 headed Google Chrome Stable owner；产品 BrowserManager 不并发占用同一 Profile。
 - maintenance `down` 后隔离测试 Profile 不残留 `SingletonLock` / `SingletonCookie` / `SingletonSocket`，证明模式切换不会因 stale Chromium owner marker 被阻塞。
 
-Docker smoke 不等于真实 ChatGPT E2E，不能用来证明当前 Selector、登录、Fresh 文本回答、上传或图片生成有效。
+Phase 4 实现后 Docker smoke 必须同步扩展为验证 `002_add_conversation_sync_checkpoint` migration history、`PAGE_IDLE_TIMEOUT_MINUTES` 配置透传和同一 Bind Mount restart 后 checkpoint/Conversation 数据仍可读取；在实现前不能把这些写成当前已通过事实。
+
+Docker smoke 不等于真实 ChatGPT E2E，不能用来证明当前 Selector、登录、Fresh 文本回答、APPEND/RESTORE、上传或图片生成有效。
 
 ## 最终目标验证入口
 
@@ -134,7 +153,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 的确定性测试覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、Executor、response encoder、runtime/maintenance 和 E2E safety gate。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 的确定性测试覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、Executor、response encoder、runtime/maintenance 和 E2E safety gate。Phase 4 已批准测试矩阵但尚未实现对应测试。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -144,8 +163,11 @@ corepack pnpm docker:smoke
 
 - ChatGPT 当前 Selector 可用。
 - Browser Profile 当前仍登录。
+- 当前 ChatGPT Web 可以在同一 Conversation URL 上真实 APPEND。
+- Gateway restart 后 saved Conversation URL 当前仍能 RESTORE。
+- 当前 ChatGPT Web 的 REBUILD/Context Envelope 行为满足 Phase 4 设计。
 - 文件实际上传成功。
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 当前已有真实通过证据：authenticated selector inspection、Fresh Driver challenge 与 Gateway HTTP challenge 均已在独立测试 Profile 上执行成功；因此可以声明 Phase 3 Fresh 非流式纯文本路径已真实验证，但仍不能把它外推为 Phase 4+ 的 Conversation Sync、Streaming、附件、Tools 或图片能力。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 当前已有真实通过证据：authenticated selector inspection、Fresh Driver challenge 与 Gateway HTTP challenge 均已在独立测试 Profile 上执行成功；因此可以声明 Phase 3 Fresh 非流式纯文本路径已真实验证，但仍不能把它外推为尚未实现的 Phase 4 Conversation Sync、Streaming、附件、Tools 或图片能力。
