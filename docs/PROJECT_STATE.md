@@ -9,21 +9,21 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-4-implementation
-STATUS=implementing-approved-phase-4-plan
+STATUS=finalizing-phase-4-with-e2e-auth-blocker
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-12
+NEXT_TASK=execute-phase-4-plan-task-13
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–11 已完成四态 Engine、生产 runtime、系统级语义、架构规则与 fresh Docker migration smoke，进入最终 real ChatGPT Phase 4 E2E。
-- **当前状态：** `implementing-approved-phase-4-plan`
+- **当前阶段：** Phase 4 — Conversation + Context Sync 代码/确定性/Docker 实施已完成；Task 12 real E2E harness 已完成，但真实运行被隔离 Profile 失效认证阻塞，进入 Task 13 最终事实回写与验证。
+- **当前状态：** `finalizing-phase-4-with-e2e-auth-blocker`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 12 — 扩展显式 real E2E 到 APPEND + restart RESTORE + divergence REBUILD，并在隔离 Profile/代理环境真实运行。
-- **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
+- **下一个可执行任务：** Plan Task 13 — 最终回写 Phase 4 已实现范围、deterministic/Docker 证据与 real E2E `auth_required` blocker，完成仓库验证和推送。
+- **验收事实：** 完整批准计划 Task 1–11 已实现并通过 `corepack pnpm verify`（43 个测试文件 / 271 个测试）与 fresh 镜像 `sha256:d31206e5d39b…` Docker smoke。Task 12 real harness 已扩展到 APPEND live DOM、restart RESTORE 与 divergence REBUILD；真实 combined E2E 在 Phase 3 auth probe 报 `auth_required`，standalone Phase 4 第 1 轮 HTTP 也返回 `503 auth_required`，因此真实网页四态仍未验收。
 
 ## Implemented Now（当前已实现）
 

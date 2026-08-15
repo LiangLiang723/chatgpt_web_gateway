@@ -22,6 +22,16 @@ describe('real ChatGPT E2E environment gate', () => {
     ).toThrow(/e2e_profile_must_be_isolated/);
   });
 
+  it('rejects credential-bearing proxy URLs for real E2E', () => {
+    expect(() =>
+      parseRealE2EEnvironment({
+        E2E_CHATGPT: '1',
+        CHATGPT_PROFILE_DIR: '/tmp/e2e-profile',
+        CHATGPT_PROXY_SERVER: 'http://user:pass@proxy.example:7890',
+      }),
+    ).toThrow(/CHATGPT_PROXY_SERVER/);
+  });
+
   it('returns normalized isolated E2E paths', () => {
     expect(
       parseRealE2EEnvironment({

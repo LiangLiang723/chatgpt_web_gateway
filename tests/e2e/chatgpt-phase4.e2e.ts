@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { inspectCollection } from '../../src/chatgpt/selector-registry.js';
+import { chatGptSelectors } from '../../src/chatgpt/selectors.js';
 import { loadConfig } from '../../src/config/index.js';
 import { createGatewayRuntime, type GatewayRuntime } from '../../src/runtime.js';
 import { cloneRealE2EProfile } from './profile.js';
@@ -14,10 +16,9 @@ export interface RunPhase4ChatGptE2EOptions {
 }
 
 export interface Phase4ChatGptE2EResult {
-  warmAppend: true;
-  restartRestore: true;
-  contextTokenRetained: true;
-  conversationIdentityStable: true;
+  append: true;
+  restore: true;
+  rebuild: true;
 }
 
 function token(): string {
@@ -62,6 +63,8 @@ export async function runPhase4ChatGptE2E(
   const dataDir = mkdtempSync(join(tmpdir(), 'cwg-phase4-e2e-'));
   const conversationKey = `phase4-${randomUUID()}`;
   const memoryToken = token();
+  const appendMarker = token();
+  const rebuiltToken = token();
   const profile = cloneRealE2EProfile(options.profileDir);
   const headers = {
     authorization: 'Bearer phase4-e2e-gateway-key',
@@ -97,9 +100,11 @@ export async function runPhase4ChatGptE2E(
       afterFirst.conversation.chatgptConversationUrl,
       'Expected the first Phase 4 turn to persist a ChatGPT Conversation URL',
     );
-    const firstIdentity = conversationIdentity(afterFirst.conversation.chatgptConversationUrl);
+    const firstUrl = afterFirst.conversation.chatgptConversationUrl;
+    const firstIdentity = conversationIdentity(firstUrl);
+    const conversationId = afterFirst.conversation.id;
 
-    const turnTwoUser = 'What token did I ask you to memorize? Reply with the token only.';
+    const turnTwoUser = `What token did I ask you to memorize? This request marker is ${appendMarker}. Reply exactly as: <memorized-token>|${appendMarker}`;
     const second = await runtime.app.inject({
       method: 'POST',
       url: '/v1/chat/completions',
@@ -117,13 +122,30 @@ export async function runPhase4ChatGptE2E(
     assert.equal(second.statusCode, 200, second.body);
     const turnTwoAssistant = assistantText(second.json());
     assert.match(turnTwoAssistant, new RegExp(memoryToken));
+    assert.match(turnTwoAssistant, new RegExp(appendMarker));
+
+    const livePage = runtime.browser?.context.pages().at(-1);
+    assert.ok(livePage, 'Expected one live ChatGPT Conversation Page after APPEND');
+    const userTurns = await inspectCollection(livePage, chatGptSelectors.userTurns);
+    assert.ok(userTurns.count >= 2, 'Expected at least two ChatGPT Web user turns after APPEND');
+    const secondWebUserTurn = await userTurns.locator.nth(userTurns.count - 1).innerText();
+    assert.match(secondWebUserTurn, new RegExp(appendMarker));
+    assert.doesNotMatch(
+      secondWebUserTurn,
+      new RegExp(memoryToken),
+      'APPEND must not resend the first user token into the second ChatGPT Web user turn',
+    );
 
     const afterSecond = runtime.persistence.conversationStore.loadByKey(conversationKey);
     assert.ok(afterSecond?.conversation.chatgptConversationUrl);
     assert.equal(
+      afterSecond.conversation.chatgptConversationUrl,
+      firstUrl,
+      'Warm APPEND must keep the exact persisted ChatGPT Conversation URL',
+    );
+    assert.equal(
       conversationIdentity(afterSecond.conversation.chatgptConversationUrl),
       firstIdentity,
-      'Warm APPEND must stay on the same ChatGPT Conversation identity',
     );
 
     await runtime.close();
@@ -143,13 +165,7 @@ export async function runPhase4ChatGptE2E(
       payload: {
         model: 'chatgpt-web',
         stream: false,
-        messages: [
-          { role: 'user', content: turnOneUser },
-          { role: 'assistant', content: turnOneAssistant },
-          { role: 'user', content: turnTwoUser },
-          { role: 'assistant', content: turnTwoAssistant },
-          { role: 'user', content: turnThreeUser },
-        ],
+        messages: [{ role: 'user', content: turnThreeUser }],
       },
     });
     assert.equal(third.statusCode, 200, third.body);
@@ -158,16 +174,50 @@ export async function runPhase4ChatGptE2E(
     const afterThird = runtime.persistence.conversationStore.loadByKey(conversationKey);
     assert.ok(afterThird?.conversation.chatgptConversationUrl);
     assert.equal(
+      afterThird.conversation.chatgptConversationUrl,
+      firstUrl,
+      'Restart RESTORE must keep the exact persisted ChatGPT Conversation URL',
+    );
+    assert.equal(
       conversationIdentity(afterThird.conversation.chatgptConversationUrl),
       firstIdentity,
-      'Restart RESTORE must return to the same ChatGPT Conversation identity',
+    );
+
+    const modifiedTurnOneUser = `The token to remember is ${rebuiltToken}. Reply exactly with: STORED ${rebuiltToken}`;
+    const modifiedTurnOneAssistant = `STORED ${rebuiltToken}`;
+    const rebuildUser =
+      'According to the corrected history, what token should you remember? Reply with the token only.';
+    const rebuilt = await runtime.app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers,
+      payload: {
+        model: 'chatgpt-web',
+        stream: false,
+        messages: [
+          { role: 'user', content: modifiedTurnOneUser },
+          { role: 'assistant', content: modifiedTurnOneAssistant },
+          { role: 'user', content: rebuildUser },
+        ],
+      },
+    });
+    assert.equal(rebuilt.statusCode, 200, rebuilt.body);
+    assert.match(assistantText(rebuilt.json()), new RegExp(rebuiltToken));
+
+    const afterRebuild = runtime.persistence.conversationStore.loadByKey(conversationKey);
+    assert.ok(afterRebuild?.conversation.chatgptConversationUrl);
+    assert.equal(afterRebuild.conversation.id, conversationId, 'REBUILD must preserve local UUID');
+    assert.equal(afterRebuild.conversation.conversationKey, conversationKey);
+    assert.notEqual(
+      afterRebuild.conversation.chatgptConversationUrl,
+      firstUrl,
+      'REBUILD must persist a new ChatGPT Conversation URL',
     );
 
     return {
-      warmAppend: true,
-      restartRestore: true,
-      contextTokenRetained: true,
-      conversationIdentityStable: true,
+      append: true,
+      restore: true,
+      rebuild: true,
     };
   } finally {
     await runtime?.close();

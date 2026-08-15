@@ -1237,7 +1237,7 @@ export interface Phase4ChatGptE2EResult {
 }
 ```
 
-- [ ] **Step 1: Keep the E2E safety gate red/green locally without network**
+- [x] **Step 1: Keep the E2E safety gate red/green locally without network**
 
 Extend unit tests around the E2E CLI so Phase 4 still requires:
 
@@ -1249,7 +1249,7 @@ optional validated CHATGPT_PROXY_SERVER
 
 Ordinary `corepack pnpm verify` must skip real access.
 
-- [ ] **Step 2: Implement keyed FRESH + full-history APPEND challenge**
+- [x] **Step 2: Implement keyed FRESH + full-history APPEND challenge**
 
 Use random key/token A/token B. First HTTP request establishes a Conversation. Read SQLite aggregate and capture URL.
 
@@ -1264,11 +1264,11 @@ second Web user turn does NOT contain token A
 
 Read the live user-turn collection through centralized selectors; do not save DOM by default.
 
-- [ ] **Step 3: Implement runtime restart RESTORE challenge**
+- [x] **Step 3: Implement runtime restart RESTORE challenge**
 
 Close runtime, keep the same temp data dir and E2E Profile, recreate runtime, then send only one incremental user Message asking for a value established earlier. Assert answer is correct and persisted URL remains exactly the prior URL.
 
-- [ ] **Step 4: Implement divergence REBUILD challenge**
+- [x] **Step 4: Implement divergence REBUILD challenge**
 
 Send a full request with an intentionally modified prior history plus new user. Assert:
 
@@ -1280,7 +1280,7 @@ new persisted ChatGPT URL != old URL
 answer follows modified history challenge
 ```
 
-- [ ] **Step 5: Run deterministic verify before external E2E**
+- [x] **Step 5: Run deterministic verify before external E2E**
 
 ```bash
 corepack pnpm verify
@@ -1288,7 +1288,7 @@ corepack pnpm verify
 
 Expected: PASS.
 
-- [ ] **Step 6: Run explicit real E2E using the already authenticated isolated profile**
+- [!] **Step 6: Run explicit real E2E using the already authenticated isolated profile**
 
 Use the environment appropriate to the actual DevSpace/NAS path, preserving the existing proxy requirement where direct network is unavailable:
 
@@ -1303,12 +1303,14 @@ Expected: Phase 3 regression plus Phase 4 `append=true`, `restore=true`, `rebuil
 
 If authentication/Cloudflare/current DOM blocks this command, stop and record the real blocker in `PROJECT_STATE`; do not mark Phase 4 complete.
 
-- [ ] **Step 7: Commit the E2E harness after successful deterministic tests**
+- [x] **Step 7: Commit the E2E harness after successful deterministic tests**
 
 ```bash
 git add tests/e2e scripts/test-chatgpt-e2e.ts tests/unit
  git commit -m "🧪 增加 Phase 4 Conversation 真实 E2E"
 ```
+
+2026-08-15 execution evidence: the E2E safety gate remains explicit; both real commands reject execution without `E2E_CHATGPT=1`, and the gate/profile unit suite passes 2 files / 5 tests including isolated Profile and credential-bearing proxy rejection. The Phase 4 harness now verifies full-history APPEND via live centralized user-turn selectors (marker B present, original token A absent), restart with a single-user incremental RESTORE, and divergence REBUILD while preserving local key/UUID and requiring a new ChatGPT URL. `corepack pnpm verify` passed 43 files / 271 tests before external access. The combined real command using `/tmp/cwg-phase3-e2e-data/e2e-browser-profile` and proxy `http://192.168.3.163:7890` stopped in the Phase 3 regression with `Expected authenticated, got auth_required`; standalone Phase 4 then independently reached Gateway turn 1 and returned HTTP 503 `auth_required`. The isolated Profile login has expired, so APPEND/RESTORE/REBUILD real DOM behavior could not be exercised. Per spec, Task 12 remains blocked and Phase 4 must not be marked complete until manual re-authentication followed by rerunning the explicit real command succeeds.
 
 ---
 
