@@ -9,21 +9,21 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-4-implementation
-STATUS=blocked-on-phase-4-real-e2e-auth
+STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=reauthenticate-e2e-profile-and-rerun-phase-4-e2e
+NEXT_TASK=execute-phase-4-plan-task-1
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 代码实现与确定性/Docker 验证已完成，真实多轮 ChatGPT E2E 尚未通过最终验收。
-- **当前状态：** `blocked-on-phase-4-real-e2e-auth`
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；已存在一批 Queue/Page affinity/Driver/Executor 实现，但刚与远端已批准的完整 13-Task 计划重新对齐，仍需补齐 sync checkpoint、single-user incremental、无 key 持久化等批准要求。
+- **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** 通过 maintenance Google Chrome Stable 重新人工认证隔离 E2E Profile，然后重跑 `corepack pnpm test:e2e:chatgpt:phase4`；只有真实 APPEND + restart RESTORE 通过后才能关闭 Phase 4。
-- **验收事实：** 当前最终 `corepack pnpm verify` 已通过 33 个测试文件 / 177 个测试，完整 `linux/amd64` 镜像 `sha256:7fd07b887b7b…` 构建成功且 Docker smoke 通过。Phase 4 real E2E 已真实启动并到达 ChatGPT，但第 1 轮返回 `auth_required`；此前 Phase 3 已验收的隔离 Profile 当前登录态已失效，需要人工重新认证。
+- **下一个可执行任务：** Plan Task 1 — 增加 `002_add_conversation_sync_checkpoint.sql` 与 `clean | in_flight` 持久化 checkpoint，再按批准计划逐 Task 验收现有/新增实现。
+- **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
 
@@ -71,7 +71,7 @@ UPDATED_AT=2026-08-15
 - ✅ `inspect:chatgpt` 与 `test:e2e:chatgpt` 显式真实 E2E harness、安全隔离 Profile 门槛和可选诊断产物边界；支持显式代理，authenticated inspect / Driver / Gateway HTTP real E2E 均已通过。
 - ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker smoke 已验证普通 headless 与 maintenance headed Chromium 的 Profile 单 owner、PUID/PGID 和 restart 边界。
 - ✅ ChatGPT Driver（网页驱动）Fresh 非流式纯文本路径已完成，并在 Phase 3 通过真实 ChatGPT DOM/登录态/问答 E2E 验收。
-- ✅ Conversation + Context Sync 运行时实现已完成并通过确定性 Unit/Integration 与 Docker smoke；Phase 4 真实多轮 APPEND/RESTORE E2E 当前因隔离 Profile `auth_required` 尚未关闭验收。
+- 🟡 Conversation + Context Sync 已有部分运行时实现（Queue、Page affinity、Driver target、较窄的四态 Planner、SQLite aggregate 保存），但尚未满足已批准完整 Phase 4 规格：sync checkpoint、single-user incremental、无 key 持久化及 crash-convergence 等仍待补齐。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -135,7 +135,7 @@ UPDATED_AT=2026-08-15
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-15：Phase 4 Conversation + Context Sync 代码完成：四态纯 Planner、同 key Queue、Conversation Page affinity/idle 回收、Driver fresh/current/restore target、SQLite Conversation Executor 与 runtime wiring 均已落地；最终确定性 `verify` 通过 33 个测试文件 / 177 个测试，镜像 `sha256:7fd07b887b7b…` Docker smoke 通过。显式 Phase 4 real E2E 已运行，但隔离 Profile 当前返回 `auth_required`，阶段保持未关闭并等待人工重新认证。
+- 2026-08-15：恢复远端已批准 Phase 4 设计/13-Task 计划后发现本地实施分支只覆盖其子集；当前已非破坏性合并设计历史，并继续实施 sync checkpoint、single-user incremental、无 key 持久化和 crash-convergence。此前较窄实现的 `verify` 为 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke 通过，作为回归基线保留。
 - 2026-08-15：Phase 3 真实验收完成：独立 Profile 通过固定 Google Chrome Stable 151.0.7922.137 人工登录；真实 `inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`，完整 `test:e2e:chatgpt` 返回 `driverChallenge=true` / `gatewayChallenge=true`。authenticated 实测发现 Composer 延迟挂载，Auth Probe 已用 Locator attachment wait + strict re-probe 修复并有红→绿单测。
 - 2026-08-15：maintenance 登录路径正式切换到固定 Google Chrome Stable，镜像以 SHA256 固定 deb；Compose 使用 vendored Playwright seccomp profile，Docker smoke 验证非 root Chrome 保持 sandbox、`Seccomp=2`、无 `CAP_SYS_ADMIN`、无 `--no-sandbox` / `--remote-debugging-pipe`。当前正式镜像验证基线为 `sha256:1ceb828d…`。
 - 2026-08-15：人工登录曾暴露 `auth.openai.com` Turnstile 在 Chrome for Testing 中重复 challenge；真实 A/B 证明 Google Chrome Stable 可正常完成人工安全验证，因此 maintenance-only 浏览器与产品 Playwright Chromium 明确分离。
@@ -156,15 +156,15 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 用 maintenance Google Chrome Stable 对隔离 E2E Profile 重新完成人工 ChatGPT 登录/MFA/安全验证。
-2. 使用现有代理重跑 `corepack pnpm test:e2e:chatgpt:phase4`，验证真实 warm APPEND、Gateway restart RESTORE、token 连续性和 `/c/...` Conversation identity 稳定。
-3. real E2E 通过后关闭 Phase 4、清空 Active Plan，并进入 Phase 5 Streaming 设计。
+1. 按批准 Plan Task 1 实现 SQLite sync checkpoint，并继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
+2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
+3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 
 ## Known Risks（已知风险）
 
 - Phase 3 真实 ChatGPT Web E2E 已通过，但网页 DOM、Cloudflare 和认证流程属于外部变化面；未来升级 Playwright / Chrome 或 ChatGPT UI 后仍需重跑显式 real E2E。
 - maintenance Google Chrome Stable 与产品 Playwright Chromium 当前主版本一致；升级其中任一浏览器时必须重新验证 Profile 兼容、人工登录和产品 real E2E。
-- 当前 POST 端点已接入 Phase 4 多轮非流式纯文本 Conversation Engine；真实 APPEND/RESTORE 网页验收仍被隔离 E2E Profile 的失效登录态阻塞，不能仅凭 deterministic tests 宣称 Phase 4 已完整验收。
+- 当前 POST 端点已接入部分 Phase 4 多轮非流式纯文本 Conversation Engine，但相对批准规格仍缺 sync checkpoint、single-user incremental、无 key 持久化/crash-convergence；不能仅凭此前 deterministic tests 宣称 Phase 4 已完整实现或验收。
 - 当前 Docker 验收矩阵只有 `linux/amd64`，未验证 ARM64。
 - ChatGPT 网页 DOM 会变化；后续 Selector 必须集中并有诊断工具。
 - Tool Calling 是 Gateway 的 Prompt + Parser 模拟层，不应伪装成 ChatGPT Web 原生工具协议。

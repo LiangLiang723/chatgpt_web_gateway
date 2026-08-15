@@ -95,9 +95,9 @@ interface NormalizedRequest {
 
 同一 Conversation 请求串行，不同 Conversation 可以并行。禁止全局锁串行所有用户。
 
-Phase 4 当前实现把 SQLite `ConversationStore` 中最后一次**成功同步**的完整 aggregate 作为本地事实源。Planner 是纯函数：只有 instructions 与持久化消息前缀完全一致、并且当前请求恰好比已同步历史多一个最终 `user` turn 时才允许 APPEND/RESTORE；instructions 变化、历史修改/回滚/分叉、缺失可恢复 URL 或其他前缀不一致都选择 REBUILD。未提供 `X-Conversation-Key` 时请求保持 ephemeral FRESH，不自动生成 key，也不把两个无 key 请求猜成同一 Conversation。
+Phase 4 已批准设计以 SQLite `ConversationStore` + `clean | in_flight` sync checkpoint 作为恢复事实源，并把请求确定性分为 `incremental | full`：单条 user message 是 incremental；多条消息或 assistant/tool history 是 full。只有能够证明已确认历史与当前请求一致时才 APPEND/RESTORE；历史分叉、instructions 变化、checkpoint 不确定/不匹配、URL 缺失或确认不可恢复时统一 REBUILD。无 `X-Conversation-Key` 时仍为独立 Fresh Conversation 并完整持久化 `conversation_key = NULL`，但绝不跨请求做隐式身份绑定。
 
-有稳定 key 的请求通过 keyed Queue 串行化。成功执行后一次性保存“当前请求完整历史 + 新 Assistant 回复 + ChatGPT conversation URL”；网页/Driver/持久化失败不会覆盖最后一个成功快照。APPEND 的 warm Page 导航身份不可信时先尝试 RESTORE 原 `/c/...` URL；只有稳定 `conversation_restore_failed` 才允许升级为 RESTORE/REBUILD，普通认证、Selector、浏览器错误不会被伪装成重建成功。
+有稳定 key 的请求通过 keyed FIFO Queue 串行化；排队期间不占 Page，轮到时重新读取 SQLite 最新状态。第一次可能写入 ChatGPT turn 之前先把 checkpoint 置 `in_flight`；成功后一次性保存 reconciled aggregate 并恢复 `clean`。任何发生在 checkpoint 之后且无法证明网页副作用的失败都不得猜测回滚为 clean，下一请求通过 REBUILD 收敛。普通认证、Selector、Browser runtime 错误不得被伪装成“可安全重建”的 restore failure。
 
 ## Container Runtime（容器运行时）
 
@@ -251,7 +251,7 @@ Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前�
 
 `GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
 
-兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`。Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、同 key Queue 与 Page affinity；未提供时仍保持 `undefined` 并执行 ephemeral FRESH。Gateway 不自动创建、推断或跨请求绑定匿名 Conversation identity。
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`。Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、同 key FIFO 与 Page affinity；未提供时仍保持 `undefined`，每个请求创建独立持久化 Fresh Conversation（`conversation_key = NULL`），Gateway 不自动创建客户端可见 key，也不推断或跨请求绑定匿名 Conversation identity。
 
 ## 错误边界
 

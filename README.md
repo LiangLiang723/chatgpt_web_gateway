@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前已实现：Phase 4 Conversation + Context Sync 代码闭环
+## 当前状态：Phase 4 Conversation + Context Sync 实施中
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E；Phase 4 的 Conversation + Context Sync 运行时代码与确定性/Docker 验证也已完成：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E。Phase 4 已实现 Queue、Page affinity、Driver restore target 和一版 Conversation Executor，但在恢复远端已批准的完整 Phase 4 设计后，仍需补齐 sync checkpoint、single-user incremental、无 key 持久化与 crash-convergence：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -34,7 +34,7 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - `corepack pnpm inspect:chatgpt`、`corepack pnpm test:e2e:chatgpt` 与 `corepack pnpm test:e2e:chatgpt:phase4` 提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 3 已完成真实验收；Phase 4 尚未关闭真实验收。** Phase 3 时独立 E2E Profile 已人工登录并通过 `inspect:chatgpt`、Fresh Driver challenge 与 Gateway HTTP challenge。Phase 4 当前 `verify`、Docker smoke 和显式三轮 real E2E harness 均已准备完成，但 2026-08-15 实际运行 Phase 4 real E2E 时隔离 Profile 第 1 轮返回 `auth_required`；需要通过 maintenance Google Chrome Stable 重新人工认证后再重跑 APPEND + restart RESTORE 验收。
+**Phase 3 已完成真实验收；Phase 4 仍在实施。** 现有 Phase 4 子集曾通过 deterministic `verify` 与 Docker smoke，显式 real E2E harness 也已建立；但这些证据不覆盖刚恢复出的完整批准计划。最终还需要完成 checkpoint/full+incremental/crash-convergence 等 Task，并在隔离 Profile 重新人工认证后重跑真实 APPEND/RESTORE/REBUILD 验收。
 
 尚未实现的核心能力包括真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
 
@@ -250,7 +250,7 @@ OpenAI Compatible Client / Agent
        NormalizedRequest
               │
               ▼
-      Conversation Engine         ← Phase 4 已实现 Queue + Context Sync + SQLite lifecycle
+      Conversation Engine         ← Phase 4 实施中；Queue/Page affinity 已有，完整 checkpoint/incremental 待补齐
               │
               ▼
         ChatGPT Driver            ← Fresh/Current/Restore；Phase 4 real E2E 待重新认证后验收
@@ -283,7 +283,7 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-当前 Phase 4 开发实现不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
+当前 Phase 4 开发过程不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
 
 ## 开源协议
 

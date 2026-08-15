@@ -21,7 +21,7 @@
 - `ConversationStore` aggregate validation 与同步事务边界。
 - Phase 3 Page Pool capacity/reuse/close、BrowserManager lifecycle、Selector Registry unique/collection/fallback/missing/ambiguous。
 - Auth Probe authenticated/auth_required/unknown、Driver turn ownership、completion stable sampling/timeout，以及 Phase 4 `fresh | current | restore` target/Conversation identity 校验。
-- Phase 4 `FRESH | APPEND | RESTORE | REBUILD` 纯 Planner、Phase 4 request/prompt boundary、同 key Queue、Conversation Page affinity/idle eviction、Conversation Executor 原子成功/失败语义。
+- Phase 4 `incremental | full` 分类、`FRESH | APPEND | RESTORE | REBUILD` 纯 Planner、`clean | in_flight` checkpoint、Phase 4 request/prompt boundary、同 key FIFO、Conversation Page affinity/idle+LRU eviction、Conversation Engine 原子成功/未知失败收敛语义。
 - Chat Completions / Responses 非流式文本 Encoder 与 stable Browser/Driver/API error mapping。
 - Chat Completions / Responses SSE Encoder（流式编码器，Phase 5 目标）。
 
@@ -34,7 +34,7 @@
 - Phase 2：Gateway runtime 在 Fastify readiness 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 幂等关闭 SQLite。
 - Phase 3：POST route → Normalizer → injected/fake execution result → Chat Completions / Responses Encoder，全程不访问真实 ChatGPT。
 - Phase 4：Gateway runtime headless → BrowserManager → Conversation Queue → Page affinity → Conversation Executor → fake ChatGPT Driver → SQLite ConversationStore；maintenance 模式不启动产品 BrowserManager。
-- Phase 4：同 key HTTP 请求串行、不同 key 可并行，APPEND 不重发已同步前缀，close/recreate runtime 后 RESTORE 使用持久化 Conversation URL，失败执行不覆盖旧 aggregate。
+- Phase 4：同 key HTTP 请求 FIFO、不同 key 可并行；full-history 与 single-user incremental APPEND 都不重发已确认前缀；close/recreate runtime 后 RESTORE 使用持久化 Conversation URL；post-checkpoint unknown failure 保持 `in_flight` 并在下一轮 REBUILD。
 - 文件元数据 + 文件系统。
 - Client abort（客户端断开）→ stop generation。
 
@@ -141,7 +141,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、response encoder 与 E2E safety gate；Phase 4 继续覆盖 Context Sync Planner、Queue、Page affinity、Driver restore identity、Conversation Executor、SQLite/runtime restart 与 HTTP 并发行为。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、response encoder 与 E2E safety gate。Phase 4 的完整批准验收还必须覆盖 checkpoint migration、full/incremental Planner、FIFO、Page affinity/LRU、Driver restore、Conversation Engine crash-convergence、runtime restart 与跨协议 HTTP 行为；当前正在逐 Task 补齐。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -155,4 +155,4 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 已有历史真实通过证据：authenticated selector inspection、Fresh Driver challenge 与 Gateway HTTP challenge 均在独立测试 Profile 上执行成功。Phase 4 当前只有确定性 Unit/Integration + Docker smoke 通过，真实多轮 E2E 停在隔离 Profile `auth_required`；因此不能把 APPEND/RESTORE 描述为当前网页已验收，更不能外推到 Streaming、附件、Tools 或图片能力。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 已有历史真实通过证据：authenticated selector inspection、Fresh Driver challenge 与 Gateway HTTP challenge 均在独立测试 Profile 上执行成功。Phase 4 当前仍在实现完整批准计划；此前较窄子集的 real E2E 还停在隔离 Profile `auth_required`。因此在 13 个 Task 与最终 real E2E 全部满足前，不能把 Phase 4 APPEND/RESTORE/REBUILD 描述为完整实现或当前网页已验收。

@@ -26,21 +26,21 @@
 
 ## Current Phase 4 Implementation（当前 Phase 4 实现）
 
-当前代码已经实现：
+当前代码处于 Phase 4 实施中。Queue、Page affinity、Driver restore target 和一版 Conversation Executor 已存在，但完整批准规格中的 sync checkpoint、single-user incremental、无 key 持久化/crash-convergence 尚未补齐，因此以下只描述当前已落地子集：
 
 - `GET /health`：返回 Gateway HTTP 进程级健康状态，不代表 ChatGPT 已登录。
 - `GET /v1/models`：认证后只返回 `chatgpt-web`。
 - `POST /v1/chat/completions` / `POST /v1/responses`：完成 TypeBox/Ajv Schema 校验、统一 Normalizer、Conversation Executor、Browser/Page affinity/Driver 执行链和两套非流式文本响应 Encoder。
 - Headless 生产 runtime 会启动 Persistent BrowserContext、Conversation Queue 与 Page affinity manager；`UI_MODE=novnc` 不启动产品 BrowserManager，ChatGPT POST 返回 `503 browser_maintenance_mode`。
 - Phase 4 接受**非流式、纯文本、多轮**请求，要求最终消息是非空 `user`。system/developer instructions 继续通过 JSON prompt envelope 近似映射，这不是 OpenAI 原生 role privilege boundary。
-- 有 `X-Conversation-Key` 时，Gateway 使用 SQLite 最后成功同步快照做 `FRESH | APPEND | RESTORE | REBUILD` 决策，同 key 串行、不同 key 可并行；未提供 key 时请求保持 ephemeral FRESH，不自动生成/推断会话身份。
-- APPEND 只在“instructions 相同 + 持久化消息是当前请求严格前缀 + 恰好新增一个最终 user turn”时成立；否则 REBUILD。Page 丢失但持久化 `/c/...` URL 可用时 RESTORE。
-- 成功执行后 `ConversationStore` 原子保存完整请求历史、新 Assistant 回复和 ChatGPT Conversation URL；失败不会覆盖最后一个成功快照。
+- 有 `X-Conversation-Key` 时，现有实现使用 SQLite aggregate 做一版 `FRESH | APPEND | RESTORE | REBUILD` 决策，同 key 串行、不同 key 可并行；批准计划还要求 single-user incremental 与 `clean | in_flight` checkpoint，当前正在补齐。
+- 当前 APPEND 子集只覆盖完整历史严格前缀 + 恰好新增一个最终 user turn；批准规格还要求仅一条 user message 的 incremental request 能续接既有 Conversation。
+- 当前成功执行会保存完整请求历史、新 Assistant 回复和 ChatGPT Conversation URL；批准规格要求 unknown post-checkpoint failure 保持 `in_flight` 并在下一轮确定性 REBUILD，尚待实现。
 - Streaming、附件、Tools、非默认 Tool Choice、Structured Output execution 和 image output 返回 `501 unsupported_phase4_request`。
 - `conversation_restore_failed` 映射为 HTTP `502`；`auth_required` 使用 HTTP `503`，不会与 Gateway Bearer API Key 的 HTTP `401` 混淆。
 - Chat Completions 不伪造 token usage；Responses 当前返回 `usage: null`。
 
-Phase 4 的 Unit/Integration 与 Docker smoke 已通过；显式 real Phase 4 E2E 也已实际启动，但当前隔离 E2E Profile 在第 1 轮返回 `auth_required`，因此**尚不能把真实网页 APPEND/RESTORE 标记为已验收**。Phase 3 的 Fresh text real E2E 是历史已通过基线；Phase 4 需要重新人工认证隔离 Profile 后重跑多轮验收。下面的 V1 矩阵仍表示最终批准目标。
+现有 Phase 4 子集的 Unit/Integration 与 Docker smoke 曾通过，显式 real E2E 也已实际启动但隔离 Profile 返回 `auth_required`。由于完整批准计划仍在补齐，**尚不能把 Phase 4 描述为完整实现或真实网页已验收**。下面的 V1 矩阵仍表示最终批准目标。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 

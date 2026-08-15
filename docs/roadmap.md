@@ -38,11 +38,11 @@
 
 ## Phase 4：Conversation + Context Sync
 
-状态：**代码实现完成，真实 E2E 验收被隔离 Profile 失效登录态阻塞**。
+状态：**实施中**。已存在 Queue/Page affinity/Driver restore/Conversation Executor 子集；恢复远端已批准完整规格后，仍在补齐 sync checkpoint、single-user incremental、无 key 持久化与 crash-convergence。
 
-交付：Conversation Key、同会话 Queue、跨会话并行、`FRESH | APPEND | RESTORE | REBUILD`、Page idle（空闲）回收和 URL 恢复。当前这些能力已完成 Unit/Integration、runtime wiring 与 Docker smoke；显式 Phase 4 real E2E harness 也已实现。
+交付：Conversation Key、同会话 Queue、跨会话并行、`FRESH | APPEND | RESTORE | REBUILD`、Page idle（空闲）+ LRU 回收、URL 恢复和 crash-safe SQLite sync checkpoint。
 
-验收：第二轮不重复灌入第一轮完整历史；进程重启可 RESTORE。当前确定性 fake-Driver/SQLite 测试已证明这两个行为，但 2026-08-15 real E2E 在第 1 轮返回 `auth_required`，需先人工重新认证隔离 E2E Profile 后重跑，未通过前不进入 Phase 5。
+验收：完整历史与 single-user incremental 都不重复灌入已确认历史；未知 post-checkpoint failure 下一轮确定性 REBUILD；进程重启可 RESTORE；真实 ChatGPT E2E 通过。未满足这些门槛前不进入 Phase 5。
 
 ## Phase 5：真 Streaming
 
