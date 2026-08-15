@@ -306,7 +306,7 @@ export function planContextSync(input: {
 }): ContextSyncPlan;
 ```
 
-- [ ] **Step 1: Write canonicalization tests**
+- [x] **Step 1: Write canonicalization tests**
 
 Cover exact behavior:
 
@@ -321,7 +321,7 @@ expect(fingerprintCanonical({ a: 1 })).toMatch(/^[0-9a-f]{64}$/);
 expect(fingerprintCanonical({ a: 1 })).toBe(fingerprintCanonical({ a: 1 }));
 ```
 
-- [ ] **Step 2: Write a table-driven planner test covering every approved mode/reason**
+- [x] **Step 2: Write a table-driven planner test covering every approved mode/reason**
 
 Cases must include:
 
@@ -340,7 +340,7 @@ clean/no URL -> REBUILD conversation_url_missing
 
 For `in_flight + incremental`, assert REBUILD history is `stored.messages.slice(0, syncedMessageCount)` and does not invent the previous uncertain turn.
 
-- [ ] **Step 3: Run the new tests red**
+- [x] **Step 3: Run the new tests red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/context-canonicalize.test.ts tests/unit/context-planner.test.ts
@@ -348,11 +348,11 @@ corepack pnpm exec vitest run tests/unit/context-canonicalize.test.ts tests/unit
 
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 4: Implement canonical helpers without importing `api/`, `persistence/`, `chatgpt/`, or Playwright**
+- [x] **Step 4: Implement canonical helpers without importing `api/`, `persistence/`, `chatgpt/`, or Playwright**
 
 Use fixed-shape objects before `JSON.stringify()` and `createHash('sha256')`; do not add a dependency.
 
-- [ ] **Step 5: Implement planner with the spec priority order**
+- [x] **Step 5: Implement planner with the spec priority order**
 
 The core order must remain explicit:
 
@@ -368,7 +368,7 @@ if (!sameInstructions(stored.instructions, request.instructions)) return rebuild
 
 For a full request, client history is authoritative on divergence. For incremental REBUILD reasons, stored confirmed prefix plus current user is authoritative.
 
-- [ ] **Step 6: Run new tests green and architecture checker**
+- [x] **Step 6: Run new tests green and architecture checker**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/context-canonicalize.test.ts tests/unit/context-planner.test.ts
@@ -377,12 +377,14 @@ node scripts/check-architecture.mjs
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/context tests/unit/context-*.test.ts
  git commit -m "✨ 增加 Context Sync 纯规划器"
 ```
+
+2026-08-15 execution evidence: both new test files first failed because the approved canonical/planner modules did not exist. The implemented pure modules then passed 2 files / 14 tests, including single-user incremental APPEND/RESTORE and all approved REBUILD reasons; `node scripts/check-architecture.mjs` also passed.
 
 ---
 
