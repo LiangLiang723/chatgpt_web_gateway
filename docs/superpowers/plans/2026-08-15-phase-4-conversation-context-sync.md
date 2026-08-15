@@ -152,7 +152,7 @@ git commit -m "✨ 激活 Page idle 配置与租约回收"
 - Planner consumes only normalized semantic data plus persisted semantic snapshot and `hasWarmPage`.
 - Executor in Task 5 consumes these functions without re-implementing equality or capability checks.
 
-- [ ] **Step 1: Write failing planner tests**
+- [x] **Step 1: Write failing planner tests**
 
 Cover these exact cases:
 
@@ -169,7 +169,7 @@ more than one unsynchronized message                      → REBUILD
 
 Also prove that two semantically equal normalized message arrays compare equal independent of persistence ids/timestamps by keeping those values outside planner inputs.
 
-- [ ] **Step 2: Run planner tests and confirm RED**
+- [x] **Step 2: Run planner tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/context-sync.test.ts
@@ -177,7 +177,7 @@ corepack pnpm vitest run tests/unit/context-sync.test.ts
 
 Expected failure: module/functions do not exist.
 
-- [ ] **Step 3: Implement the pure planner**
+- [x] **Step 3: Implement the pure planner**
 
 Use public types equivalent to:
 
@@ -205,11 +205,11 @@ export function planContextSync(options: {
 
 Implement explicit semantic equality for instructions, roles, ordered content parts, `toolCallId` and `toolCalls`; do not compare JSON persistence text, request ids or timestamps.
 
-- [ ] **Step 4: Run planner tests and confirm GREEN**
+- [x] **Step 4: Run planner tests and confirm GREEN**
 
 Run the Task 2 planner test command and require PASS.
 
-- [ ] **Step 5: Write failing Phase 4 request/prompt tests**
+- [x] **Step 5: Write failing Phase 4 request/prompt tests**
 
 Prove:
 
@@ -220,7 +220,7 @@ Prove:
 - full prompt uses `JSON.stringify()` and includes all normalized system/developer instructions and ordered text messages;
 - append prompt contains only the one new user turn and not old assistant/history text.
 
-- [ ] **Step 6: Run prompt tests and confirm RED**
+- [x] **Step 6: Run prompt tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/phase4-request.test.ts
@@ -228,7 +228,7 @@ corepack pnpm vitest run tests/unit/phase4-request.test.ts
 
 Expected failure: Phase 4 request module is missing.
 
-- [ ] **Step 7: Implement validation and prompt builders**
+- [x] **Step 7: Implement validation and prompt builders**
 
 Define:
 
@@ -240,14 +240,14 @@ export class Phase4ExecutionError extends Error {
 
 Keep full and append prompt templates exactly centralized in this module. Convert each text-only normalized message to `{ role, text }`; never concatenate unescaped JSON manually.
 
-- [ ] **Step 8: Run Task 2 tests and typecheck**
+- [x] **Step 8: Run Task 2 tests and typecheck**
 
 ```bash
 corepack pnpm vitest run tests/unit/context-sync.test.ts tests/unit/phase4-request.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 9: Update plan and commit**
+- [x] **Step 9: Update plan and commit**
 
 ```bash
 git add src/context src/conversations/phase4-request.ts tests/unit/context-sync.test.ts tests/unit/phase4-request.test.ts docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
