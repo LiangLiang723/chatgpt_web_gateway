@@ -737,7 +737,7 @@ export function buildFinalConversationAggregate(input: {
 }): ConversationAggregate;
 ```
 
-- [ ] **Step 1: Write prompt serialization tests**
+- [x] **Step 1: Write prompt serialization tests**
 
 Use malicious-looking text containing quotes, `</json>`, newlines, and braces. Parse the substring after the stable prelude with `JSON.parse()` and assert exact recovery.
 
@@ -754,7 +754,7 @@ Context payload must be exactly:
 
 Append payload must contain only `version` and `current_user`; assert it does not contain old-history tokens or `instructions`.
 
-- [ ] **Step 2: Write aggregate reconciliation tests**
+- [x] **Step 2: Write aggregate reconciliation tests**
 
 Given stored `u1/a1/u2/a2`, assert:
 
@@ -764,7 +764,7 @@ Given stored `u1/a1/u2/a2`, assert:
 - final checkpoint is `{ status: 'clean', syncedMessageCount: messages.length }` with no `startedAt`.
 - final Conversation URL is the validated result URL.
 
-- [ ] **Step 3: Run red**
+- [x] **Step 3: Run red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/conversation-prompts.test.ts tests/unit/conversation-aggregate-builder.test.ts
@@ -772,15 +772,15 @@ corepack pnpm exec vitest run tests/unit/conversation-prompts.test.ts tests/unit
 
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 4: Implement prompts with `JSON.stringify()` only**
+- [x] **Step 4: Implement prompts with `JSON.stringify()` only**
 
 Use stable fixed prelude strings. Do not hand-escape user content and do not claim prompt-level role separation is a security boundary.
 
-- [ ] **Step 5: Implement longest-common-prefix reconciliation**
+- [x] **Step 5: Implement longest-common-prefix reconciliation**
 
 Compare canonical role/text. Reuse exact-prefix stored records, then generate `randomUUID()` for the authoritative suffix and generated Assistant. Normalize stored Phase 4 content to one text part.
 
-- [ ] **Step 6: Run green**
+- [x] **Step 6: Run green**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/conversation-prompts.test.ts tests/unit/conversation-aggregate-builder.test.ts
@@ -788,12 +788,14 @@ corepack pnpm exec vitest run tests/unit/conversation-prompts.test.ts tests/unit
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/conversations/prompts.ts src/conversations/aggregate-builder.ts tests/unit/conversation-prompts.test.ts tests/unit/conversation-aggregate-builder.test.ts
  git commit -m "✨ 增加 Conversation 重建与 Prompt 封装"
 ```
+
+2026-08-15 execution evidence: both approved tests first failed because the new modules did not exist. After implementing versioned JSON-only Context/Append envelopes and canonical longest-common-prefix Message reconciliation, 2 files / 5 tests passed and `corepack pnpm typecheck` passed.
 
 ---
 
