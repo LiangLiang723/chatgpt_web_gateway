@@ -36,7 +36,10 @@ describe('Gateway persistence startup', () => {
       runtime.persistence.database
         .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
         .all(),
-    ).toEqual([expect.objectContaining({ version: 1, name: 'initial' })]);
+    ).toEqual([
+      expect.objectContaining({ version: 1, name: 'initial' }),
+      expect.objectContaining({ version: 2, name: 'add_conversation_sync_checkpoint' }),
+    ]);
 
     await runtime.close();
     await expect(runtime.close()).resolves.toBeUndefined();

@@ -92,50 +92,67 @@ export class BackendNotImplementedError extends GatewayError {
 const executionErrorMap = {
   auth_required: {
     statusCode: 503,
+    type: 'server_error',
     message: 'ChatGPT authentication is required',
   },
   browser_unavailable: {
     statusCode: 503,
+    type: 'server_error',
     message: 'ChatGPT browser runtime is unavailable',
   },
   browser_maintenance_mode: {
     statusCode: 503,
+    type: 'server_error',
     message: 'ChatGPT browser execution is unavailable during maintenance mode',
   },
   page_capacity_exceeded: {
     statusCode: 503,
+    type: 'server_error',
     message: 'ChatGPT page capacity is currently exhausted',
   },
   selector_missing: {
     statusCode: 502,
+    type: 'server_error',
     message: 'ChatGPT page structure does not match the current selector registry',
   },
   selector_ambiguous: {
     statusCode: 502,
+    type: 'server_error',
     message: 'ChatGPT page structure produced an ambiguous selector match',
   },
   chatgpt_generation_timeout: {
     statusCode: 504,
+    type: 'server_error',
     message: 'ChatGPT generation did not complete before the timeout',
   },
   chatgpt_response_missing: {
     statusCode: 502,
+    type: 'server_error',
     message: 'ChatGPT did not produce a readable Assistant response',
   },
   conversation_restore_failed: {
     statusCode: 502,
+    type: 'server_error',
     message: 'The saved ChatGPT conversation could not be restored',
   },
   unsupported_phase4_request: {
     statusCode: 501,
+    type: 'server_error',
     message: 'This request requires a capability not implemented in Phase 4',
+  },
+  invalid_conversation_request: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The Conversation request is invalid for Phase 4',
   },
   conversation_sync_not_implemented: {
     statusCode: 501,
+    type: 'server_error',
     message: 'Conversation synchronization is not implemented in Phase 3',
   },
   unsupported_phase3_request: {
     statusCode: 501,
+    type: 'server_error',
     message: 'This request requires a capability not implemented in Phase 3',
   },
 } as const;
@@ -157,7 +174,7 @@ export function gatewayErrorFromExecution(error: unknown): GatewayError | undefi
   return new GatewayError({
     message: mapped.message,
     statusCode: mapped.statusCode,
-    type: 'server_error',
+    type: mapped.type,
     code,
   });
 }

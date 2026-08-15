@@ -13,16 +13,16 @@ STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-9
+NEXT_TASK=execute-phase-4-plan-task-10
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–8 已完成完整四态 Engine 与 crash convergence，下一步切换 runtime/API error/config 到新 Engine。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–9 已完成完整四态 Engine、crash convergence 与生产 runtime/API wiring，进入系统级并发/LRU/重启/跨协议验收。
 - **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 9 — 完成 Phase 4 error mapping、配置与 runtime wiring，移除正常 headless 路径对旧 Phase3/partial Executor 的依赖。
+- **下一个可执行任务：** Plan Task 10 — 证明 same-key FIFO、cross-key parallel、Page LRU/busy、SQLite restart RESTORE 与 Chat Completions/Responses 跨协议连续性。
 - **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
@@ -79,7 +79,8 @@ UPDATED_AT=2026-08-15
 - ✅ Context/Append Envelope 使用版本化 JSON-only payload；aggregate builder 按 canonical longest common prefix 复用 Message identity，并在成功后收敛为 clean checkpoint。
 - ✅ 新 Conversation Engine 已接入真实 `ConversationStore`、same-key Queue、Page Registry 与 pure Planner；FRESH、full/incremental APPEND、NULL-key 持久化及 checkpoint 写入顺序已有真实临时 SQLite 集成测试。
 - ✅ Conversation Engine 四态已闭环：RESTORE、`not_restorable → REBUILD`、full history/incremental instructions REBUILD、checkpoint uncertainty/mismatch 与 post-checkpoint `in_flight` reopen 均有真实临时 SQLite 集成测试。
-- 🟡 runtime/API error/config 尚未切换到新 Engine，继续执行批准 Task 9。
+- ✅ Headless production runtime 已正式切换到 `ConversationQueue + ConversationPageRegistry + ConversationEngine`；maintenance 模式不创建产品 Browser/Queue/Registry，公共 Phase 4 invalid/unsupported error mapping 已完成。
+- 🟡 继续执行批准 Task 10–13 的系统级、Docker、real E2E 与最终文档验收。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -164,7 +165,7 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 按批准 Plan Task 9 完成 error/config/runtime/HTTP wiring，再继续 Task 10–13 的系统级验收。
+1. 按批准 Plan Task 10 完成系统级 FIFO/parallel/LRU/restart/cross-protocol 验收，再继续 Task 11–13。
 2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
 3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 

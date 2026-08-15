@@ -1004,11 +1004,11 @@ AppConfig.pageIdleTimeoutMinutes: number;
 
 `gatewayErrorFromExecution()` must map per-code HTTP status **and** OpenAI error type.
 
-- [ ] **Step 1: Add config tests**
+- [x] **Step 1: Add config tests**
 
 Assert default `30`, explicit `1` and `1440`, reject `0`, `1441`, non-integer.
 
-- [ ] **Step 2: Add error mapping tests**
+- [x] **Step 2: Add error mapping tests**
 
 Expected mappings:
 
@@ -1019,7 +1019,7 @@ invalid_conversation_request -> 400 / invalid_request_error
 
 Keep all existing Browser/Driver mappings unchanged.
 
-- [ ] **Step 3: Add runtime integration expectations**
+- [x] **Step 3: Add runtime integration expectations**
 
 Headless runtime must create Page Registry + Queue + Conversation Engine using `persistence.conversationStore`; maintenance mode must still use `browserMaintenanceModeExecution` and never create product BrowserManager/Engine browser work.
 
@@ -1032,7 +1032,7 @@ app.close
 → persistence close
 ```
 
-- [ ] **Step 4: Run focused tests red**
+- [x] **Step 4: Run focused tests red**
 
 ```bash
 corepack pnpm exec vitest run \
@@ -1043,7 +1043,7 @@ corepack pnpm exec vitest run \
 
 Expected: FAIL on missing config/Engine behavior.
 
-- [ ] **Step 5: Implement config and API mapping**
+- [x] **Step 5: Implement config and API mapping**
 
 Parse:
 
@@ -1059,7 +1059,7 @@ pageIdleTimeoutMinutes: parseInteger(
 
 Change the execution error map entries to carry `type`, rather than hard-coding `server_error` for every execution error.
 
-- [ ] **Step 6: Replace production Phase3Executor wiring**
+- [x] **Step 6: Replace production Phase3Executor wiring**
 
 Headless runtime constructs:
 
@@ -1071,11 +1071,11 @@ createConversationEngine({ queue, pageRegistry, driver, conversationStore: persi
 
 Keep `phase3-executor.ts` only if still used by an isolated regression test; otherwise remove it and replace its tests with Phase 4 capability tests. Do not leave dead production wiring.
 
-- [ ] **Step 7: Run focused tests green**
+- [x] **Step 7: Run focused tests green**
 
 Run the Step 4 command; expected PASS.
 
-- [ ] **Step 8: Run all deterministic tests once**
+- [x] **Step 8: Run all deterministic tests once**
 
 ```bash
 corepack pnpm test
@@ -1083,12 +1083,14 @@ corepack pnpm test
 
 Expected: PASS, no network access.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/config src/api/errors.ts src/runtime.ts src/conversations tests/unit tests/integration
  git commit -m "✨ 接入 Phase 4 Conversation Runtime"
 ```
+
+2026-08-15 execution evidence: focused Task 9 tests first failed only on the missing `invalid_conversation_request` public mapping and old runtime composition. After switching runtime to Queue + Page Registry + Conversation Engine and making execution error entries carry their own OpenAI error type, the focused suite passed 3 files / 30 tests. The first full deterministic run exposed only stale regression assertions against the removed Driver `target` navigation surface plus a Phase 2-only migration expectation; after moving those assertions to `openFresh/openConversation` and expecting migrations 001+002, `corepack pnpm test` passed 41 files / 248 tests and `corepack pnpm typecheck` passed.
 
 ---
 

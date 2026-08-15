@@ -104,12 +104,23 @@ interface DriverCall {
   request: ChatGptTextRequest;
 }
 
+type NavigationCall =
+  | { type: 'fresh'; page: Page }
+  | { type: 'conversation'; page: Page; conversationUrl: string };
+
 class ControlledDriver implements ChatGptDriver {
   readonly calls: DriverCall[] = [];
+  readonly navigationCalls: NavigationCall[] = [];
 
-  async openFresh(): Promise<void> {}
+  async openFresh(page: Page): Promise<void> {
+    this.navigationCalls.push({ type: 'fresh', page });
+  }
 
-  async openConversation(): Promise<'restored' | 'not_restorable'> {
+  async openConversation(
+    page: Page,
+    conversationUrl: string,
+  ): Promise<'restored' | 'not_restorable'> {
+    this.navigationCalls.push({ type: 'conversation', page, conversationUrl });
     return 'restored';
   }
 
@@ -189,11 +200,14 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     expect(second.statusCode).toBe(200);
     expect(second.json().choices[0].message.content).toBe('reply two');
 
-    expect(driver.calls[0]!.request.target).toEqual({ kind: 'fresh' });
-    expect(driver.calls[1]!.request.target).toEqual({
-      kind: 'current',
-      conversationUrl: 'https://chatgpt.com/c/chat-alpha',
-    });
+    expect(driver.navigationCalls).toEqual([
+      { type: 'fresh', page: driver.calls[0]!.page },
+      {
+        type: 'conversation',
+        page: driver.calls[1]!.page,
+        conversationUrl: 'https://chatgpt.com/c/chat-alpha',
+      },
+    ]);
     expect(driver.calls[1]!.request.prompt).toContain('chat turn two');
     expect(driver.calls[1]!.request.prompt).not.toContain('chat turn one');
   });
@@ -230,8 +244,9 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     });
     expect(second.statusCode).toBe(200);
     expect(second.json().output[0].content[0].text).toBe('response two');
-    expect(driver.calls[1]!.request.target).toEqual({
-      kind: 'current',
+    expect(driver.navigationCalls[1]).toEqual({
+      type: 'conversation',
+      page: driver.calls[1]!.page,
       conversationUrl: 'https://chatgpt.com/c/response-alpha',
     });
     expect(driver.calls[1]!.request.prompt).not.toContain('response turn one');
@@ -357,8 +372,9 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     });
 
     expect(second.statusCode).toBe(200);
-    expect(secondDriver.calls[0]!.request.target).toEqual({
-      kind: 'restore',
+    expect(secondDriver.navigationCalls[0]).toEqual({
+      type: 'conversation',
+      page: secondDriver.calls[0]!.page,
       conversationUrl: 'https://chatgpt.com/c/restart-alpha',
     });
     expect(secondDriver.calls[0]!.request.prompt).not.toContain('restart one');
@@ -392,7 +408,10 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     });
 
     expect(rebuilt.statusCode).toBe(200);
-    expect(driver.calls[1]!.request.target).toEqual({ kind: 'fresh' });
+    expect(driver.navigationCalls[1]).toEqual({
+      type: 'fresh',
+      page: driver.calls[1]!.page,
+    });
     expect(driver.calls[1]!.request.prompt).toContain('edited original user');
     expect(
       gateway.persistence.conversationStore.loadByKey('rebuild-thread')?.conversation

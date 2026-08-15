@@ -173,21 +173,22 @@ describe('POST routes', () => {
   });
 
   it.each([
-    ['auth_required', 503],
-    ['browser_unavailable', 503],
-    ['browser_maintenance_mode', 503],
-    ['page_capacity_exceeded', 503],
-    ['selector_missing', 502],
-    ['selector_ambiguous', 502],
-    ['chatgpt_generation_timeout', 504],
-    ['chatgpt_response_missing', 502],
-    ['conversation_restore_failed', 502],
-    ['unsupported_phase4_request', 501],
-    ['conversation_sync_not_implemented', 501],
-    ['unsupported_phase3_request', 501],
+    ['auth_required', 503, 'server_error'],
+    ['browser_unavailable', 503, 'server_error'],
+    ['browser_maintenance_mode', 503, 'server_error'],
+    ['page_capacity_exceeded', 503, 'server_error'],
+    ['selector_missing', 502, 'server_error'],
+    ['selector_ambiguous', 502, 'server_error'],
+    ['chatgpt_generation_timeout', 504, 'server_error'],
+    ['chatgpt_response_missing', 502, 'server_error'],
+    ['conversation_restore_failed', 502, 'server_error'],
+    ['unsupported_phase4_request', 501, 'server_error'],
+    ['invalid_conversation_request', 400, 'invalid_request_error'],
+    ['conversation_sync_not_implemented', 501, 'server_error'],
+    ['unsupported_phase3_request', 501, 'server_error'],
   ] as const)(
-    'maps execution code %s to HTTP %s without leaking raw errors',
-    async (code, status) => {
+    'maps execution code %s to HTTP %s / %s without leaking raw errors',
+    async (code, status, type) => {
       const app = createApp(async () => {
         throw Object.assign(new Error('sensitive Playwright/profile detail'), { code });
       });
@@ -202,7 +203,7 @@ describe('POST routes', () => {
       expect(response.statusCode).toBe(status);
       expect(response.json()).toMatchObject({
         error: {
-          type: 'server_error',
+          type,
           code,
           param: null,
         },

@@ -5,8 +5,10 @@ import type { BrowserContext, Page } from 'playwright';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { BrowserManager, PagePool } from '../../src/browser/types.js';
+import type { ChatGptTextDriver } from '../../src/chatgpt/driver.js';
 import { loadConfig } from '../../src/config/index.js';
-import type { ConversationPageManager } from '../../src/conversations/conversation-pages.js';
+import type { ConversationPageRegistry } from '../../src/conversations/page-registry.js';
+import type { ConversationQueue } from '../../src/conversations/conversation-queue.js';
 import { createGatewayRuntime } from '../../src/runtime.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
 
@@ -24,17 +26,36 @@ function temp() {
   return paths;
 }
 
-function fakeConversationPageManager(
+function fakePageRegistry(
   close: () => Promise<void> = vi.fn(async (): Promise<void> => undefined),
-): ConversationPageManager {
+): ConversationPageRegistry {
   return {
-    affinityCount: 0,
-    hasWarmPage: vi.fn(() => false),
+    hasAffinity: vi.fn(() => false),
     acquire: vi.fn(async () => {
       throw new Error('not used by runtime composition test');
     }),
-    sweepIdle: vi.fn(async () => undefined),
     close,
+  };
+}
+
+function fakeQueue(close: () => void = vi.fn()): ConversationQueue {
+  return {
+    pendingKeyCount: 0,
+    async run<T>(_key: string, work: () => Promise<T>): Promise<T> {
+      return work();
+    },
+    close,
+  };
+}
+
+function fakeDriver(): ChatGptTextDriver {
+  return {
+    openFresh: vi.fn(async () => undefined),
+    openConversation: vi.fn(async () => 'restored' as const),
+    sendText: vi.fn(async () => ({
+      text: 'fake',
+      conversationUrl: 'https://chatgpt.com/c/fake',
+    })),
   };
 }
 
@@ -60,7 +81,7 @@ function fakeBrowserManager(
 }
 
 describe('Gateway Browser runtime composition', () => {
-  it('opens persistence before BrowserManager and wires configured Conversation Page idle timeout', async () => {
+  it('opens persistence before BrowserManager and wires Queue + Page Registry + Engine dependencies', async () => {
     const paths = temp();
     const dataDir = join(paths.root, 'data');
     const browser = fakeBrowserManager();
@@ -68,8 +89,10 @@ describe('Gateway Browser runtime composition', () => {
       expect(existsSync(join(dataDir, 'gateway.db'))).toBe(true);
       return browser;
     });
-    const conversationPages = fakeConversationPageManager();
-    const createConversationPageManager = vi.fn(() => conversationPages);
+    const pageRegistry = fakePageRegistry();
+    const queue = fakeQueue();
+    const createConversationPageRegistry = vi.fn(() => pageRegistry);
+    const createConversationQueue = vi.fn(() => queue);
     const config = loadConfig({
       GATEWAY_API_KEY: 'test-key',
       DATA_DIR: dataDir,
@@ -81,7 +104,9 @@ describe('Gateway Browser runtime composition', () => {
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager,
-      createConversationPageManager,
+      createConversationPageRegistry,
+      createConversationQueue,
+      driver: fakeDriver(),
       logger: false,
     });
     runtimes.push(runtime);
@@ -91,12 +116,13 @@ describe('Gateway Browser runtime composition', () => {
       maxActivePages: 4,
       proxyServer: 'http://proxy.example:7890',
     });
-    expect(createConversationPageManager).toHaveBeenCalledWith({
+    expect(createConversationPageRegistry).toHaveBeenCalledWith({
       pagePool: browser.pages,
       idleTimeoutMs: 12 * 60_000,
     });
+    expect(createConversationQueue).toHaveBeenCalledTimes(1);
     expect(runtime.browser).toBe(browser);
-    expect(runtime.conversationPages).toBe(conversationPages);
+    expect(runtime.pageRegistry).toBe(pageRegistry);
   });
 
   it('supports an explicit test-only Browser Profile override', async () => {
@@ -110,7 +136,9 @@ describe('Gateway Browser runtime composition', () => {
       migrationsDir: paths.migrationsDir,
       browserProfileDir: profileDir,
       createBrowserManager,
-      createConversationPageManager: () => fakeConversationPageManager(),
+      createConversationPageRegistry: () => fakePageRegistry(),
+      createConversationQueue: () => fakeQueue(),
+      driver: fakeDriver(),
       logger: false,
     });
     runtimes.push(runtime);
@@ -121,10 +149,11 @@ describe('Gateway Browser runtime composition', () => {
     });
   });
 
-  it('does not start BrowserManager or Conversation Pages in noVNC maintenance mode', async () => {
+  it('does not start BrowserManager, Queue, or Page Registry in noVNC maintenance mode', async () => {
     const paths = temp();
     const createBrowserManager = vi.fn(async () => fakeBrowserManager());
-    const createConversationPageManager = vi.fn(() => fakeConversationPageManager());
+    const createConversationPageRegistry = vi.fn(() => fakePageRegistry());
+    const createConversationQueue = vi.fn(() => fakeQueue());
     const config = loadConfig({
       GATEWAY_API_KEY: 'test-key',
       DATA_DIR: join(paths.root, 'data'),
@@ -135,15 +164,18 @@ describe('Gateway Browser runtime composition', () => {
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager,
-      createConversationPageManager,
+      createConversationPageRegistry,
+      createConversationQueue,
+      driver: fakeDriver(),
       logger: false,
     });
     runtimes.push(runtime);
 
     expect(createBrowserManager).not.toHaveBeenCalled();
-    expect(createConversationPageManager).not.toHaveBeenCalled();
+    expect(createConversationPageRegistry).not.toHaveBeenCalled();
+    expect(createConversationQueue).not.toHaveBeenCalled();
     expect(runtime.browser).toBeUndefined();
-    expect(runtime.conversationPages).toBeUndefined();
+    expect(runtime.pageRegistry).toBeUndefined();
 
     const response = await runtime.app.inject({
       method: 'POST',
@@ -155,11 +187,15 @@ describe('Gateway Browser runtime composition', () => {
     expect(response.json().error.code).toBe('browser_maintenance_mode');
   });
 
-  it('closes Fastify, Conversation Pages, Browser, then persistence and remains idempotent', async () => {
+  it('closes Fastify, Queue, Page Registry, Browser, then persistence and remains idempotent', async () => {
     const paths = temp();
     const order: string[] = [];
-    const closePages = vi.fn(async () => {
-      order.push('pages');
+    const closeQueue = vi.fn(() => {
+      order.push('queue');
+      expect(runtime.persistence.database.prepare('SELECT 1').get()).toBeDefined();
+    });
+    const closeRegistry = vi.fn(async () => {
+      order.push('registry');
       expect(runtime.persistence.database.prepare('SELECT 1').get()).toBeDefined();
     });
     const closeBrowser = vi.fn(async () => {
@@ -172,7 +208,9 @@ describe('Gateway Browser runtime composition', () => {
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager: async () => browser,
-      createConversationPageManager: () => fakeConversationPageManager(closePages),
+      createConversationPageRegistry: () => fakePageRegistry(closeRegistry),
+      createConversationQueue: () => fakeQueue(closeQueue),
+      driver: fakeDriver(),
       logger: false,
     });
     runtime.app.addHook('onClose', async () => {
@@ -182,8 +220,9 @@ describe('Gateway Browser runtime composition', () => {
     await runtime.close();
     await runtime.close();
 
-    expect(order).toEqual(['app', 'pages', 'browser']);
-    expect(closePages).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['app', 'queue', 'registry', 'browser']);
+    expect(closeQueue).toHaveBeenCalledTimes(1);
+    expect(closeRegistry).toHaveBeenCalledTimes(1);
     expect(closeBrowser).toHaveBeenCalledTimes(1);
     expect(() => runtime.persistence.database.prepare('SELECT 1').get()).toThrow();
   });

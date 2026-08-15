@@ -9,15 +9,18 @@ import {
   type CreateBrowserManagerOptions,
 } from './browser/browser-manager.js';
 import type { BrowserManager } from './browser/types.js';
-import { createChatGptDriver, type ChatGptDriver } from './chatgpt/driver.js';
+import { createChatGptDriver, type ChatGptTextDriver } from './chatgpt/driver.js';
 import type { AppConfig } from './config/index.js';
-import { createConversationExecutor } from './conversations/conversation-executor.js';
+import { createConversationEngine } from './conversations/conversation-engine.js';
 import {
-  createConversationPageManager as defaultCreateConversationPageManager,
-  type ConversationPageManager,
-  type CreateConversationPageManagerOptions,
-} from './conversations/conversation-pages.js';
-import { createConversationQueue } from './conversations/conversation-queue.js';
+  createConversationPageRegistry as defaultCreateConversationPageRegistry,
+  type ConversationPageRegistry,
+  type CreateConversationPageRegistryOptions,
+} from './conversations/page-registry.js';
+import {
+  createConversationQueue as defaultCreateConversationQueue,
+  type ConversationQueue,
+} from './conversations/conversation-queue.js';
 import { createPersistenceContext, type PersistenceContext } from './persistence/index.js';
 
 export interface CreateGatewayRuntimeOptions {
@@ -26,17 +29,18 @@ export interface CreateGatewayRuntimeOptions {
   migrationsDir?: string;
   browserProfileDir?: string;
   createBrowserManager?: (options: CreateBrowserManagerOptions) => Promise<BrowserManager>;
-  createConversationPageManager?: (
-    options: CreateConversationPageManagerOptions,
-  ) => ConversationPageManager;
-  driver?: ChatGptDriver;
+  createConversationPageRegistry?: (
+    options: CreateConversationPageRegistryOptions,
+  ) => ConversationPageRegistry;
+  createConversationQueue?: () => ConversationQueue;
+  driver?: ChatGptTextDriver;
 }
 
 export interface GatewayRuntime {
   readonly app: FastifyInstance;
   readonly persistence: PersistenceContext;
   readonly browser?: BrowserManager;
-  readonly conversationPages?: ConversationPageManager;
+  readonly pageRegistry?: ConversationPageRegistry;
   close(): Promise<void>;
 }
 
@@ -49,7 +53,21 @@ export async function createGatewayRuntime(
   });
 
   let browser: BrowserManager | undefined;
-  let conversationPages: ConversationPageManager | undefined;
+  let pageRegistry: ConversationPageRegistry | undefined;
+  let conversationQueue: ConversationQueue | undefined;
+
+  const closeExecutionResources = async (): Promise<void> => {
+    try {
+      conversationQueue?.close();
+    } finally {
+      try {
+        await pageRegistry?.close();
+      } finally {
+        await browser?.close();
+      }
+    }
+  };
+
   try {
     if (options.config.uiMode === 'headless') {
       browser = await (options.createBrowserManager ?? defaultCreateBrowserManager)({
@@ -59,33 +77,29 @@ export async function createGatewayRuntime(
           ? { proxyServer: options.config.chatgptProxyServer }
           : {}),
       });
-      conversationPages = (
-        options.createConversationPageManager ?? defaultCreateConversationPageManager
+      pageRegistry = (
+        options.createConversationPageRegistry ?? defaultCreateConversationPageRegistry
       )({
         pagePool: browser.pages,
         idleTimeoutMs: options.config.pageIdleTimeoutMinutes * 60_000,
       });
+      conversationQueue = (options.createConversationQueue ?? defaultCreateConversationQueue)();
     }
   } catch (error) {
     try {
-      await conversationPages?.close();
+      await closeExecutionResources();
     } finally {
-      try {
-        await browser?.close();
-      } finally {
-        persistence.close();
-      }
+      persistence.close();
     }
     throw error;
   }
 
   const execute =
-    browser === undefined || conversationPages === undefined
+    browser === undefined || pageRegistry === undefined || conversationQueue === undefined
       ? browserMaintenanceModeExecution
-      : createConversationExecutor({
-          pagePool: browser.pages,
-          pageManager: conversationPages,
-          queue: createConversationQueue(),
+      : createConversationEngine({
+          pageRegistry,
+          queue: conversationQueue,
           driver: options.driver ?? createChatGptDriver(),
           conversationStore: persistence.conversationStore,
         });
@@ -95,13 +109,9 @@ export async function createGatewayRuntime(
     app = buildServer({ config: options.config, execute, logger: options.logger ?? false });
   } catch (error) {
     try {
-      await conversationPages?.close();
+      await closeExecutionResources();
     } finally {
-      try {
-        await browser?.close();
-      } finally {
-        persistence.close();
-      }
+      persistence.close();
     }
     throw error;
   }
@@ -111,7 +121,7 @@ export async function createGatewayRuntime(
     app,
     persistence,
     ...(browser === undefined ? {} : { browser }),
-    ...(conversationPages === undefined ? {} : { conversationPages }),
+    ...(pageRegistry === undefined ? {} : { pageRegistry }),
     async close() {
       if (closed) return;
       closed = true;
@@ -119,13 +129,9 @@ export async function createGatewayRuntime(
         await app.close();
       } finally {
         try {
-          await conversationPages?.close();
+          await closeExecutionResources();
         } finally {
-          try {
-            await browser?.close();
-          } finally {
-            persistence.close();
-          }
+          persistence.close();
         }
       }
     },

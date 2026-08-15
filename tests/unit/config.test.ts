@@ -57,6 +57,11 @@ describe('loadConfig', () => {
     });
   });
 
+  it('accepts PAGE_IDLE_TIMEOUT_MINUTES boundary values', () => {
+    expect(loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1' }).pageIdleTimeoutMinutes).toBe(1);
+    expect(loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1440' }).pageIdleTimeoutMinutes).toBe(1440);
+  });
+
   it('rejects invalid numeric runtime values', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PORT: '0' })).toThrow(/PORT/);
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PORT: '65536' })).toThrow(/PORT/);
@@ -75,6 +80,9 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1441' })).toThrow(
       /PAGE_IDLE_TIMEOUT_MINUTES/,
     );
+    expect(() =>
+      loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1.5' }),
+    ).toThrow(/PAGE_IDLE_TIMEOUT_MINUTES/);
   });
 
   it('rejects unsupported UI modes', () => {
