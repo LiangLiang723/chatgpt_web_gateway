@@ -1,16 +1,20 @@
 import type { Page } from 'playwright';
 
 import { BrowserRuntimeError } from '../browser/errors.js';
-import type { PageLease, PageLeaseReleaseOptions, PagePool } from '../browser/types.js';
+import type { PageLease, PagePool } from '../browser/types.js';
 
 interface IntervalHandle {
   unref?: () => void;
 }
 
+export interface ConversationPageReleaseOptions {
+  discard?: boolean;
+}
+
 export interface ConversationPageLease {
   readonly page: Page;
   readonly reused: boolean;
-  release(options?: PageLeaseReleaseOptions): Promise<void>;
+  release(options?: ConversationPageReleaseOptions): Promise<void>;
 }
 
 export interface ConversationPageManager {
@@ -59,7 +63,7 @@ export function createConversationPageManager(
 
   const discardAffinity = async (conversationKey: string, affinity: Affinity): Promise<void> => {
     if (affinities.get(conversationKey) === affinity) affinities.delete(conversationKey);
-    await affinity.poolLease.release({ discard: true });
+    await affinity.poolLease.close();
   };
 
   const sweepIdle = async (): Promise<void> => {
@@ -177,7 +181,7 @@ export function createConversationPageManager(
       const retained = [...affinities.values()];
       affinities.clear();
       const results = await Promise.allSettled(
-        retained.map((affinity) => affinity.poolLease.release({ discard: true })),
+        retained.map((affinity) => affinity.poolLease.close()),
       );
       const failed = results.find((result) => result.status === 'rejected');
       if (failed?.status === 'rejected') {

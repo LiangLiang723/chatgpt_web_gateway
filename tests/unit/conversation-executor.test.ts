@@ -107,13 +107,17 @@ class FakePagePool implements Pick<PagePool, 'acquire'> {
   releaseCalls = 0;
 
   async acquire(): Promise<PageLease> {
-    let released = false;
+    let state: 'active' | 'released' | 'closed' = 'active';
     return {
       page: this.page,
       release: async () => {
-        if (released) return;
-        released = true;
+        if (state !== 'active') return;
+        state = 'released';
         this.releaseCalls += 1;
+      },
+      close: async () => {
+        if (state !== 'active') return;
+        state = 'closed';
       },
     };
   }

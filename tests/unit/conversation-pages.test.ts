@@ -2,7 +2,7 @@ import type { Page } from 'playwright';
 import { describe, expect, it } from 'vitest';
 
 import { BrowserRuntimeError } from '../../src/browser/errors.js';
-import type { PageLease, PageLeaseReleaseOptions, PagePool } from '../../src/browser/types.js';
+import type { PageLease, PagePool } from '../../src/browser/types.js';
 import { createConversationPageManager } from '../../src/conversations/conversation-pages.js';
 
 class FakePage {
@@ -21,7 +21,8 @@ class FakePage {
 interface FakeLease extends PageLease {
   page: Page;
   fakePage: FakePage;
-  releaseCalls: PageLeaseReleaseOptions[];
+  releaseCalls: number;
+  closeCalls: number;
 }
 
 class FakePool implements Pick<PagePool, 'acquire'> {
@@ -38,17 +39,24 @@ class FakePool implements Pick<PagePool, 'acquire'> {
 
     this.outstanding += 1;
     const fakePage = new FakePage(this.nextId++);
-    let released = false;
+    let state: 'active' | 'released' | 'closed' = 'active';
     const lease: FakeLease = {
       page: fakePage as unknown as Page,
       fakePage,
-      releaseCalls: [],
-      release: async (options = {}) => {
-        if (released) return;
-        released = true;
-        lease.releaseCalls.push(options);
+      releaseCalls: 0,
+      closeCalls: 0,
+      release: async () => {
+        if (state !== 'active') return;
+        state = 'released';
+        lease.releaseCalls += 1;
         this.outstanding -= 1;
-        if (options.discard) fakePage.closed = true;
+      },
+      close: async () => {
+        if (state !== 'active') return;
+        state = 'closed';
+        lease.closeCalls += 1;
+        fakePage.closed = true;
+        this.outstanding -= 1;
       },
     };
     this.leases.push(lease);
@@ -96,7 +104,7 @@ describe('ConversationPageManager', () => {
     expect(first.reused).toBe(false);
     const firstPage = first.page;
     await first.release();
-    expect(pool.leases[0]!.releaseCalls).toEqual([]);
+    expect(pool.leases[0]!.releaseCalls).toBe(0);
 
     now = 20;
     const second = await manager.acquire('alpha');
@@ -123,7 +131,7 @@ describe('ConversationPageManager', () => {
     const replacement = await manager.acquire('alpha');
     expect(replacement.reused).toBe(false);
     expect(replacement.page).not.toBe(first.page);
-    expect(pool.leases[0]!.releaseCalls).toEqual([{ discard: true }]);
+    expect(pool.leases[0]!.closeCalls).toBe(1);
     await replacement.release();
     await manager.close();
   });
@@ -143,7 +151,7 @@ describe('ConversationPageManager', () => {
     await manager.sweepIdle();
 
     expect(manager.affinityCount).toBe(0);
-    expect(pool.leases[0]!.releaseCalls).toEqual([{ discard: true }]);
+    expect(pool.leases[0]!.closeCalls).toBe(1);
     expect(pool.leases[0]!.fakePage.closed).toBe(true);
     await manager.close();
   });
@@ -164,7 +172,7 @@ describe('ConversationPageManager', () => {
     const beta = await manager.acquire('beta');
     expect(beta.reused).toBe(false);
     expect(pool.leases).toHaveLength(2);
-    expect(pool.leases[0]!.releaseCalls).toEqual([{ discard: true }]);
+    expect(pool.leases[0]!.closeCalls).toBe(1);
     expect(manager.hasWarmPage('alpha')).toBe(false);
     expect(manager.hasWarmPage('beta')).toBe(true);
 
@@ -182,7 +190,7 @@ describe('ConversationPageManager', () => {
 
     const alpha = await manager.acquire('alpha');
     await expect(manager.acquire('beta')).rejects.toMatchObject({ code: 'page_capacity_exceeded' });
-    expect(pool.leases[0]!.releaseCalls).toEqual([]);
+    expect(pool.leases[0]!.releaseCalls).toBe(0);
 
     await alpha.release();
     await manager.close();
@@ -201,7 +209,7 @@ describe('ConversationPageManager', () => {
     await lease.release({ discard: true });
 
     expect(manager.affinityCount).toBe(0);
-    expect(pool.leases[0]!.releaseCalls).toEqual([{ discard: true }]);
+    expect(pool.leases[0]!.closeCalls).toBe(1);
     await manager.close();
   });
 

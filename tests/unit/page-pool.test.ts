@@ -78,19 +78,36 @@ describe('PagePool', () => {
     await second.release();
   });
 
-  it('discards a leased page by closing it instead of returning it to idle', async () => {
+  it('closes a leased page exactly once and makes release after close a no-op', async () => {
     const pool = createPagePool(context(), { maxOpenPages: 2 });
     const lease = await pool.acquire();
     const page = lease.page as unknown as FakePage;
 
-    await lease.release({ discard: true });
-    await lease.release({ discard: true });
+    await lease.close();
+    await lease.close();
+    await lease.release();
 
     expect(page.closed).toBe(true);
     expect(page.closeCalls).toBe(1);
     expect(pool.openCount).toBe(0);
     expect(pool.leasedCount).toBe(0);
     expect(pool.idleCount).toBe(0);
+  });
+
+  it('makes close after release a no-op so an old lease cannot kill a re-leased Page', async () => {
+    const pool = createPagePool(context(), { maxOpenPages: 1 });
+    const first = await pool.acquire();
+    const page = first.page as unknown as FakePage;
+    await first.release();
+
+    const second = await pool.acquire();
+    expect(second.page).toBe(first.page);
+    await first.close();
+
+    expect(page.closed).toBe(false);
+    expect(page.closeCalls).toBe(0);
+    expect(pool.leasedCount).toBe(1);
+    await second.release();
   });
 
   it('makes release idempotent and removes pages that close while leased or idle', async () => {

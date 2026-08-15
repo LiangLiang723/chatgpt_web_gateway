@@ -13,16 +13,16 @@ STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-4
+NEXT_TASK=execute-phase-4-plan-task-5
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1 sync checkpoint、Task 2 pure Planner、Task 3 Request Adapter + same-key FIFO 已完成，继续按批准计划复验/补齐 Page Registry、Driver、Engine。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–4 已完成 checkpoint、pure Planner、Request Adapter/FIFO 与 Page Registry，继续按批准计划复验/补齐 ChatGPT Driver、prompts/aggregate、Engine。
 - **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 4 — 将 PageLease 终态改为 `release | close`，建立 Conversation Page Registry、idle+LRU 回收与 busy 保护。
+- **下一个可执行任务：** Plan Task 5 — 拆分 ChatGPT fresh/restore/send，增加安全 Conversation URL 解析与 identity 校验。
 - **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
@@ -74,7 +74,8 @@ UPDATED_AT=2026-08-15
 - ✅ Phase 4 SQLite sync checkpoint 已实现：`002_add_conversation_sync_checkpoint`、`clean | in_flight`、`syncedMessageCount`、metadata-only `markSyncInFlight` 与越界 aggregate 校验。
 - ✅ Phase 4 pure Context Planner 已实现 canonicalization、SHA-256 fingerprint、`incremental | full` 与完整 `FRESH | APPEND | RESTORE | REBUILD`/REBUILD reason 决策，`context/` 保持 browser/API/DB-free。
 - ✅ Phase 4 Request Adapter 已实现 capability gate、canonical text 转换与 `incremental | full` 分类；same-key Queue 使用 Promise-tail FIFO，不同 key 可并行，close 后拒绝新任务但已排队工作继续 drain。
-- 🟡 Conversation + Context Sync 已有部分 Page affinity/Driver/Executor 实现，但仍需按批准 Task 4+ 接口重构并接入新 Planner；无 key 持久化及完整 crash-convergence 等仍待补齐。
+- ✅ Phase 4 PageLease 已使用互斥 `release | close` 终态；Conversation Page Registry 已实现 keyed affinity、transient lease、idle deadline close、LRU capacity eviction、busy 保护和 deterministic tie-break。
+- 🟡 Conversation + Context Sync 已有部分 Driver/Executor 实现，但仍需按批准 Task 5+ 接口重构并接入新 Planner；无 key 持久化及完整 crash-convergence 等仍待补齐。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -159,7 +160,7 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 按批准 Plan Task 4 实现 PageLease terminal state + Conversation Page Registry，并继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
+1. 按批准 Plan Task 5 实现安全 Conversation URL + ChatGPT fresh/restore/send Driver split，并继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
 2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
 3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 

@@ -48,6 +48,7 @@ function fakeBrowserManager(
     acquire: vi.fn(async () => ({
       page: {} as Page,
       release: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
     })),
     close: vi.fn(async () => undefined),
   };

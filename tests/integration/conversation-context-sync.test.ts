@@ -65,17 +65,20 @@ function fakeBrowserManager(capacity = 4): BrowserManager {
       const page = new FakePage();
       tracked.add(page);
       leasedCount += 1;
-      let released = false;
+      let state: 'active' | 'released' | 'closed' = 'active';
       return {
         page: page as unknown as Page,
-        async release(options = {}) {
-          if (released) return;
-          released = true;
+        async release() {
+          if (state !== 'active') return;
+          state = 'released';
           leasedCount -= 1;
-          if (options.discard) {
-            page.closed = true;
-            tracked.delete(page);
-          }
+        },
+        async close() {
+          if (state !== 'active') return;
+          state = 'closed';
+          leasedCount -= 1;
+          page.closed = true;
+          tracked.delete(page);
         },
       };
     },

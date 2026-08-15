@@ -540,7 +540,7 @@ export function createConversationPageRegistry(options: {
 }): ConversationPageRegistry;
 ```
 
-- [ ] **Step 1: Add PageLease terminal-state tests**
+- [x] **Step 1: Add PageLease terminal-state tests**
 
 Assert:
 
@@ -550,7 +550,7 @@ Assert:
 - `close()` after `release()` is a no-op and must **not** close a Page that could already be re-leased.
 - `release()` after `close()` is a no-op.
 
-- [ ] **Step 2: Run PagePool test red**
+- [x] **Step 2: Run PagePool test red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/page-pool.test.ts
@@ -558,11 +558,11 @@ corepack pnpm exec vitest run tests/unit/page-pool.test.ts
 
 Expected: FAIL because `close()` is missing.
 
-- [ ] **Step 3: Implement PageLease terminal state**
+- [x] **Step 3: Implement PageLease terminal state**
 
 Use `let state: 'active' | 'released' | 'closed' = 'active'`. Only active operations may mutate pool tracking.
 
-- [ ] **Step 4: Write Page Registry tests with fake clock/timer**
+- [x] **Step 4: Write Page Registry tests with fake clock/timer**
 
 Cover:
 
@@ -580,7 +580,7 @@ registry.close() clears timer + releases all bindings
 
 Tie-break equal `lastUsedAt` by `conversationId.localeCompare()`.
 
-- [ ] **Step 5: Run registry tests red**
+- [x] **Step 5: Run registry tests red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/conversation-page-registry.test.ts
@@ -588,13 +588,13 @@ corepack pnpm exec vitest run tests/unit/conversation-page-registry.test.ts
 
 Expected: FAIL because registry does not exist.
 
-- [ ] **Step 6: Implement registry**
+- [x] **Step 6: Implement registry**
 
 A keyed `acquire(id)` sets/creates `busy=true`. `complete()` sets `busy=false`, updates `lastUsedAt`, and reschedules one earliest-expiry timer. `fail()` removes binding and releases its active lease. A transient session never enters the bindings Map.
 
 On PagePool `page_capacity_exceeded`, evict one non-busy LRU binding with `release()`, then call `pagePool.acquire()` exactly once more.
 
-- [ ] **Step 7: Run focused tests green**
+- [x] **Step 7: Run focused tests green**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/page-pool.test.ts tests/unit/conversation-page-registry.test.ts
@@ -602,12 +602,14 @@ corepack pnpm exec vitest run tests/unit/page-pool.test.ts tests/unit/conversati
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/browser src/conversations/page-registry.ts tests/unit/page-pool.test.ts tests/unit/conversation-page-registry.test.ts
  git commit -m "✨ 增加 Conversation Page affinity 与回收"
 ```
+
+2026-08-15 execution evidence: PagePool tests first failed because `PageLease.close()` did not exist; the new Registry test then failed because `page-registry.ts` did not exist. After implementing terminal-state leases and the one-timer Registry, the approved focused pair passed 2 files / 14 tests. Legacy partial Page-manager compatibility was adapted to the new lease terminal API; running it too produced 3 files / 21 tests, and `corepack pnpm typecheck` passed.
 
 ---
 

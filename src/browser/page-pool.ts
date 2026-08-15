@@ -56,23 +56,25 @@ export function createPagePool(context: BrowserContext, options: CreatePagePoolO
         trackPage(page, 'leased');
       }
 
-      let released = false;
+      let state: 'active' | 'released' | 'closed' = 'active';
       return {
         page,
-        async release(releaseOptions = {}) {
-          if (released) return;
-          released = true;
+        async release() {
+          if (state !== 'active') return;
+          state = 'released';
           leased.delete(page);
-          if (releaseOptions.discard) {
-            removePage(page);
-            if (!page.isClosed()) await page.close();
-            return;
-          }
           if (closed || page.isClosed()) {
             removePage(page);
             return;
           }
           idle.add(page);
+        },
+        async close() {
+          if (state !== 'active') return;
+          state = 'closed';
+          leased.delete(page);
+          removePage(page);
+          if (!page.isClosed()) await page.close();
         },
       };
     },
