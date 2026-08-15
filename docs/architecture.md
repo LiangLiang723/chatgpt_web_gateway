@@ -84,16 +84,32 @@ interface NormalizedRequest {
 
 ## Conversation（对话）和 Context Sync（上下文同步）
 
-每个 Conversation 有稳定 `ConversationKey`，本地保存完整消息和 ChatGPT conversation URL。
+SQLite 保存完整本地 Conversation；ChatGPT conversation URL 是可恢复的网页位置；Page 只是可丢弃的运行时缓存。
 
-同步只允许四种模式：
+Phase 4 已批准、尚待实现的同步模型只允许四种模式：
 
-- `FRESH`：没有已知会话，创建新 ChatGPT Conversation。
-- `APPEND`：输入历史与本地已同步前缀一致，只发送新增内容。
-- `RESTORE`：进程/Page 已丢失，但 ChatGPT conversation URL 和本地状态可恢复。
-- `REBUILD`：历史被压缩、修改、回滚，或原网页会话不可恢复，根据当前有效历史建立新会话。
+- `FRESH`：没有已知本地 Conversation，新建 ChatGPT Conversation；已有完整历史通过一次 Context Envelope 注入。
+- `APPEND`：输入历史与本地已确认历史一致，只发送新的 trailing user，不重复旧历史或 instructions。
+- `RESTORE`：本地状态与 ChatGPT URL 可用但 Page 已丢失，重新打开原 URL 后继续 APPEND。
+- `REBUILD`：历史被压缩、修改、回滚、分叉，instructions 变化，sync checkpoint 不确定，或原网页 Conversation 确认不可恢复时，根据当前 authoritative history 新建 ChatGPT Conversation。
 
-同一 Conversation 请求串行，不同 Conversation 可以并行。禁止全局锁串行所有用户。
+Conversation identity 规则：
+
+- `X-Conversation-Key` 存在时，它是跨请求稳定 identity；不存在的 key 自动创建，不增加单独 create API。
+- 无 `X-Conversation-Key` 时不通过历史 fingerprint 猜身份；每个请求独立创建 `conversation_key = NULL` 的持久化 Conversation，请求后不保留跨请求 Page affinity。
+- keyed Conversation 同时支持常见的 full-history 重发和 single-user incremental 输入。已有 key 下恰好一条 user message 按 incremental 解释；多条 message / assistant history 按 full 解释。
+- full history 与已确认本地历史分叉时，以客户端当前 full history 为 authoritative source REBUILD，ConversationKey 与本地 UUID 不变。
+
+同步安全规则：
+
+- 只有 clean checkpoint、`synced_message_count == messages.length` 且存在安全 ChatGPT URL 时才允许 APPEND / RESTORE。
+- 第一个可能写入网页 Conversation 的动作之前标记 `in_flight`；网页成功后才原子保存新 messages、URL 和 clean checkpoint。
+- `in_flight` 或 count mismatch 表示不确定状态；下一请求不猜测网页副作用，直接 REBUILD。
+- FRESH / REBUILD 通过单次版本化 Context Envelope 表示历史；不逐轮 replay 旧 user，也不让 ChatGPT 重新生成历史 assistant。
+
+同一 Conversation 使用内存 FIFO 串行；排队请求不提前占 Page，轮到执行时重新读取 SQLite。不同 Conversation 没有全局 mutex，可以在 Page capacity 内并行。V1 仍是假定单 Gateway / Browser owner，不承诺多进程分布式 Conversation lock。
+
+详细状态机见 [`superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md`](superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md)。当前产品仍停留在 Phase 3 Fresh-only executor，以上 Phase 4 行为不能在实现完成前视为已支持。
 
 ## Container Runtime（容器运行时）
 
@@ -120,7 +136,11 @@ Playwright
           └── Page C → Conversation C
 ```
 
-Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/关闭；Conversation Queue、idle Page 回收和 conversation URL restore 从 Phase 4 实现。SQLite 保留会话状态，后续恢复时再重新打开 conversation URL。
+Page 数有上限。Phase 3 已实现通用 bounded Page Pool 的创建/租用/归还/关闭；它不理解 Conversation identity。
+
+Phase 4 已批准、尚待实现的 `Conversation Page Registry` 位于 `conversations/`：keyed Conversation 成功后保留 Page affinity；默认 `PAGE_IDLE_TIMEOUT_MINUTES=30` 到期真正关闭 idle Page；当 PagePool 满时优先 LRU 释放最久未使用且非 busy 的 affinity Page，使新 Conversation 能复用物理 Page；所有 Page 都 busy 时继续返回稳定 `page_capacity_exceeded`。LRU/idle 策略不得进入 `browser/` 形成反向 Conversation 依赖。
+
+SQLite 保留 Conversation 状态和 URL，因此 Page 被 idle/LRU 回收后，下次请求通过 RESTORE 恢复；单 Page 故障不得无条件杀掉其他 Conversation。
 
 故障恢复逐级升级：
 
@@ -131,8 +151,6 @@ Page 数有上限。Phase 3 先实现 bounded Page Pool 的创建/租用/归还/
 5. 重建 BrowserContext。
 6. 最后才重启 Chromium。
 
-单 Page 故障不得无条件杀掉其他 Conversation。
-
 ## ChatGPT Driver（网页驱动）
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
@@ -142,6 +160,8 @@ Phase 3 已实现 Fresh-only text Driver：每次请求先导航到 ChatGPT Fres
 Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。
 
 Phase 3 Executor 只接受 Fresh、非流式、纯文本请求；system/developer/user 通过一次 JSON-serialized prompt envelope 近似映射。Conversation Key/历史属于 Phase 4，Streaming/附件/Tools/Structured Output 属于后续 Phase。
+
+Phase 4 已批准将 Driver 拆为 Fresh preparation、safe Conversation restore 和 current-page `sendText`：`sendText` 不再自己强制导航 Fresh。Persisted restore URL 必须先验证 `https://chatgpt.com` origin 和非 root pathname；明确 root/Fresh redirect 才返回 `not_restorable`，`auth_required`、selector error 和 Browser runtime failure 不允许被吞成 REBUILD。该拆分尚未实现。
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
@@ -243,24 +263,31 @@ Phase 2 使用 Node 24 内置 `node:sqlite` 的单 `DatabaseSync` 连接，不�
 
 Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 时幂等关闭数据库。最终 Docker 镜像包含 `migrations/`；Docker smoke 会验证数据库 owner、`001_initial` migration history 和同一 Bind Mount 下 Gateway restart 后继续可用。
 
+Phase 4 已批准、尚待实现 `002_add_conversation_sync_checkpoint.sql`：Conversation 增加 `clean | in_flight`、`synced_message_count` 和可空 `sync_started_at`。网页 write 前使用短同步 metadata transaction 标记 `in_flight`，不在 SQLite transaction 内等待 Playwright；Assistant 成功后再通过完整 aggregate transaction 保存 messages/URL 并推进 clean checkpoint。Migration 不回填猜测旧 Message 已同步位置，legacy row 默认 count=0，因此不能误走 APPEND。
+
 ## API Authentication（接口认证）
 
 `GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
 
-兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`；未提供时保持 `undefined`，自动会话策略由后续 Conversation / Context Sync 阶段实现。
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`；未提供时保持 `undefined`。Phase 4 已批准：有 key 才建立跨请求稳定 identity；无 key 每次独立持久化，不自动 fingerprint 绑定。当前 Phase 3 产品仍会对 key 返回 `conversation_sync_not_implemented`，直到 Phase 4 实现完成。
 
 ## 错误边界
 
 内部使用稳定错误类型；API 层映射为 OpenAI 风格错误。不得把 Playwright 原始堆栈、Cookie、API Key、Authorization Header、文件系统敏感路径直接返回客户端或写入普通日志。
+
+Phase 4 实现后，unsupported future capabilities 使用稳定 `unsupported_phase4_request`；无法形成 trailing user 等 Conversation 语义错误使用 HTTP 400 `invalid_request_error`。`not_restorable` 是 RESTORE → REBUILD 的内部控制流，不应错误覆盖真实 auth/selector/browser failure。
 
 ## 可执行架构约束
 
 `scripts/check-architecture.mjs` 会随着产品源码出现逐步收紧：
 
 - `api/` 不直接导入 `playwright`。
-- `context/` 不依赖 `playwright`、`api/` 或 `chatgpt/`。
+- `context/` 不依赖 `playwright`、`api/`、`chatgpt/` 或 `persistence/`。
 - `stream/` 不直接导入 `chatgpt/selectors`。
 - `persistence/` 不依赖 `playwright`。
 - `node:sqlite` 只允许在 `src/persistence/` 中导入；checker 同时识别普通、动态、require 和 side-effect import。
 - ChatGPT Selector 只允许定义在 `src/chatgpt/selectors.ts`。
-- `browser/` 不依赖 `api/`、`persistence/` 或 `chatgpt/`；`chatgpt/` 不依赖 `api/`、`persistence/` 或 BrowserManager/PagePool 实现。
+- `browser/` 不依赖 `api/`、`persistence/`、`chatgpt/` 或 `conversations/`。
+- `chatgpt/` 不依赖 `api/`、`persistence/` 或 Conversation Engine/Page Registry 实现。
+
+这些新增 Phase 4 约束属于已批准设计；对应 checker 只有在 Phase 4 实施任务中落地后才算可执行验证。
