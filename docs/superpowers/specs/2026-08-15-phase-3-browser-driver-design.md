@@ -1050,6 +1050,7 @@ POST /v1/chat/completions
 - `/data/browser-profile/` 可由长期非 root 进程创建/使用。
 - 普通 Compose 不启动 x11vnc / websockify / noVNC / maintenance browser，也不发布 noVNC 端口。
 - maintenance overlay 启动 headed maintenance browser，不再启动产品 BrowserManager；HTTP POST 返回 `browser_maintenance_mode`，从而保证同一 Profile 单 owner。
+- maintenance noVNC 必须完成真实 RFB 握手：Docker smoke 通过 `/websockify` WebSocket 接收到 `RFB 003.008`。当前 Ubuntu x11vnc `0.9.16` 固定使用 `-threads`，因为默认单线程模式已真实复现为高 CPU 且不发送 banner。
 - shutdown 同时正确关闭 Fastify、Browser、SQLite；maintenance `down` 后 Browser Profile 不得残留 `SingletonLock` / `SingletonCookie` / `SingletonSocket`。
 
 普通 `docker:smoke` 不能证明：

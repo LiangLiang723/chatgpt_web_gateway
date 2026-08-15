@@ -105,6 +105,32 @@ async function waitForNovnc() {
   throw new Error(`noVNC did not become reachable at ${url}`);
 }
 
+async function assertNovncRfbHandshake() {
+  const url = `ws://127.0.0.1:${novncPort}/websockify`;
+  const banner = await new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error(`Timed out waiting for RFB banner from ${url}`));
+    }, 3_000);
+
+    socket.binaryType = 'arraybuffer';
+    socket.addEventListener('message', (event) => {
+      clearTimeout(timer);
+      socket.close();
+      resolve(Buffer.from(event.data).toString('utf8'));
+    });
+    socket.addEventListener('error', () => {
+      clearTimeout(timer);
+      reject(new Error(`noVNC WebSocket failed at ${url}`));
+    });
+  });
+
+  if (!banner.startsWith('RFB 003.008')) {
+    throw new Error(`Unexpected RFB banner from noVNC backend: ${JSON.stringify(banner)}`);
+  }
+}
+
 async function assertHttpContract() {
   const modelsUrl = `http://127.0.0.1:${gatewayPort}/v1/models`;
   const unauthenticated = await fetch(modelsUrl);
@@ -339,6 +365,7 @@ async function main() {
     runDocker(composeArgs(true, 'up', '-d', '--no-build'));
     await waitForHealth();
     await waitForNovnc();
+    await assertNovncRfbHandshake();
     const maintenanceId = containerId(true);
     assertRuntimeIdentity(maintenanceId);
     assertPersistence(maintenanceId);

@@ -43,6 +43,7 @@ x11vnc \
   -display "$DISPLAY" \
   -forever \
   -shared \
+  -threads \
   -localhost \
   -rfbport 5900 \
   -rfbauth "$password_file" \
@@ -51,7 +52,7 @@ x11vnc_pid=$!
 websockify \
   --web=/usr/share/novnc \
   "$NOVNC_PORT" \
-  localhost:5900 \
+  127.0.0.1:5900 \
   >"$DATA_DIR/logs/websockify.log" 2>&1 &
 websockify_pid=$!
 rm -f /tmp/maintenance-browser.pid /tmp/maintenance-browser.ready
