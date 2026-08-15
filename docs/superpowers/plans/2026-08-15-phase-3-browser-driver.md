@@ -1088,7 +1088,7 @@ Current evidence by criterion:
 16. `inspect:chatgpt` exists; safety tests reject missing/production E2E Profile.
 17. Inspect tests prove screenshot/HTML only when diagnostics dir is explicit.
 18. After proxy support, fresh deterministic `corepack pnpm verify` passed with 26 test files / 130 tests.
-19. Virtual-display Docker build succeeded as image `sha256:0471e9b7530c2221cc706d33ed51a8e64df76991fd9343305337f64533be4e61`; fresh Docker smoke proves normal `UI_MODE=headless` runs Xvfb + full Chromium without noVNC, normal/maintenance both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, and HTTP/SQLite/restart checks still pass.
+19. Latest Docker build succeeded as image `sha256:99a0c44beea7df536bf3e42a9e9d7ee8e3dacaf041627ba73876c77cafc6ebd1`; fresh Docker smoke proves normal `UI_MODE=headless` runs Xvfb + full Chromium without noVNC, normal/maintenance both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, HTTP/SQLite/restart checks still pass, and maintenance `down` leaves no Chromium `Singleton*` marker after the supervised shutdown path.
 20. **BLOCKED:** proxy-backed Xvfb/full-Chromium real inspection passes Cloudflare and validates Guest `auth_required`, but completion requires the isolated headed Profile to finish manual ChatGPT login before authenticated composer/selector calibration.
 21. **BLOCKED:** real Fresh Driver challenge awaits criterion 20 manual auth.
 22. **BLOCKED:** real Gateway HTTP challenge awaits criterion 20 manual auth.

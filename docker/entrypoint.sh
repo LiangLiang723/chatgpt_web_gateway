@@ -73,6 +73,7 @@ fi
 case "$UI_MODE" in
   headless)
     start_virtual_display
+    exec gosu pwuser "$@"
     ;;
   novnc)
     if [[ -z "${NOVNC_PASSWORD:-}" ]]; then
@@ -88,4 +89,45 @@ case "$UI_MODE" in
     ;;
 esac
 
-exec gosu pwuser "$@"
+stop_maintenance_browser() {
+  local pid_file=/tmp/maintenance-browser.pid
+  [[ -f "$pid_file" ]] || return 0
+  local browser_pid
+  browser_pid="$(cat "$pid_file")"
+  if ! kill -0 "$browser_pid" 2>/dev/null; then
+    rm -f "$pid_file"
+    return 0
+  fi
+
+  kill -TERM "$browser_pid" 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    if ! kill -0 "$browser_pid" 2>/dev/null; then
+      rm -f "$pid_file"
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  echo 'Timed out waiting for maintenance browser to close cleanly' >&2
+  return 1
+}
+
+gosu pwuser "$@" &
+gateway_pid=$!
+
+shutdown_maintenance() {
+  trap - TERM INT
+  stop_maintenance_browser || true
+  kill -TERM "$gateway_pid" 2>/dev/null || true
+  wait "$gateway_pid" 2>/dev/null || true
+  exit 0
+}
+
+trap shutdown_maintenance TERM INT
+
+set +e
+wait "$gateway_pid"
+gateway_status=$?
+set -e
+stop_maintenance_browser || true
+exit "$gateway_status"

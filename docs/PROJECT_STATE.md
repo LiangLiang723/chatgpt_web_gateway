@@ -128,7 +128,8 @@ UPDATED_AT=2026-08-15
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-15：真实 Cloudflare 对照验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT Guest 页面并由 Auth Probe 报告 `auth_required`。normal `UI_MODE=headless` 因此实现为“无暴露 UI 的 Xvfb + full Chromium”；确定性 `verify` 继续通过 26 个测试文件 / 130 个测试，新镜像 `sha256:0471e9b7…` Docker smoke 通过 normal/maintenance virtual display、proxy/Profile single-owner、HTTP/SQLite/restart 验证。
+- 2026-08-15：maintenance mode switch 增加 PersistentContext readiness handshake、有序 shutdown 和受 hostname/PID 约束的 stale Chromium `Singleton*` 清理；新镜像 `sha256:99a0c44b…` Docker smoke 验证 maintenance `down` 后测试 Profile 无 Singleton marker，人工登录后可安全切回 normal runtime。
+- 2026-08-15：真实 Cloudflare 对照验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT Guest 页面并由 Auth Probe 报告 `auth_required`。normal `UI_MODE=headless` 因此实现为“无暴露 UI 的 Xvfb + full Chromium”；确定性 `verify` 继续通过 26 个测试文件 / 130 个测试，Docker smoke 通过 normal/maintenance virtual display、proxy/Profile single-owner、HTTP/SQLite/restart 验证。
 - 2026-08-15：新增可选 `CHATGPT_PROXY_SERVER`，normal/maintenance/inspect/E2E 共用同一代理；Compose 同步补齐 `MAX_ACTIVE_PAGES` 透传。代理 URL 禁止内嵌凭据，maintenance 可显式切换独立 E2E Profile。
 - 2026-08-15：真实 Phase 3 网络/Cloudflare blocker 已收敛：系统 DNS/直连路径不可用，但用户提供的 LAN 代理 + Xvfb/full Chromium 能稳定进入 HTTP 200 ChatGPT Guest 页面，真实 inspect 返回 `auth_required`；当前 blocker 只剩隔离 E2E Profile 的人工 ChatGPT 登录/MFA。
 - 2026-08-15：完成 Phase 3 BrowserManager / PagePool / Selector Registry / Auth Probe / Fresh Driver / Phase3Executor / OpenAI-style text encoder / inspect + real E2E harness 代码实现；此前最终文档回写后的 `corepack pnpm verify` 通过 26 个测试文件 / 128 个测试，镜像 `sha256:f6435e40…` 的 Docker smoke 通过 Chromium 单-owner / SQLite / HTTP / restart 验证。

@@ -54,8 +54,10 @@ websockify \
   localhost:5900 \
   >"$DATA_DIR/logs/websockify.log" 2>&1 &
 websockify_pid=$!
+rm -f /tmp/maintenance-browser.pid /tmp/maintenance-browser.ready
 node /app/docker/maintenance-browser.mjs >"$DATA_DIR/logs/maintenance-browser.log" 2>&1 &
 browser_pid=$!
+printf '%s\n' "$browser_pid" > /tmp/maintenance-browser.pid
 
 for pid in "$fluxbox_pid" "$x11vnc_pid" "$websockify_pid" "$browser_pid"; do
   if ! kill -0 "$pid" 2>/dev/null; then
@@ -63,5 +65,22 @@ for pid in "$fluxbox_pid" "$x11vnc_pid" "$websockify_pid" "$browser_pid"; do
     exit 70
   fi
 done
+
+browser_ready=0
+for _ in $(seq 1 100); do
+  if [[ -f /tmp/maintenance-browser.ready ]]; then
+    browser_ready=1
+    break
+  fi
+  if ! kill -0 "$browser_pid" 2>/dev/null; then
+    echo 'Maintenance browser exited before PersistentContext became ready' >&2
+    exit 70
+  fi
+  sleep 0.1
+done
+if [[ "$browser_ready" != 1 ]]; then
+  echo 'Timed out waiting for maintenance browser readiness' >&2
+  exit 70
+fi
 
 printf 'noVNC maintenance stack started on container port %s\n' "$NOVNC_PORT"

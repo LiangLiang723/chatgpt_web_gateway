@@ -112,6 +112,7 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 - 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
 - maintenance overlay 存在且只存在一个 headed maintenance Chromium owner；产品 BrowserManager 不并发占用同一 Profile。
+- maintenance `down` 后隔离测试 Profile 不残留 `SingletonLock` / `SingletonCookie` / `SingletonSocket`，证明模式切换不会因 stale Chromium owner marker 被阻塞。
 
 Docker smoke 不等于真实 ChatGPT E2E，不能用来证明当前 Selector、登录、Fresh 文本回答、上传或图片生成有效。
 

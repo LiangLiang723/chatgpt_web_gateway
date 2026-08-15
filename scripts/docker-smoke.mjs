@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -289,6 +289,16 @@ function down(maintenance) {
   });
 }
 
+function assertProfileUnlocked(profilePath) {
+  if (!existsSync(profilePath)) return;
+  const singletonFiles = readdirSync(profilePath).filter((name) => name.startsWith('Singleton'));
+  if (singletonFiles.length > 0) {
+    throw new Error(
+      `Browser Profile retained Chromium Singleton files after shutdown: ${singletonFiles.join(', ')}`,
+    );
+  }
+}
+
 async function main() {
   const base = serviceConfig(false);
   if (publishedTargets(base).includes(novncPort) || publishedTargets(base).includes(6080)) {
@@ -337,6 +347,7 @@ async function main() {
   } finally {
     down(true);
   }
+  assertProfileUnlocked(path.join(dataPath, 'e2e-browser-profile'));
 
   console.log('Docker smoke passed.');
 }

@@ -276,7 +276,7 @@ listen
 
 Browser/Xvfb 启动失败属于正常 `UI_MODE=headless` startup failure；ChatGPT 未登录不属于 startup failure。
 
-`UI_MODE=novnc` 是 maintenance 模式：entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
+`UI_MODE=novnc` 是 maintenance 模式：entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance browser 必须在 PersistentContext 建立后发布 readiness marker；停机时 entrypoint 先请求 maintenance browser 优雅 `context.close()`，再停止 Gateway。Linux Chromium 若在关闭后留下 `Singleton*` marker，只允许在 `SingletonLock` hostname 等于当前容器且其中 PID 已确认不存在时清理，禁止盲删可能属于其他 owner 的 lock。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
 
 Gateway shutdown：
 
@@ -1050,7 +1050,7 @@ POST /v1/chat/completions
 - `/data/browser-profile/` 可由长期非 root 进程创建/使用。
 - 普通 Compose 不启动 x11vnc / websockify / noVNC / maintenance browser，也不发布 noVNC 端口。
 - maintenance overlay 启动 headed maintenance browser，不再启动产品 BrowserManager；HTTP POST 返回 `browser_maintenance_mode`，从而保证同一 Profile 单 owner。
-- shutdown 同时正确关闭 Fastify、Browser、SQLite。
+- shutdown 同时正确关闭 Fastify、Browser、SQLite；maintenance `down` 后 Browser Profile 不得残留 `SingletonLock` / `SingletonCookie` / `SingletonSocket`。
 
 普通 `docker:smoke` 不能证明：
 
