@@ -3,8 +3,7 @@ import { randomUUID as defaultRandomUUID } from 'node:crypto';
 import type { NormalizedExecutionHandler, TextExecutionResult } from '../api/execution.js';
 import type { NormalizedMessage, NormalizedRequest } from '../api/normalized.js';
 import type { PagePool } from '../browser/types.js';
-import type { ChatGptDriver, ChatGptTextResult, ChatGptTextTarget } from '../chatgpt/driver.js';
-import { ChatGptDriverError } from '../chatgpt/errors.js';
+import type { ChatGptDriver, ChatGptTextResult } from '../chatgpt/driver.js';
 import { planContextSync, type ContextSyncPlan } from '../context/sync.js';
 import type { ConversationStore } from '../persistence/conversation-store.js';
 import type { ConversationAggregate, MessageRecord } from '../persistence/types.js';
@@ -37,16 +36,6 @@ function normalizedMessages(aggregate: ConversationAggregate): NormalizedMessage
   }));
 }
 
-function isRestoreFailure(error: unknown): error is ChatGptDriverError {
-  return error instanceof ChatGptDriverError && error.code === 'conversation_restore_failed';
-}
-
-function targetForAppend(mode: 'APPEND' | 'RESTORE', conversationUrl: string): ChatGptTextTarget {
-  return mode === 'APPEND'
-    ? { kind: 'current', conversationUrl }
-    : { kind: 'restore', conversationUrl };
-}
-
 async function executePlan(options: {
   driver: ChatGptDriver;
   page: ConversationPageLease['page'];
@@ -55,6 +44,7 @@ async function executePlan(options: {
   conversationUrl?: string;
 }): Promise<ChatGptTextResult> {
   if (options.plan.mode === 'FRESH' || options.plan.mode === 'REBUILD') {
+    await options.driver.openFresh(options.page);
     return options.driver.sendText(options.page, {
       prompt: buildFullContextPrompt(options.request),
       target: { kind: 'fresh' },
@@ -62,37 +52,21 @@ async function executePlan(options: {
   }
 
   const conversationUrl = options.conversationUrl;
-  if (!conversationUrl) {
-    return options.driver.sendText(options.page, {
-      prompt: buildFullContextPrompt(options.request),
-      target: { kind: 'fresh' },
-    });
-  }
-
-  const appendMessage = options.plan.appendMessages[0]!;
-  const appendPrompt = buildAppendPrompt(appendMessage);
-  const initialTarget = targetForAppend(options.plan.mode, conversationUrl);
-
-  try {
-    return await options.driver.sendText(options.page, {
-      prompt: appendPrompt,
-      target: initialTarget,
-    });
-  } catch (error) {
-    if (!isRestoreFailure(error)) throw error;
-  }
-
-  if (options.plan.mode === 'APPEND') {
-    try {
-      return await options.driver.sendText(options.page, {
-        prompt: appendPrompt,
-        target: { kind: 'restore', conversationUrl },
+  if (conversationUrl) {
+    const restored = await options.driver.openConversation(options.page, conversationUrl);
+    if (restored === 'restored') {
+      const appendMessage = options.plan.appendMessages[0]!;
+      return options.driver.sendText(options.page, {
+        prompt: buildAppendPrompt(appendMessage),
+        target:
+          options.plan.mode === 'APPEND'
+            ? { kind: 'current', conversationUrl }
+            : { kind: 'restore', conversationUrl },
       });
-    } catch (error) {
-      if (!isRestoreFailure(error)) throw error;
     }
   }
 
+  await options.driver.openFresh(options.page);
   return options.driver.sendText(options.page, {
     prompt: buildFullContextPrompt(options.request),
     target: { kind: 'fresh' },
@@ -165,6 +139,7 @@ async function executeEphemeral(
 ): Promise<TextExecutionResult> {
   const lease = await options.pagePool.acquire();
   try {
+    await options.driver.openFresh(lease.page);
     const result = await options.driver.sendText(lease.page, {
       prompt: buildFullContextPrompt(request),
       target: { kind: 'fresh' },

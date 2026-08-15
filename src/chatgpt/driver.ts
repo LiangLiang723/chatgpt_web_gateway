@@ -5,6 +5,7 @@ import {
   waitForAssistantCompletion,
   type WaitForAssistantCompletionOptions,
 } from './completion.js';
+import { parseSafeChatGptConversationUrl } from './conversation-url.js';
 import { asChatGptDriverError, ChatGptDriverError } from './errors.js';
 import { inspectCollection, inspectUnique, resolveUnique } from './selector-registry.js';
 import { chatGptSelectors } from './selectors.js';
@@ -16,7 +17,8 @@ export type ChatGptTextTarget =
 
 export interface ChatGptTextRequest {
   prompt: string;
-  target: ChatGptTextTarget;
+  /** @deprecated Navigation is performed by openFresh/openConversation; retained until legacy executor removal. */
+  target?: ChatGptTextTarget;
 }
 
 export interface ChatGptTextResult {
@@ -24,9 +26,16 @@ export interface ChatGptTextResult {
   conversationUrl: string;
 }
 
-export interface ChatGptDriver {
+export interface ChatGptTextDriver {
+  openFresh(page: Page): Promise<void>;
+  openConversation(
+    page: Page,
+    conversationUrl: string,
+  ): Promise<'restored' | 'not_restorable'>;
   sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult>;
 }
+
+export type ChatGptDriver = ChatGptTextDriver;
 
 export interface CreateChatGptDriverOptions {
   probeAuth?: typeof probeAuth;
@@ -37,22 +46,7 @@ export interface CreateChatGptDriverOptions {
   navigationTimeoutMs?: number;
 }
 
-function identifiesConversation(actualUrl: string, expectedUrl: string): boolean {
-  try {
-    const actual = new URL(actualUrl);
-    const expected = new URL(expectedUrl);
-    return (
-      actual.origin === 'https://chatgpt.com' &&
-      expected.origin === 'https://chatgpt.com' &&
-      expected.pathname.startsWith('/c/') &&
-      actual.pathname === expected.pathname
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): ChatGptDriver {
+export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): ChatGptTextDriver {
   const authProbe = options.probeAuth ?? probeAuth;
   const inspectCollectionSelector = options.inspectCollection ?? inspectCollection;
   const inspectUniqueSelector = options.inspectUnique ?? inspectUnique;
@@ -60,44 +54,61 @@ export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): C
   const waitForCompletion = options.waitForAssistantCompletion ?? waitForAssistantCompletion;
   const navigationTimeoutMs = options.navigationTimeoutMs ?? 60_000;
 
+  const ensureReady = async (page: Page): Promise<void> => {
+    const auth = await authProbe(page);
+    if (auth.state === 'auth_required') {
+      throw new ChatGptDriverError({
+        code: 'auth_required',
+        message: 'ChatGPT authentication is required',
+      });
+    }
+    if (auth.state !== 'authenticated') {
+      throw new ChatGptDriverError({
+        code: 'selector_missing',
+        message: 'Unable to determine authenticated ChatGPT composer state',
+        selectorName: chatGptSelectors.composer.name,
+      });
+    }
+  };
+
   return {
-    async sendText(page, request) {
+    async openFresh(page) {
       try {
-        if (request.target.kind === 'fresh') {
-          await page.goto('https://chatgpt.com/', {
+        await page.goto('https://chatgpt.com/', {
+          waitUntil: 'domcontentloaded',
+          timeout: navigationTimeoutMs,
+        });
+        await ensureReady(page);
+      } catch (error) {
+        throw asChatGptDriverError(error);
+      }
+    },
+
+    async openConversation(page, conversationUrl) {
+      try {
+        const expected = parseSafeChatGptConversationUrl(conversationUrl);
+        if (!expected) return 'not_restorable';
+
+        const current = parseSafeChatGptConversationUrl(page.url());
+        if (current?.pathname !== expected.pathname) {
+          await page.goto(expected.href, {
             waitUntil: 'domcontentloaded',
             timeout: navigationTimeoutMs,
           });
-        } else {
-          if (request.target.kind === 'restore') {
-            await page.goto(request.target.conversationUrl, {
-              waitUntil: 'domcontentloaded',
-              timeout: navigationTimeoutMs,
-            });
-          }
-          if (!identifiesConversation(page.url(), request.target.conversationUrl)) {
-            throw new ChatGptDriverError({
-              code: 'conversation_restore_failed',
-              message: 'ChatGPT Conversation URL could not be restored',
-            });
-          }
         }
 
-        const auth = await authProbe(page);
-        if (auth.state === 'auth_required') {
-          throw new ChatGptDriverError({
-            code: 'auth_required',
-            message: 'ChatGPT authentication is required',
-          });
-        }
-        if (auth.state !== 'authenticated') {
-          throw new ChatGptDriverError({
-            code: 'selector_missing',
-            message: 'Unable to determine authenticated ChatGPT composer state',
-            selectorName: chatGptSelectors.composer.name,
-          });
-        }
+        const restored = parseSafeChatGptConversationUrl(page.url());
+        if (!restored || restored.pathname !== expected.pathname) return 'not_restorable';
 
+        await ensureReady(page);
+        return 'restored';
+      } catch (error) {
+        throw asChatGptDriverError(error);
+      }
+    },
+
+    async sendText(page, request) {
+      try {
         const assistantTurns = await inspectCollectionSelector(
           page,
           chatGptSelectors.assistantTurns,
@@ -135,7 +146,15 @@ export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): C
           },
         });
 
-        return { text, conversationUrl: page.url() };
+        const conversationUrl = parseSafeChatGptConversationUrl(page.url());
+        if (!conversationUrl) {
+          throw new ChatGptDriverError({
+            code: 'conversation_restore_failed',
+            message: 'ChatGPT did not produce a safe Conversation URL',
+          });
+        }
+
+        return { text, conversationUrl: conversationUrl.href };
       } catch (error) {
         throw asChatGptDriverError(error);
       }

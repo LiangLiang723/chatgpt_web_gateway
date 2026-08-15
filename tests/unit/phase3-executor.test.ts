@@ -31,7 +31,11 @@ function harness() {
   }));
   const execute = createPhase3Executor({
     pagePool: { acquire } as never,
-    driver: { sendText },
+    driver: {
+      openFresh: vi.fn(async () => undefined),
+      openConversation: vi.fn(async () => 'restored' as const),
+      sendText,
+    },
     now: () => 1_786_720_000_123,
   });
   return { execute, acquire, release, sendText };
@@ -71,10 +75,7 @@ describe('Phase3Executor', () => {
       conversationUrl: 'https://chatgpt.com/c/test',
       completedAt: 1_786_720_000_123,
     });
-    expect(sendText).toHaveBeenCalledWith(expect.anything(), {
-      prompt,
-      target: { kind: 'fresh' },
-    });
+    expect(sendText).toHaveBeenCalledWith(expect.anything(), { prompt });
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -145,6 +146,8 @@ describe('Phase3Executor', () => {
     const execute = createPhase3Executor({
       pagePool: { acquire: async () => ({ page: {} as Page, release }) } as never,
       driver: {
+        openFresh: async () => undefined,
+        openConversation: async () => 'restored',
         sendText: async () => {
           throw new Error('driver failed');
         },

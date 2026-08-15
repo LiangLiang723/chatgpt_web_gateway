@@ -67,9 +67,27 @@ interface DriverCall {
 
 class FakeDriver implements ChatGptDriver {
   readonly calls: DriverCall[] = [];
+  readonly navigationCalls: Array<
+    { type: 'fresh'; page: Page } | { type: 'conversation'; page: Page; conversationUrl: string }
+  > = [];
+  readonly openConversationActions: Array<'restored' | 'not_restorable' | Error> = [];
   readonly actions: Array<
     { type: 'success'; text: string; conversationUrl: string } | { type: 'error'; error: Error }
   > = [];
+
+  async openFresh(page: Page): Promise<void> {
+    this.navigationCalls.push({ type: 'fresh', page });
+  }
+
+  async openConversation(
+    page: Page,
+    conversationUrl: string,
+  ): Promise<'restored' | 'not_restorable'> {
+    this.navigationCalls.push({ type: 'conversation', page, conversationUrl });
+    const action = this.openConversationActions.shift();
+    if (action instanceof Error) throw action;
+    return action ?? 'restored';
+  }
 
   async sendText(page: Page, request: ChatGptTextRequest) {
     this.calls.push({ page, request });
@@ -269,15 +287,9 @@ describe('ConversationExecutor', () => {
     const driver = new FakeDriver();
     driver.actions.push(
       { type: 'success', text: 'reply one', conversationUrl: 'https://chatgpt.com/c/alpha' },
-      {
-        type: 'error',
-        error: new ChatGptDriverError({
-          code: 'conversation_restore_failed',
-          message: 'gone',
-        }),
-      },
       { type: 'success', text: 'rebuilt', conversationUrl: 'https://chatgpt.com/c/beta' },
     );
+    driver.openConversationActions.push('not_restorable');
     const { execute, pages } = executor({ persistence: db, driver });
 
     await execute(request([user('turn one')]));
@@ -285,40 +297,16 @@ describe('ConversationExecutor', () => {
     await execute(request([user('turn one'), assistant('reply one'), user('turn two')]));
 
     expect(driver.calls.slice(1).map((call) => call.request.target)).toEqual([
-      { kind: 'restore', conversationUrl: 'https://chatgpt.com/c/alpha' },
       { kind: 'fresh' },
     ]);
-    expect(driver.calls[1]!.page).toBe(driver.calls[2]!.page);
-    expect(driver.calls[2]!.request.prompt).toContain('turn one');
+    expect(driver.navigationCalls.slice(1).map((call) => call.type)).toEqual([
+      'conversation',
+      'fresh',
+    ]);
+    expect(driver.calls[1]!.request.prompt).toContain('turn one');
     expect(db.conversationStore.loadByKey('thread-a')?.conversation.chatgptConversationUrl).toBe(
       'https://chatgpt.com/c/beta',
     );
-  });
-
-  it('tries saved-URL RESTORE after a warm current identity failure before rebuilding', async () => {
-    const db = persistence();
-    const driver = new FakeDriver();
-    driver.actions.push(
-      { type: 'success', text: 'reply one', conversationUrl: 'https://chatgpt.com/c/alpha' },
-      {
-        type: 'error',
-        error: new ChatGptDriverError({
-          code: 'conversation_restore_failed',
-          message: 'warm page moved',
-        }),
-      },
-      { type: 'success', text: 'reply two', conversationUrl: 'https://chatgpt.com/c/alpha' },
-    );
-    const { execute } = executor({ persistence: db, driver });
-
-    await execute(request([user('turn one')]));
-    await execute(request([user('turn one'), assistant('reply one'), user('turn two')]));
-
-    expect(driver.calls.slice(1).map((call) => call.request.target)).toEqual([
-      { kind: 'current', conversationUrl: 'https://chatgpt.com/c/alpha' },
-      { kind: 'restore', conversationUrl: 'https://chatgpt.com/c/alpha' },
-    ]);
-    expect(driver.calls[2]!.request.prompt).not.toContain('turn one');
   });
 
   it('preserves the previous snapshot and discards the affinity on non-restore execution failure', async () => {

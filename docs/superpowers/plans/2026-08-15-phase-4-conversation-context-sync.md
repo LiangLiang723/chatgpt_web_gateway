@@ -639,7 +639,7 @@ export interface ChatGptTextDriver {
 }
 ```
 
-- [ ] **Step 1: Write safe URL tests**
+- [x] **Step 1: Write safe URL tests**
 
 Accept:
 
@@ -659,7 +659,7 @@ not-a-url
 
 Canonical identity compares origin + pathname and ignores query/hash.
 
-- [ ] **Step 2: Rewrite Driver unit tests around three operations**
+- [x] **Step 2: Rewrite Driver unit tests around three operations**
 
 Prove:
 
@@ -671,7 +671,7 @@ Prove:
 - `auth_required`, selector ambiguity/missing, and browser runtime failures remain errors, not `not_restorable`.
 - `sendText()` itself never calls `goto` and preserves Phase 3 Assistant baseline/completion ownership.
 
-- [ ] **Step 3: Run Driver tests red**
+- [x] **Step 3: Run Driver tests red**
 
 ```bash
 corepack pnpm exec vitest run tests/unit/chatgpt-conversation-url.test.ts tests/unit/chatgpt-driver.test.ts
@@ -679,13 +679,13 @@ corepack pnpm exec vitest run tests/unit/chatgpt-conversation-url.test.ts tests/
 
 Expected: FAIL because old `sendText()` owns navigation and new methods do not exist.
 
-- [ ] **Step 4: Implement URL helper and Driver split**
+- [x] **Step 4: Implement URL helper and Driver split**
 
 Factor the existing root navigation/AuthProbe block into `openFresh`. Reuse one readiness helper from both navigation methods. Keep existing `waitForAssistantCompletion` logic in `sendText` unchanged except removing navigation/Auth setup.
 
 Before returning a successful `conversationUrl`, validate the resulting `page.url()` with `parseSafeChatGptConversationUrl`; if invalid, throw a stable Driver error rather than persisting it.
 
-- [ ] **Step 5: Run regression tests green**
+- [x] **Step 5: Run regression tests green**
 
 ```bash
 corepack pnpm exec vitest run \
@@ -697,12 +697,14 @@ corepack pnpm exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/chatgpt tests/unit/chatgpt-*.test.ts
  git commit -m "♻️ 拆分 ChatGPT Fresh 与会话恢复驱动"
 ```
+
+2026-08-15 execution evidence: the new URL suite failed because `conversation-url.ts` did not exist and all 14 rewritten Driver tests failed against the old target-owning Driver. After splitting navigation/readiness from submission, the approved Driver/URL/Auth/Completion regression plus Phase 3 Executor and legacy partial Conversation regression passed 7 files / 56 tests; `corepack pnpm typecheck` passed. A deprecated optional `target` field is temporarily retained only for legacy executor test compatibility; the real Driver ignores it and all navigation is now exclusively `openFresh/openConversation`.
 
 ---
 

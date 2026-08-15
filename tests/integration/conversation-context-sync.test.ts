@@ -107,6 +107,12 @@ interface DriverCall {
 class ControlledDriver implements ChatGptDriver {
   readonly calls: DriverCall[] = [];
 
+  async openFresh(): Promise<void> {}
+
+  async openConversation(): Promise<'restored' | 'not_restorable'> {
+    return 'restored';
+  }
+
   constructor(
     private readonly handler: (
       call: DriverCall,
