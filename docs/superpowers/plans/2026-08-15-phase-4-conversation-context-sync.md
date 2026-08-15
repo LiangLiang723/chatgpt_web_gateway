@@ -1105,27 +1105,27 @@ git add src/config src/api/errors.ts src/runtime.ts src/conversations tests/unit
 **Interfaces:**
 - No new production interface unless a test exposes an actual missing seam.
 
-- [ ] **Step 1: Add same-key HTTP/Engine concurrency test**
+- [x] **Step 1: Add same-key HTTP/Engine concurrency test**
 
 Use deferred fake Driver. Fire two same-key requests without awaiting the first. Prove the second Driver call does not start until the first success has committed; then prove the second planner sees the first Assistant in Store.
 
-- [ ] **Step 2: Add different-key parallelism test**
+- [x] **Step 2: Add different-key parallelism test**
 
 With capacity ≥2, fire `key-a` and `key-b`; prove both fake Driver sends start before either is released.
 
-- [ ] **Step 3: Add capacity-pressure test**
+- [x] **Step 3: Add capacity-pressure test**
 
 With Page capacity 2, complete A and B so both hold idle affinities, then start C. Assert A (oldest `lastUsedAt`) is released/reused and B remains bound. Then make A/B both busy and assert C gets `page_capacity_exceeded`.
 
-- [ ] **Step 4: Add real SQLite close/reopen RESTORE integration**
+- [x] **Step 4: Add real SQLite close/reopen RESTORE integration**
 
 Run first request, close Persistence/Engine runtime objects, reopen the same temporary DB, create a fresh Registry, send incremental request, and assert fake Driver receives saved URL through `openConversation()`.
 
-- [ ] **Step 5: Add Chat Completions ↔ Responses parity test with same key**
+- [x] **Step 5: Add Chat Completions ↔ Responses parity test with same key**
 
 Start with one protocol, continue with the other using canonical-equivalent history/incremental input. Assert both route adapters hit the same persisted Conversation and Engine rather than creating protocol-specific browser logic.
 
-- [ ] **Step 6: Run the integration group**
+- [x] **Step 6: Run the integration group**
 
 ```bash
 corepack pnpm exec vitest run tests/integration
@@ -1133,12 +1133,14 @@ corepack pnpm exec vitest run tests/integration
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add tests/integration
  git commit -m "🧪 补充 Context Sync 并发与重启测试"
 ```
+
+2026-08-15 execution evidence: the existing HTTP integration was strengthened so a second same-key request is already queued as single-user incremental before the first completes; when it reaches the Driver it observes the first Assistant in SQLite and sends only the new turn. Restart continuation was also changed to single-user incremental. A new PagePool+Registry integration proves capacity-2 LRU reuse and busy protection, and a Chat Completions → Responses test proves protocol adapters share one persisted Conversation. The complete integration group passed 8 files / 53 tests without requiring new production seams.
 
 ---
 

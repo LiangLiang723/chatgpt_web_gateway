@@ -13,16 +13,16 @@ STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-10
+NEXT_TASK=execute-phase-4-plan-task-11
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–9 已完成完整四态 Engine、crash convergence 与生产 runtime/API wiring，进入系统级并发/LRU/重启/跨协议验收。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–10 已完成四态 Engine、生产 runtime 与系统级 FIFO/并行/LRU/重启/跨协议验收，进入架构与 Docker migration smoke。
 - **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 10 — 证明 same-key FIFO、cross-key parallel、Page LRU/busy、SQLite restart RESTORE 与 Chat Completions/Responses 跨协议连续性。
+- **下一个可执行任务：** Plan Task 11 — 强化 architecture checker，并在 fresh Docker build/smoke 中验证 migration 001+002、checkpoint columns 与 Phase 4 配置。
 - **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
@@ -80,7 +80,8 @@ UPDATED_AT=2026-08-15
 - ✅ 新 Conversation Engine 已接入真实 `ConversationStore`、same-key Queue、Page Registry 与 pure Planner；FRESH、full/incremental APPEND、NULL-key 持久化及 checkpoint 写入顺序已有真实临时 SQLite 集成测试。
 - ✅ Conversation Engine 四态已闭环：RESTORE、`not_restorable → REBUILD`、full history/incremental instructions REBUILD、checkpoint uncertainty/mismatch 与 post-checkpoint `in_flight` reopen 均有真实临时 SQLite 集成测试。
 - ✅ Headless production runtime 已正式切换到 `ConversationQueue + ConversationPageRegistry + ConversationEngine`；maintenance 模式不创建产品 Browser/Queue/Registry，公共 Phase 4 invalid/unsupported error mapping 已完成。
-- 🟡 继续执行批准 Task 10–13 的系统级、Docker、real E2E 与最终文档验收。
+- ✅ 系统级 integration 已证明 queued single-user incremental 会在 FIFO 内重读第一轮 SQLite 状态、不同 key 并行、capacity-2 LRU/busy 保护、runtime restart RESTORE 与 Chat Completions/Responses 同 key 连续性。
+- 🟡 继续执行批准 Task 11–13 的架构/Docker、real E2E 与最终文档验收。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -165,7 +166,7 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 按批准 Plan Task 10 完成系统级 FIFO/parallel/LRU/restart/cross-protocol 验收，再继续 Task 11–13。
+1. 按批准 Plan Task 11 完成 architecture + fresh Docker build/smoke，再继续 Task 12–13。
 2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
 3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 

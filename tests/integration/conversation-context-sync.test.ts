@@ -258,19 +258,27 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     const sameFirstStarted = deferred();
     const sameSecondStarted = deferred();
     let sameCalls = 0;
-    const sameDriver = new ControlledDriver(async () => {
+    let gateway!: GatewayRuntime;
+    const sameDriver = new ControlledDriver(async (call) => {
       sameCalls += 1;
       if (sameCalls === 1) {
         sameFirstStarted.resolve();
         await firstGate.promise;
       }
-      if (sameCalls === 2) sameSecondStarted.resolve();
+      if (sameCalls === 2) {
+        const stored = gateway.persistence.conversationStore.loadByKey('same-key');
+        expect(stored?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+        expect(call.request.prompt).toContain('same two');
+        expect(call.request.prompt).not.toContain('same one');
+        expect(call.request.prompt).not.toContain('same reply one');
+        sameSecondStarted.resolve();
+      }
       return {
         text: sameCalls === 1 ? 'same reply one' : 'same reply two',
         conversationUrl: 'https://chatgpt.com/c/same',
       };
     });
-    const gateway = await runtime(paths, sameDriver);
+    gateway = await runtime(paths, sameDriver);
     const sameHeaders = { ...auth, 'x-conversation-key': 'same-key' };
 
     const first = gateway.app.inject({
@@ -283,11 +291,7 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
       method: 'POST',
       url: '/v1/chat/completions',
       headers: sameHeaders,
-      payload: chatPayload([
-        { role: 'user', content: 'same one' },
-        { role: 'assistant', content: 'same reply one' },
-        { role: 'user', content: 'same two' },
-      ]),
+      payload: chatPayload([{ role: 'user', content: 'same two' }]),
     });
 
     await sameFirstStarted.promise;
@@ -364,11 +368,7 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
       method: 'POST',
       url: '/v1/chat/completions',
       headers,
-      payload: chatPayload([
-        { role: 'user', content: 'restart one' },
-        { role: 'assistant', content: 'restart reply one' },
-        { role: 'user', content: 'restart two' },
-      ]),
+      payload: chatPayload([{ role: 'user', content: 'restart two' }]),
     });
 
     expect(second.statusCode).toBe(200);
@@ -378,6 +378,51 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
       conversationUrl: 'https://chatgpt.com/c/restart-alpha',
     });
     expect(secondDriver.calls[0]!.request.prompt).not.toContain('restart one');
+  });
+
+  it('shares one persisted Conversation across Chat Completions and Responses with the same key', async () => {
+    const paths = temp();
+    const driver = new ControlledDriver((_call, index) => ({
+      text: index === 0 ? 'cross reply one' : 'cross reply two',
+      conversationUrl: 'https://chatgpt.com/c/cross-protocol',
+    }));
+    const gateway = await runtime(paths, driver);
+    const headers = { ...auth, 'x-conversation-key': 'cross-protocol-thread' };
+
+    const first = await gateway.app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers,
+      payload: chatPayload([{ role: 'user', content: 'cross turn one' }]),
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await gateway.app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      headers,
+      payload: { model: 'chatgpt-web', input: 'cross turn two' },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().output[0].content[0].text).toBe('cross reply two');
+
+    expect(driver.navigationCalls[1]).toEqual({
+      type: 'conversation',
+      page: driver.calls[1]!.page,
+      conversationUrl: 'https://chatgpt.com/c/cross-protocol',
+    });
+    expect(driver.calls[1]!.request.prompt).toContain('cross turn two');
+    expect(driver.calls[1]!.request.prompt).not.toContain('cross turn one');
+    const saved = gateway.persistence.conversationStore.loadByKey('cross-protocol-thread')!;
+    expect(saved.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(saved.conversation.chatgptConversationUrl).toBe(
+      'https://chatgpt.com/c/cross-protocol',
+    );
   });
 
   it('REBUILDs through HTTP when the caller edits previously synchronized history', async () => {
