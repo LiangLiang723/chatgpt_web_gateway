@@ -59,10 +59,11 @@ describe('SQLite database and migrations', () => {
       expect.stringMatching(/^[a-f0-9]{64}$/),
     ]);
     expect(
-      database.prepare('PRAGMA table_info(conversations)').all().map((row) => String(row.name)),
-    ).toEqual(
-      expect.arrayContaining(['sync_status', 'synced_message_count', 'sync_started_at']),
-    );
+      database
+        .prepare('PRAGMA table_info(conversations)')
+        .all()
+        .map((row) => String(row.name)),
+    ).toEqual(expect.arrayContaining(['sync_status', 'synced_message_count', 'sync_started_at']));
     expect(tableNames(database)).toEqual(
       expect.arrayContaining([
         'attachments',

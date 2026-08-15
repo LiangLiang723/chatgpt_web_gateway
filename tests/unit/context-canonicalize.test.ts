@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  canonicalizeInstructions,
-  canonicalizeText,
-} from '../../src/context/canonicalize.js';
+import { canonicalizeInstructions, canonicalizeText } from '../../src/context/canonicalize.js';
 import { fingerprintCanonical } from '../../src/context/fingerprint.js';
 
 describe('Context canonicalization', () => {
@@ -27,9 +24,7 @@ describe('Context canonicalization', () => {
   it('creates deterministic SHA-256 fingerprints for canonical values', () => {
     expect(fingerprintCanonical({ a: 1 })).toMatch(/^[0-9a-f]{64}$/);
     expect(fingerprintCanonical({ a: 1 })).toBe(fingerprintCanonical({ a: 1 }));
-    expect(fingerprintCanonical({ b: 2, a: 1 })).toBe(
-      fingerprintCanonical({ a: 1, b: 2 }),
-    );
+    expect(fingerprintCanonical({ b: 2, a: 1 })).toBe(fingerprintCanonical({ a: 1, b: 2 }));
     expect(fingerprintCanonical({ a: 1 })).not.toBe(fingerprintCanonical({ a: 2 }));
   });
 });

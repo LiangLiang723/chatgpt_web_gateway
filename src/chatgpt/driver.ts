@@ -28,10 +28,7 @@ export interface ChatGptTextResult {
 
 export interface ChatGptTextDriver {
   openFresh(page: Page): Promise<void>;
-  openConversation(
-    page: Page,
-    conversationUrl: string,
-  ): Promise<'restored' | 'not_restorable'>;
+  openConversation(page: Page, conversationUrl: string): Promise<'restored' | 'not_restorable'>;
   sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult>;
 }
 

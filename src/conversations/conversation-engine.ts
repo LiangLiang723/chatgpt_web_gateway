@@ -41,13 +41,13 @@ function canonicalStoredMessage(
   }
   return {
     role: record.role,
-    text: canonicalizeText(
-      record.content.map((part) => (part.type === 'text' ? part.text : '')),
-    ),
+    text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
   };
 }
 
-function canonicalStoredConversation(aggregate: ConversationAggregate): CanonicalStoredConversation {
+function canonicalStoredConversation(
+  aggregate: ConversationAggregate,
+): CanonicalStoredConversation {
   return {
     instructions: canonicalizeInstructions(aggregate.conversation.instructions),
     messages: aggregate.messages.map(canonicalStoredMessage),
@@ -122,8 +122,7 @@ function authoritativeMessages(options: {
     return [...options.plan.history, options.plan.currentUser];
   }
   if (options.canonicalRequest.mode === 'full') return options.canonicalRequest.messages;
-  const confirmed =
-    options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
+  const confirmed = options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
   return [...confirmed, options.plan.currentUser];
 }
 
@@ -188,7 +187,9 @@ async function executeConversation(options: {
     if (existing === undefined) {
       initial = createInFlightConversation({
         conversationId,
-        ...(options.conversationKey === undefined ? {} : { conversationKey: options.conversationKey }),
+        ...(options.conversationKey === undefined
+          ? {}
+          : { conversationKey: options.conversationKey }),
         request: options.request,
         startedAt,
       });
@@ -210,7 +211,9 @@ async function executeConversation(options: {
             }),
             currentUser: plan.currentUser,
           });
-    const result: ChatGptTextResult = await options.engine.driver.sendText(session.page, { prompt });
+    const result: ChatGptTextResult = await options.engine.driver.sendText(session.page, {
+      prompt,
+    });
     const completedAt = options.now();
     const finalAggregate = buildFinalConversationAggregate({
       ...(existing === undefined ? {} : { stored: existing }),

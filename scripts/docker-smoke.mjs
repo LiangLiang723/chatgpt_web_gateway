@@ -169,7 +169,7 @@ function assertPersistence(id) {
     throw new Error(`Expected gateway.db owner ${puid}:${pgid}, got ${owner}`);
   }
 
-  const migration = JSON.parse(
+  const persistenceState = JSON.parse(
     runDocker(
       [
         'exec',
@@ -179,13 +179,24 @@ function assertPersistence(id) {
         'node',
         '--input-type=module',
         '-e',
-        "import { DatabaseSync } from 'node:sqlite'; const db=new DatabaseSync('/data/gateway.db',{readOnly:true}); const row=db.prepare('SELECT version,name,(SELECT COUNT(*) FROM schema_migrations) AS count FROM schema_migrations WHERE version=1').get(); db.close(); console.log(JSON.stringify(row));",
+        "import { DatabaseSync } from 'node:sqlite'; const db=new DatabaseSync('/data/gateway.db',{readOnly:true}); const migrations=db.prepare('SELECT version,name FROM schema_migrations ORDER BY version').all(); const columns=db.prepare('PRAGMA table_info(conversations)').all().map((row)=>String(row.name)); db.close(); console.log(JSON.stringify({migrations,columns}));",
       ],
       { quiet: true },
     ),
   );
-  if (migration?.version !== 1 || migration?.name !== 'initial' || migration?.count !== 1) {
-    throw new Error(`Unexpected SQLite migration state: ${JSON.stringify(migration)}`);
+  const expectedMigrations = [
+    { version: 1, name: 'initial' },
+    { version: 2, name: 'add_conversation_sync_checkpoint' },
+  ];
+  if (JSON.stringify(persistenceState?.migrations) !== JSON.stringify(expectedMigrations)) {
+    throw new Error(
+      `Unexpected SQLite migration state: ${JSON.stringify(persistenceState?.migrations)}`,
+    );
+  }
+  for (const column of ['sync_status', 'synced_message_count', 'sync_started_at']) {
+    if (!persistenceState?.columns?.includes(column)) {
+      throw new Error(`Conversation checkpoint column is missing: ${column}`);
+    }
   }
 }
 

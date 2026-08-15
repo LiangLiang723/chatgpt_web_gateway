@@ -79,7 +79,9 @@ describe('Conversation Page Registry + PagePool capacity semantics', () => {
     const alpha = await registry.acquire('alpha');
     const beta = await registry.acquire('beta');
 
-    await expect(registry.acquire('gamma')).rejects.toMatchObject({ code: 'page_capacity_exceeded' });
+    await expect(registry.acquire('gamma')).rejects.toMatchObject({
+      code: 'page_capacity_exceeded',
+    });
     expect(registry.hasAffinity('alpha')).toBe(true);
     expect(registry.hasAffinity('beta')).toBe(true);
 

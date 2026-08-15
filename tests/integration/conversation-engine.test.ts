@@ -8,7 +8,10 @@ import type {
   ChatGptTextResult,
 } from '../../src/chatgpt/driver.js';
 import { createConversationEngine } from '../../src/conversations/conversation-engine.js';
-import type { ConversationPageRegistry, ConversationPageSession } from '../../src/conversations/page-registry.js';
+import type {
+  ConversationPageRegistry,
+  ConversationPageSession,
+} from '../../src/conversations/page-registry.js';
 import type { ConversationQueue } from '../../src/conversations/conversation-queue.js';
 import { createPersistenceContext, type PersistenceContext } from '../../src/persistence/index.js';
 import type { ConversationAggregate } from '../../src/persistence/types.js';
@@ -227,11 +230,7 @@ describe('Conversation Engine FRESH + APPEND', () => {
   it.each([
     {
       name: 'full history',
-      secondMessages: [
-        user('u1-unique-old-token'),
-        assistant('a1-unique-old-token'),
-        user('u2'),
-      ],
+      secondMessages: [user('u1-unique-old-token'), assistant('a1-unique-old-token'), user('u2')],
     },
     {
       name: 'single-user incremental',
@@ -376,9 +375,9 @@ describe('Conversation Engine RESTORE + REBUILD + crash convergence', () => {
     const send = secondCalls[1] as Extract<DriverCall, { type: 'sendText' }>;
     expect(send.request.prompt).toContain('u2');
     expect(send.request.prompt).not.toContain('u1');
-    expect(db.conversationStore.loadByKey('restore-thread')?.conversation.chatgptConversationUrl).toBe(
-      'https://chatgpt.com/c/restore-one',
-    );
+    expect(
+      db.conversationStore.loadByKey('restore-thread')?.conversation.chatgptConversationUrl,
+    ).toBe('https://chatgpt.com/c/restore-one');
   });
 
   it('falls back from not_restorable RESTORE to one Fresh REBUILD with confirmed history', async () => {
@@ -417,11 +416,7 @@ describe('Conversation Engine RESTORE + REBUILD + crash convergence', () => {
     await second(request({ messages: [user('u2-current')], conversationKey: 'rebuild-thread' }));
     const calls = driver.calls.slice(before);
 
-    expect(calls.map((call) => call.type)).toEqual([
-      'openConversation',
-      'openFresh',
-      'sendText',
-    ]);
+    expect(calls.map((call) => call.type)).toEqual(['openConversation', 'openFresh', 'sendText']);
     const send = calls[2] as Extract<DriverCall, { type: 'sendText' }>;
     expect(send.request.prompt).toContain('u1-restore-token');
     expect(send.request.prompt).toContain('a1-restore-token');

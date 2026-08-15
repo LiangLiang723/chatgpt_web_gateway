@@ -77,7 +77,9 @@ export function createConversationPageRegistry(
     deleteClosedBindings();
     const current = now();
     const expired = [...bindings.entries()]
-      .filter(([, binding]) => !binding.busy && binding.lastUsedAt + options.idleTimeoutMs <= current)
+      .filter(
+        ([, binding]) => !binding.busy && binding.lastUsedAt + options.idleTimeoutMs <= current,
+      )
       .sort(
         ([leftId, left], [rightId, right]) =>
           left.lastUsedAt - right.lastUsedAt || leftId.localeCompare(rightId),
@@ -179,7 +181,10 @@ export function createConversationPageRegistry(
 
     async acquire(conversationId) {
       if (closed) {
-        throw new BrowserRuntimeError('browser_unavailable', 'Conversation Page registry is closed');
+        throw new BrowserRuntimeError(
+          'browser_unavailable',
+          'Conversation Page registry is closed',
+        );
       }
 
       if (conversationId === undefined) {

@@ -13,5 +13,7 @@ function stabilize(value: unknown): unknown {
 }
 
 export function fingerprintCanonical(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(stabilize(value))).digest('hex');
+  return createHash('sha256')
+    .update(JSON.stringify(stabilize(value)))
+    .digest('hex');
 }

@@ -1156,7 +1156,7 @@ git add tests/integration
 - Architecture checker rules from governing spec §29.
 - Container environment passes `PAGE_IDLE_TIMEOUT_MINUTES` into Gateway.
 
-- [ ] **Step 1: Add architecture-check failure fixtures/rules**
+- [x] **Step 1: Add architecture-check failure fixtures/rules**
 
 Checker must reject:
 
@@ -1171,7 +1171,7 @@ chatgpt/ -> conversations/page-registry or conversation-engine
 
 Keep existing selector/process.env/node:sqlite checks.
 
-- [ ] **Step 2: Run architecture checker**
+- [x] **Step 2: Run architecture checker**
 
 ```bash
 node scripts/check-architecture.mjs
@@ -1179,7 +1179,7 @@ node scripts/check-architecture.mjs
 
 Expected before rule implementation: command may pass without enforcing new cases; after adding rules it must pass current valid source tree.
 
-- [ ] **Step 3: Extend Docker environment and smoke assertions**
+- [x] **Step 3: Extend Docker environment and smoke assertions**
 
 Pass:
 
@@ -1191,7 +1191,7 @@ After container startup, verify database migration history contains exactly `001
 
 Keep all existing Xvfb/Chromium/noVNC/sandbox/Profile single-owner checks.
 
-- [ ] **Step 4: Run repository deterministic verification**
+- [x] **Step 4: Run repository deterministic verification**
 
 ```bash
 corepack pnpm verify
@@ -1199,7 +1199,7 @@ corepack pnpm verify
 
 Expected: PASS.
 
-- [ ] **Step 5: Build and run fresh Docker smoke**
+- [x] **Step 5: Build and run fresh Docker smoke**
 
 ```bash
 corepack pnpm docker:build
@@ -1208,12 +1208,14 @@ corepack pnpm docker:smoke
 
 Expected: PASS on `linux/amd64`; smoke remains network-independent and does not contact ChatGPT.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts docker-compose*.yml .env.example
  git commit -m "🐳 验证 Phase 4 Conversation 持久化运行边界"
 ```
+
+2026-08-15 execution evidence: architecture import rules were extracted into a unit-testable rule module; the synthetic rule suite first failed because that module did not exist, then passed together with the real source-tree architecture checker. After applying repository formatting and one test-only lint/type declaration fix, `corepack pnpm verify` passed 43 test files / 271 tests plus format/lint/typecheck/build/governance. Fresh `linux/amd64` image `sha256:d31206e5d39b5493d11563fc034fb30c0f9f5909d0454162cdc2c3d645f867a1` built successfully; Docker smoke passed while explicitly validating migration history 001+002, all three Conversation checkpoint columns, non-default `PAGE_IDLE_TIMEOUT_MINUTES=12`, and all existing normal/maintenance non-root/Profile/sandbox/seccomp/RFB/restart boundaries.
 
 ---
 

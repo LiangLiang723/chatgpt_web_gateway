@@ -26,9 +26,7 @@ function request(
   };
 }
 
-function stored(
-  options: Partial<CanonicalStoredConversation> = {},
-): CanonicalStoredConversation {
+function stored(options: Partial<CanonicalStoredConversation> = {}): CanonicalStoredConversation {
   return {
     instructions: { system: ['s'], developer: ['d'] },
     messages: [u1, a1],
@@ -93,7 +91,10 @@ describe('planContextSync', () => {
   it('REBUILDs checkpoint count mismatch from confirmed prefix', () => {
     expect(
       planContextSync({
-        stored: stored({ messages: [u1, a1, u2], sync: { status: 'clean', syncedMessageCount: 2 } }),
+        stored: stored({
+          messages: [u1, a1, u2],
+          sync: { status: 'clean', syncedMessageCount: 2 },
+        }),
         request: request([u3]),
         hasAffinityPage: true,
       }),

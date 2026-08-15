@@ -16,7 +16,12 @@ const ids = [
   '44444444-4444-4444-8444-444444444444',
 ];
 
-function message(id: string, sequence: number, role: 'user' | 'assistant', text: string): MessageRecord {
+function message(
+  id: string,
+  sequence: number,
+  role: 'user' | 'assistant',
+  text: string,
+): MessageRecord {
   return {
     id,
     conversationId,

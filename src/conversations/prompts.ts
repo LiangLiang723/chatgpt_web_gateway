@@ -1,7 +1,4 @@
-import type {
-  CanonicalInstructions,
-  CanonicalTextMessage,
-} from '../context/types.js';
+import type { CanonicalInstructions, CanonicalTextMessage } from '../context/types.js';
 
 const CONTEXT_PRELUDE = [
   'You are processing an API conversation through ChatGPT Web Gateway.',

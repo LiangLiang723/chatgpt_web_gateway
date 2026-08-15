@@ -120,10 +120,7 @@ export class ConversationRepository {
     }
   }
 
-  updateSyncCheckpoint(
-    conversationId: string,
-    checkpoint: ConversationSyncCheckpoint,
-  ): void {
+  updateSyncCheckpoint(conversationId: string, checkpoint: ConversationSyncCheckpoint): void {
     assertUuidV4(conversationId, 'Conversation id');
     validateSyncCheckpoint(checkpoint);
     const result = this.database

@@ -129,7 +129,9 @@ describe('ConversationPageRegistry', () => {
     const registry = createConversationPageRegistry({ pagePool: pool, idleTimeoutMs: 1000 });
 
     const alpha = await registry.acquire('alpha');
-    await expect(registry.acquire('beta')).rejects.toMatchObject({ code: 'page_capacity_exceeded' });
+    await expect(registry.acquire('beta')).rejects.toMatchObject({
+      code: 'page_capacity_exceeded',
+    });
     expect(pool.leases[0]!.releaseCalls).toBe(0);
     await alpha.complete();
     await registry.close();

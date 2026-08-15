@@ -13,9 +13,7 @@ function storedCanonicalMessage(record: MessageRecord): CanonicalTextMessage | u
   if (record.content.some((part) => part.type !== 'text')) return undefined;
   return {
     role: record.role,
-    text: canonicalizeText(
-      record.content.map((part) => (part.type === 'text' ? part.text : '')),
-    ),
+    text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
   };
 }
 

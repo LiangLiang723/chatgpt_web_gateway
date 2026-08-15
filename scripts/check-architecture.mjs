@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+import { architectureImportRules as rules } from './architecture-rules.mjs';
+
 const root = path.resolve(import.meta.dirname, '..');
 const src = path.join(root, 'src');
 const errors = [];
@@ -30,45 +32,6 @@ function importsFrom(content) {
   }
   return results;
 }
-
-const rules = [
-  {
-    dir: 'api',
-    forbidden: (value) => value === 'playwright' || value.startsWith('playwright/'),
-    message: 'api/ must not import Playwright directly',
-  },
-  {
-    dir: 'context',
-    forbidden: (value) =>
-      value === 'playwright' ||
-      value.startsWith('playwright/') ||
-      /(?:^|\/)api(?:\/|$)/.test(value) ||
-      /(?:^|\/)chatgpt(?:\/|$)/.test(value),
-    message: 'context/ must stay pure and independent from api/chatgpt/playwright',
-  },
-  {
-    dir: 'stream',
-    forbidden: (value) => /chatgpt\/selectors/.test(value),
-    message: 'stream/ must not import ChatGPT selectors',
-  },
-  {
-    dir: 'persistence',
-    forbidden: (value) => value === 'playwright' || value.startsWith('playwright/'),
-    message: 'persistence/ must not import Playwright',
-  },
-  {
-    dir: 'browser',
-    forbidden: (value) => /(?:^|\/)(?:api|persistence|chatgpt)(?:\/|$)/.test(value),
-    message: 'browser/ must stay independent from api/persistence/chatgpt',
-  },
-  {
-    dir: 'chatgpt',
-    forbidden: (value) =>
-      /(?:^|\/)(?:api|persistence)(?:\/|$)/.test(value) ||
-      /browser\/(?:browser-manager|page-pool)/.test(value),
-    message: 'chatgpt/ must not depend on api/persistence or BrowserManager/PagePool implementations',
-  },
-];
 
 for (const rule of rules) {
   for (const file of sourceFiles(path.join(src, rule.dir))) {

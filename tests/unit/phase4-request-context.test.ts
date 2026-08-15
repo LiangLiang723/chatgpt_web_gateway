@@ -40,7 +40,13 @@ describe('toCanonicalConversationRequest', () => {
       toCanonicalConversationRequest(
         baseRequest({
           messages: [
-            { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'a' },
+                { type: 'text', text: 'b' },
+              ],
+            },
             { role: 'assistant', content: [{ type: 'text', text: 'answer' }] },
             { role: 'user', content: [{ type: 'text', text: 'next' }] },
           ],
@@ -63,7 +69,9 @@ describe('toCanonicalConversationRequest', () => {
     [
       'request attachments',
       baseRequest({
-        attachments: [{ id: 'a1', kind: 'image', source: { type: 'url', url: 'https://example.com/a.png' } }],
+        attachments: [
+          { id: 'a1', kind: 'image', source: { type: 'url', url: 'https://example.com/a.png' } },
+        ],
       }),
     ],
     [
@@ -102,9 +110,7 @@ describe('toCanonicalConversationRequest', () => {
     [
       'attachment content part',
       baseRequest({
-        messages: [
-          { role: 'user', content: [{ type: 'attachment', attachmentId: 'a1' }] },
-        ],
+        messages: [{ role: 'user', content: [{ type: 'attachment', attachmentId: 'a1' }] }],
       }),
     ],
   ] as const)('rejects unsupported Phase 4 capability: %s', (_name, request) => {

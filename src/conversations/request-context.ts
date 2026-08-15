@@ -1,9 +1,6 @@
 import type { NormalizedRequest } from '../api/normalized.js';
 import { canonicalizeInstructions, canonicalizeText } from '../context/canonicalize.js';
-import type {
-  CanonicalConversationRequest,
-  CanonicalTextMessage,
-} from '../context/types.js';
+import type { CanonicalConversationRequest, CanonicalTextMessage } from '../context/types.js';
 import { Phase4ExecutionError } from './errors.js';
 
 function unsupported(message: string): never {

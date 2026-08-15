@@ -296,9 +296,7 @@ describe('ConversationExecutor', () => {
     pages.warm = false;
     await execute(request([user('turn one'), assistant('reply one'), user('turn two')]));
 
-    expect(driver.calls.slice(1).map((call) => call.request.target)).toEqual([
-      { kind: 'fresh' },
-    ]);
+    expect(driver.calls.slice(1).map((call) => call.request.target)).toEqual([{ kind: 'fresh' }]);
     expect(driver.navigationCalls.slice(1).map((call) => call.type)).toEqual([
       'conversation',
       'fresh',

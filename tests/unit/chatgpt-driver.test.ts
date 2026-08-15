@@ -170,9 +170,9 @@ describe('ChatGptDriver navigation readiness', () => {
       redirectAfterGoto: 'https://chatgpt.com/',
     });
 
-    await expect(
-      driver.openConversation(page, 'https://chatgpt.com/c/thread-1'),
-    ).resolves.toBe('not_restorable');
+    await expect(driver.openConversation(page, 'https://chatgpt.com/c/thread-1')).resolves.toBe(
+      'not_restorable',
+    );
     expect(events).toHaveLength(1);
     expect(events[0]).toContain('goto:https://chatgpt.com/c/thread-1:');
   });
@@ -214,7 +214,9 @@ describe('ChatGptDriver navigation readiness', () => {
     } as unknown as Page;
     const driver = createChatGptDriver();
 
-    await expect(driver.openConversation(page, 'https://chatgpt.com/c/thread-1')).rejects.toMatchObject({
+    await expect(
+      driver.openConversation(page, 'https://chatgpt.com/c/thread-1'),
+    ).rejects.toMatchObject({
       code: 'browser_unavailable',
     });
   });
@@ -238,13 +240,7 @@ describe('ChatGptDriver sendText', () => {
     });
 
     expect(page.goto).not.toHaveBeenCalled();
-    expect(events).toEqual([
-      'baseline',
-      'fill:hello',
-      'click:send',
-      'completion',
-      'turn:3',
-    ]);
+    expect(events).toEqual(['baseline', 'fill:hello', 'click:send', 'completion', 'turn:3']);
   });
 
   it('rejects an unsafe final URL instead of returning it for persistence', async () => {

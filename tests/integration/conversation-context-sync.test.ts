@@ -105,8 +105,7 @@ interface DriverCall {
 }
 
 type NavigationCall =
-  | { type: 'fresh'; page: Page }
-  | { type: 'conversation'; page: Page; conversationUrl: string };
+  { type: 'fresh'; page: Page } | { type: 'conversation'; page: Page; conversationUrl: string };
 
 class ControlledDriver implements ChatGptDriver {
   readonly calls: DriverCall[] = [];
@@ -258,7 +257,7 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
     const sameFirstStarted = deferred();
     const sameSecondStarted = deferred();
     let sameCalls = 0;
-    let gateway!: GatewayRuntime;
+    const gatewayRef: { current?: GatewayRuntime } = {};
     const sameDriver = new ControlledDriver(async (call) => {
       sameCalls += 1;
       if (sameCalls === 1) {
@@ -266,7 +265,7 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
         await firstGate.promise;
       }
       if (sameCalls === 2) {
-        const stored = gateway.persistence.conversationStore.loadByKey('same-key');
+        const stored = gatewayRef.current!.persistence.conversationStore.loadByKey('same-key');
         expect(stored?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
         expect(call.request.prompt).toContain('same two');
         expect(call.request.prompt).not.toContain('same one');
@@ -278,7 +277,8 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
         conversationUrl: 'https://chatgpt.com/c/same',
       };
     });
-    gateway = await runtime(paths, sameDriver);
+    const gateway = await runtime(paths, sameDriver);
+    gatewayRef.current = gateway;
     const sameHeaders = { ...auth, 'x-conversation-key': 'same-key' };
 
     const first = gateway.app.inject({
@@ -420,9 +420,7 @@ describe('Phase 4 Conversation + Context Sync HTTP integration', () => {
       'user',
       'assistant',
     ]);
-    expect(saved.conversation.chatgptConversationUrl).toBe(
-      'https://chatgpt.com/c/cross-protocol',
-    );
+    expect(saved.conversation.chatgptConversationUrl).toBe('https://chatgpt.com/c/cross-protocol');
   });
 
   it('REBUILDs through HTTP when the caller edits previously synchronized history', async () => {
