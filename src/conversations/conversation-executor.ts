@@ -41,10 +41,7 @@ function isRestoreFailure(error: unknown): error is ChatGptDriverError {
   return error instanceof ChatGptDriverError && error.code === 'conversation_restore_failed';
 }
 
-function targetForAppend(
-  mode: 'APPEND' | 'RESTORE',
-  conversationUrl: string,
-): ChatGptTextTarget {
+function targetForAppend(mode: 'APPEND' | 'RESTORE', conversationUrl: string): ChatGptTextTarget {
   return mode === 'APPEND'
     ? { kind: 'current', conversationUrl }
     : { kind: 'restore', conversationUrl };

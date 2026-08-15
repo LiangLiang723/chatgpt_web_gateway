@@ -157,7 +157,6 @@ describe('Gateway Browser runtime composition', () => {
   it('closes Fastify, Conversation Pages, Browser, then persistence and remains idempotent', async () => {
     const paths = temp();
     const order: string[] = [];
-    let runtime!: Awaited<ReturnType<typeof createGatewayRuntime>>;
     const closePages = vi.fn(async () => {
       order.push('pages');
       expect(runtime.persistence.database.prepare('SELECT 1').get()).toBeDefined();
@@ -168,7 +167,7 @@ describe('Gateway Browser runtime composition', () => {
     });
     const browser = fakeBrowserManager(closeBrowser);
     const config = loadConfig({ GATEWAY_API_KEY: 'test-key', DATA_DIR: join(paths.root, 'data') });
-    runtime = await createGatewayRuntime({
+    const runtime = await createGatewayRuntime({
       config,
       migrationsDir: paths.migrationsDir,
       createBrowserManager: async () => browser,

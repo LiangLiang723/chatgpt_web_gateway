@@ -18,7 +18,10 @@ const assistant = (text: string): NormalizedMessage => ({
   content: [{ type: 'text', text }],
 });
 
-const persisted = (messages: NormalizedMessage[], conversationUrl = 'https://chatgpt.com/c/abc') => ({
+const persisted = (
+  messages: NormalizedMessage[],
+  conversationUrl = 'https://chatgpt.com/c/abc',
+) => ({
   instructions: structuredClone(instructions),
   messages: structuredClone(messages),
   conversationUrl,
@@ -131,12 +134,7 @@ describe('planContextSync', () => {
     expect(
       planContextSync({
         instructions,
-        messages: [
-          ...stored,
-          user('two'),
-          assistant('caller supplied reply two'),
-          user('three'),
-        ],
+        messages: [...stored, user('two'), assistant('caller supplied reply two'), user('three')],
         persisted: persisted(stored),
         hasWarmPage: true,
       }).mode,

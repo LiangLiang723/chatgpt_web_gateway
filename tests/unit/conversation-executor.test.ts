@@ -68,8 +68,7 @@ interface DriverCall {
 class FakeDriver implements ChatGptDriver {
   readonly calls: DriverCall[] = [];
   readonly actions: Array<
-    | { type: 'success'; text: string; conversationUrl: string }
-    | { type: 'error'; error: Error }
+    { type: 'success'; text: string; conversationUrl: string } | { type: 'error'; error: Error }
   > = [];
 
   async sendText(page: Page, request: ChatGptTextRequest) {
@@ -178,9 +177,7 @@ describe('ConversationExecutor', () => {
     expect(driver.calls[0]!.request.target).toEqual({ kind: 'fresh' });
     expect(driver.calls[0]!.request.prompt).toContain('turn one');
 
-    await execute(
-      request([user('turn one'), assistant('reply one'), user('turn two')]),
-    );
+    await execute(request([user('turn one'), assistant('reply one'), user('turn two')]));
 
     const second = db.conversationStore.loadByKey('thread-a');
     expect(second?.conversation.id).toBe(first?.conversation.id);
@@ -355,9 +352,7 @@ describe('ConversationExecutor', () => {
     const pagePool = new FakePagePool();
     const { execute } = executor({ persistence: db, driver, pagePool });
 
-    await execute(
-      request([user('one'), assistant('reply one'), user('two')], null),
-    );
+    await execute(request([user('one'), assistant('reply one'), user('two')], null));
 
     expect(driver.calls[0]!.request.target).toEqual({ kind: 'fresh' });
     expect(driver.calls[0]!.request.prompt).toContain('one');

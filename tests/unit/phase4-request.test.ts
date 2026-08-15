@@ -70,7 +70,9 @@ describe('Phase 4 request validation and prompts', () => {
         tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' } }],
       }),
       request({ toolChoice: { mode: 'required' } }),
-      request({ messages: [{ role: 'tool', toolCallId: 'call-1', content: [{ type: 'text', text: 'ok' }] }] }),
+      request({
+        messages: [{ role: 'tool', toolCallId: 'call-1', content: [{ type: 'text', text: 'ok' }] }],
+      }),
       request({
         messages: [
           {

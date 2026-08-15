@@ -72,9 +72,9 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '0' })).toThrow(
       /PAGE_IDLE_TIMEOUT_MINUTES/,
     );
-    expect(() =>
-      loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1441' }),
-    ).toThrow(/PAGE_IDLE_TIMEOUT_MINUTES/);
+    expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1441' })).toThrow(
+      /PAGE_IDLE_TIMEOUT_MINUTES/,
+    );
   });
 
   it('rejects unsupported UI modes', () => {

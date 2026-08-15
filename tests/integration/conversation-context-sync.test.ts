@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { BrowserRuntimeError } from '../../src/browser/errors.js';
 import type { BrowserManager, PageLease, PagePool } from '../../src/browser/types.js';
-import type { ChatGptDriver, ChatGptTextRequest, ChatGptTextResult } from '../../src/chatgpt/driver.js';
+import type {
+  ChatGptDriver,
+  ChatGptTextRequest,
+  ChatGptTextResult,
+} from '../../src/chatgpt/driver.js';
 import { loadConfig } from '../../src/config/index.js';
 import { createGatewayRuntime, type GatewayRuntime } from '../../src/runtime.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';

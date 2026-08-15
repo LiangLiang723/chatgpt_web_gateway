@@ -85,9 +85,12 @@ export function createConversationPageManager(
     return true;
   };
 
-  const timer = setIntervalFn(() => {
-    void sweepIdle().catch(() => undefined);
-  }, Math.min(options.idleTimeoutMs, 60_000));
+  const timer = setIntervalFn(
+    () => {
+      void sweepIdle().catch(() => undefined);
+    },
+    Math.min(options.idleTimeoutMs, 60_000),
+  );
   timer.unref?.();
 
   const manager: ConversationPageManager = {

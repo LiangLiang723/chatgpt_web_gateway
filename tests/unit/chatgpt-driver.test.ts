@@ -123,9 +123,7 @@ describe('ChatGptDriver', () => {
 
   it('restores a saved Conversation URL before submitting', async () => {
     const restoredUrl = 'https://chatgpt.com/c/test-conversation?model=auto';
-    const { page, driver } = successfulHarness(
-      'https://chatgpt.com/c/test-conversation#restored',
-    );
+    const { page, driver } = successfulHarness('https://chatgpt.com/c/test-conversation#restored');
 
     await driver.sendText(page, {
       prompt: 'next',

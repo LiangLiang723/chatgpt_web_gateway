@@ -1,31 +1,45 @@
-import type {
-  NormalizedContentPart,
-  NormalizedInstruction,
-  NormalizedMessage,
-  NormalizedToolCall,
-} from '../api/normalized.js';
+export type ContextInstruction = {
+  role: 'system' | 'developer';
+  content: string;
+};
+
+export type ContextContentPart =
+  { type: 'text'; text: string } | { type: 'attachment'; attachmentId: string };
+
+export interface ContextToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface ContextMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: ContextContentPart[];
+  toolCallId?: string;
+  toolCalls?: ContextToolCall[];
+}
 
 export type ContextSyncMode = 'FRESH' | 'APPEND' | 'RESTORE' | 'REBUILD';
 
 export interface PersistedContextSnapshot {
-  instructions: NormalizedInstruction[];
-  messages: NormalizedMessage[];
+  instructions: ContextInstruction[];
+  messages: ContextMessage[];
   conversationUrl?: string;
 }
 
 export interface ContextSyncPlan {
   mode: ContextSyncMode;
-  appendMessages: NormalizedMessage[];
+  appendMessages: ContextMessage[];
 }
 
 export interface PlanContextSyncOptions {
-  instructions: NormalizedInstruction[];
-  messages: NormalizedMessage[];
+  instructions: ContextInstruction[];
+  messages: ContextMessage[];
   persisted?: PersistedContextSnapshot;
   hasWarmPage: boolean;
 }
 
-function contentPartEqual(left: NormalizedContentPart, right: NormalizedContentPart): boolean {
+function contentPartEqual(left: ContextContentPart, right: ContextContentPart): boolean {
   if (left.type !== right.type) return false;
   if (left.type === 'text' && right.type === 'text') return left.text === right.text;
   return (
@@ -35,15 +49,11 @@ function contentPartEqual(left: NormalizedContentPart, right: NormalizedContentP
   );
 }
 
-function toolCallEqual(left: NormalizedToolCall, right: NormalizedToolCall): boolean {
-  return (
-    left.id === right.id &&
-    left.name === right.name &&
-    left.arguments === right.arguments
-  );
+function toolCallEqual(left: ContextToolCall, right: ContextToolCall): boolean {
+  return left.id === right.id && left.name === right.name && left.arguments === right.arguments;
 }
 
-function messageEqual(left: NormalizedMessage, right: NormalizedMessage): boolean {
+function messageEqual(left: ContextMessage, right: ContextMessage): boolean {
   if (left.role !== right.role || left.toolCallId !== right.toolCallId) return false;
   if (left.content.length !== right.content.length) return false;
   if (!left.content.every((part, index) => contentPartEqual(part, right.content[index]!))) {
@@ -58,24 +68,17 @@ function messageEqual(left: NormalizedMessage, right: NormalizedMessage): boolea
   );
 }
 
-function instructionsEqual(
-  left: NormalizedInstruction[],
-  right: NormalizedInstruction[],
-): boolean {
+function instructionsEqual(left: ContextInstruction[], right: ContextInstruction[]): boolean {
   return (
     left.length === right.length &&
     left.every(
       (instruction, index) =>
-        instruction.role === right[index]!.role &&
-        instruction.content === right[index]!.content,
+        instruction.role === right[index]!.role && instruction.content === right[index]!.content,
     )
   );
 }
 
-function hasPersistedPrefix(
-  current: NormalizedMessage[],
-  persisted: NormalizedMessage[],
-): boolean {
+function hasPersistedPrefix(current: ContextMessage[], persisted: ContextMessage[]): boolean {
   if (persisted.length > current.length) return false;
   return persisted.every((message, index) => messageEqual(message, current[index]!));
 }
