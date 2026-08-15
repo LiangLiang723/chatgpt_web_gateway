@@ -128,6 +128,8 @@ type DriverCall =
 class FakeDriver implements ChatGptTextDriver {
   readonly calls: DriverCall[] = [];
   readonly results: ChatGptTextResult[] = [];
+  readonly openConversationResults: Array<'restored' | 'not_restorable' | Error> = [];
+  nextSendError?: Error;
   onOpenFresh?: () => void;
   onSend?: (request: ChatGptTextRequest, index: number) => void;
 
@@ -138,13 +140,20 @@ class FakeDriver implements ChatGptTextDriver {
 
   async openConversation(page: Page, url: string): Promise<'restored' | 'not_restorable'> {
     this.calls.push({ type: 'openConversation', page, url });
-    return 'restored';
+    const result = this.openConversationResults.shift();
+    if (result instanceof Error) throw result;
+    return result ?? 'restored';
   }
 
   async sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult> {
     const sendIndex = this.calls.filter((call) => call.type === 'sendText').length;
     this.calls.push({ type: 'sendText', page, request });
     this.onSend?.(request, sendIndex);
+    if (this.nextSendError) {
+      const error = this.nextSendError;
+      this.nextSendError = undefined;
+      throw error;
+    }
     const result = this.results.shift();
     if (!result) throw new Error('No fake Driver result configured');
     return result;
@@ -323,5 +332,281 @@ describe('Conversation Engine FRESH + APPEND', () => {
       { role: 'user', text: 'u2' },
       { role: 'assistant', text: 'a2' },
     ]);
+  });
+});
+
+describe('Conversation Engine RESTORE + REBUILD + crash convergence', () => {
+  it('RESTOREs a clean persisted Conversation when a fresh Registry has no affinity', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const queue = new RecordingQueue();
+    const firstRegistry = new FakePageRegistry();
+    driver.results.push(
+      { text: 'a1', conversationUrl: 'https://chatgpt.com/c/restore-one' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/restore-one' },
+    );
+    const first = createConversationEngine({
+      pageRegistry: firstRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 3000,
+      randomUuid: () => 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    });
+    await first(request({ messages: [user('u1')], conversationKey: 'restore-thread' }));
+
+    const secondRegistry = new FakePageRegistry();
+    const second = createConversationEngine({
+      pageRegistry: secondRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 3100,
+      randomUuid: () => 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    });
+    const before = driver.calls.length;
+    await second(request({ messages: [user('u2')], conversationKey: 'restore-thread' }));
+    const secondCalls = driver.calls.slice(before);
+
+    expect(secondCalls.map((call) => call.type)).toEqual(['openConversation', 'sendText']);
+    expect(secondCalls[0]).toMatchObject({
+      type: 'openConversation',
+      url: 'https://chatgpt.com/c/restore-one',
+    });
+    const send = secondCalls[1] as Extract<DriverCall, { type: 'sendText' }>;
+    expect(send.request.prompt).toContain('u2');
+    expect(send.request.prompt).not.toContain('u1');
+    expect(db.conversationStore.loadByKey('restore-thread')?.conversation.chatgptConversationUrl).toBe(
+      'https://chatgpt.com/c/restore-one',
+    );
+  });
+
+  it('falls back from not_restorable RESTORE to one Fresh REBUILD with confirmed history', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const queue = new RecordingQueue();
+    const firstRegistry = new FakePageRegistry();
+    driver.results.push(
+      { text: 'a1-restore-token', conversationUrl: 'https://chatgpt.com/c/old-url' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/new-url' },
+    );
+    const first = createConversationEngine({
+      pageRegistry: firstRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 4000,
+      randomUuid: () => 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    });
+    await first(
+      request({ messages: [user('u1-restore-token')], conversationKey: 'rebuild-thread' }),
+    );
+    const originalId = db.conversationStore.loadByKey('rebuild-thread')!.conversation.id;
+
+    const secondRegistry = new FakePageRegistry();
+    driver.openConversationResults.push('not_restorable');
+    const second = createConversationEngine({
+      pageRegistry: secondRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 4100,
+      randomUuid: () => 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    });
+    const before = driver.calls.length;
+    await second(request({ messages: [user('u2-current')], conversationKey: 'rebuild-thread' }));
+    const calls = driver.calls.slice(before);
+
+    expect(calls.map((call) => call.type)).toEqual([
+      'openConversation',
+      'openFresh',
+      'sendText',
+    ]);
+    const send = calls[2] as Extract<DriverCall, { type: 'sendText' }>;
+    expect(send.request.prompt).toContain('u1-restore-token');
+    expect(send.request.prompt).toContain('a1-restore-token');
+    expect(send.request.prompt).toContain('u2-current');
+    const saved = db.conversationStore.loadByKey('rebuild-thread')!;
+    expect(saved.conversation.id).toBe(originalId);
+    expect(saved.conversation.chatgptConversationUrl).toBe('https://chatgpt.com/c/new-url');
+  });
+
+  it('REBUILDs full history divergence using client history as authoritative', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'a1-original', conversationUrl: 'https://chatgpt.com/c/diverge-old' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/diverge-new' },
+    );
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 5000,
+      randomUuid: () => '12121212-1212-4212-8212-121212121212',
+    });
+    await execute(request({ messages: [user('u1-original')], conversationKey: 'diverge' }));
+    const before = driver.calls.length;
+    await execute(
+      request({
+        messages: [user('u1-edited'), assistant('a1-original'), user('u2')],
+        conversationKey: 'diverge',
+      }),
+    );
+    const calls = driver.calls.slice(before);
+
+    expect(calls.map((call) => call.type)).toEqual(['openFresh', 'sendText']);
+    const send = calls[1] as Extract<DriverCall, { type: 'sendText' }>;
+    expect(send.request.prompt).toContain('u1-edited');
+    expect(send.request.prompt).not.toContain('u1-original');
+    expect(db.conversationStore.loadByKey('diverge')?.conversation.chatgptConversationUrl).toBe(
+      'https://chatgpt.com/c/diverge-new',
+    );
+  });
+
+  it('REBUILDs incremental instructions change with confirmed stored history and new instructions', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'a1-instruction-token', conversationUrl: 'https://chatgpt.com/c/instruction-old' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/instruction-new' },
+    );
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 6000,
+      randomUuid: () => '34343434-3434-4434-8434-343434343434',
+    });
+    await execute(
+      request({
+        messages: [user('u1-instruction-token')],
+        conversationKey: 'instructions',
+        system: 'system-v1',
+      }),
+    );
+    const before = driver.calls.length;
+    await execute(
+      request({
+        messages: [user('u2-current')],
+        conversationKey: 'instructions',
+        system: 'system-v2',
+      }),
+    );
+    const calls = driver.calls.slice(before);
+
+    expect(calls.map((call) => call.type)).toEqual(['openFresh', 'sendText']);
+    const send = calls[1] as Extract<DriverCall, { type: 'sendText' }>;
+    expect(send.request.prompt).toContain('system-v2');
+    expect(send.request.prompt).toContain('u1-instruction-token');
+    expect(send.request.prompt).toContain('a1-instruction-token');
+    expect(send.request.prompt).toContain('u2-current');
+  });
+
+  it.each([
+    { status: 'in_flight' as const, count: 2, startedAt: 123, reason: 'uncertain' },
+    { status: 'clean' as const, count: 1, startedAt: undefined, reason: 'mismatch' },
+  ])('REBUILDs checkpoint $reason using only confirmed stored prefix', async (checkpoint) => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'a1-checkpoint-token', conversationUrl: 'https://chatgpt.com/c/checkpoint-old' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/checkpoint-new' },
+    );
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 7000,
+      randomUuid: () => '56565656-5656-4656-8656-565656565656',
+    });
+    await execute(
+      request({ messages: [user('u1-checkpoint-token')], conversationKey: 'checkpoint' }),
+    );
+    const saved = db.conversationStore.loadByKey('checkpoint')!;
+    db.conversationStore.save({
+      ...saved,
+      conversation: {
+        ...saved.conversation,
+        sync:
+          checkpoint.status === 'in_flight'
+            ? {
+                status: 'in_flight',
+                syncedMessageCount: checkpoint.count,
+                startedAt: checkpoint.startedAt!,
+              }
+            : { status: 'clean', syncedMessageCount: checkpoint.count },
+      },
+    });
+
+    const before = driver.calls.length;
+    await execute(request({ messages: [user('u2-current')], conversationKey: 'checkpoint' }));
+    const calls = driver.calls.slice(before);
+    expect(calls.map((call) => call.type)).toEqual(['openFresh', 'sendText']);
+    const send = calls[1] as Extract<DriverCall, { type: 'sendText' }>;
+    expect(send.request.prompt).toContain('u1-checkpoint-token');
+    if (checkpoint.count === 2) expect(send.request.prompt).toContain('a1-checkpoint-token');
+    else expect(send.request.prompt).not.toContain('a1-checkpoint-token');
+    expect(send.request.prompt).toContain('u2-current');
+  });
+
+  it('keeps the persisted checkpoint in_flight after a post-checkpoint send failure and reopen', async () => {
+    const paths = createTempPersistencePaths();
+    resources.push(paths);
+    const firstDb = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    contexts.push(firstDb);
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push({ text: 'a1', conversationUrl: 'https://chatgpt.com/c/crash' });
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: firstDb.conversationStore,
+      now: () => 8000,
+      randomUuid: () => '78787878-7878-4787-8787-787878787878',
+    });
+    await execute(request({ messages: [user('u1')], conversationKey: 'crash' }));
+
+    driver.nextSendError = new Error('simulated post-checkpoint failure');
+    await expect(
+      execute(request({ messages: [user('u2')], conversationKey: 'crash' })),
+    ).rejects.toThrow('simulated post-checkpoint failure');
+    const failed = firstDb.conversationStore.loadByKey('crash')!;
+    expect(failed.conversation.sync).toEqual({
+      status: 'in_flight',
+      syncedMessageCount: 2,
+      startedAt: 8000,
+    });
+    expect(textMessages(failed)).toEqual([
+      { role: 'user', text: 'u1' },
+      { role: 'assistant', text: 'a1' },
+    ]);
+    firstDb.close();
+    contexts.splice(contexts.indexOf(firstDb), 1);
+
+    const reopened = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    contexts.push(reopened);
+    expect(reopened.conversationStore.loadByKey('crash')?.conversation.sync).toEqual({
+      status: 'in_flight',
+      syncedMessageCount: 2,
+      startedAt: 8000,
+    });
   });
 });

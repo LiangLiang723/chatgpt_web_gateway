@@ -923,7 +923,7 @@ git add src/conversations/conversation-engine.ts tests/integration/conversation-
 - Consumes Task 2 Planner reasons and Task 5 `openConversation()` result.
 - Produces no new public API; completes the four-mode engine.
 
-- [ ] **Step 1: Add RESTORE test**
+- [x] **Step 1: Add RESTORE test**
 
 Persist a clean Conversation with URL but start a fresh Page Registry with no affinity. Assert:
 
@@ -934,15 +934,15 @@ Append Envelope sent
 final URL unchanged
 ```
 
-- [ ] **Step 2: Add `not_restorable → REBUILD` test**
+- [x] **Step 2: Add `not_restorable → REBUILD` test**
 
 Fake `openConversation()` returns `'not_restorable'`. Assert same request then calls `openFresh()`, sends Context Envelope containing confirmed history + current user, and saves a new URL while key/Conversation UUID remain unchanged.
 
-- [ ] **Step 3: Add full divergence and instructions-change REBUILD tests**
+- [x] **Step 3: Add full divergence and instructions-change REBUILD tests**
 
 Full divergence must use request history as authoritative. Incremental instructions change must use stored confirmed history + current user with the new instructions.
 
-- [ ] **Step 4: Add checkpoint uncertainty tests**
+- [x] **Step 4: Add checkpoint uncertainty tests**
 
 Persist:
 
@@ -954,11 +954,11 @@ with two confirmed Messages. Send incremental `u2`; assert `openFresh()` and Con
 
 Also persist clean `syncedMessageCount < messages.length`; assert the same REBUILD safety behavior.
 
-- [ ] **Step 5: Add post-checkpoint failure test**
+- [x] **Step 5: Add post-checkpoint failure test**
 
 Configure fake Driver `sendText()` to throw after Engine calls `markSyncInFlight`. Assert response rejects and reopened SQLite state is still `in_flight`; no Assistant row was fabricated.
 
-- [ ] **Step 6: Run red then implement the missing branches**
+- [x] **Step 6: Run red then implement the missing branches**
 
 Run:
 
@@ -968,16 +968,18 @@ corepack pnpm exec vitest run tests/integration/conversation-engine.test.ts
 
 Expected initially: new RESTORE/REBUILD cases FAIL. Implement explicit branches; do not use a catch-all rebuild around Driver errors.
 
-- [ ] **Step 7: Run green**
+- [x] **Step 7: Run green**
 
 Run the same test file. Expected: all four modes and crash convergence PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/conversations/conversation-engine.ts tests/integration/conversation-engine.test.ts
  git commit -m "✨ 接入 RESTORE 与 REBUILD 恢复"
 ```
+
+2026-08-15 execution evidence: after adding all approved recovery/crash cases, 10 of 11 tests passed immediately; the sole red case was the missing `not_restorable → Fresh REBUILD` branch. Implementing only that explicit status branch (without catching auth/selector/browser errors) plus authoritative context-history selection produced 1 file / 11 passing tests and `corepack pnpm typecheck` passed. The post-checkpoint failure test closes and reopens the real SQLite database and proves the row remains `in_flight` with no fabricated Assistant.
 
 ---
 

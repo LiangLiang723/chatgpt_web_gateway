@@ -99,6 +99,20 @@ function finalConversationRecord(options: {
   };
 }
 
+function contextHistory(options: {
+  canonicalRequest: CanonicalConversationRequest;
+  plan: ContextSyncPlan;
+  stored?: CanonicalStoredConversation;
+}): CanonicalTextMessage[] {
+  if (options.plan.mode === 'FRESH' || options.plan.mode === 'REBUILD') {
+    return options.plan.history;
+  }
+  if (options.canonicalRequest.mode === 'full') {
+    return options.canonicalRequest.messages.slice(0, -1);
+  }
+  return options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
+}
+
 function authoritativeMessages(options: {
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
@@ -132,13 +146,10 @@ async function preparePage(options: {
     });
   }
   const restored = await options.driver.openConversation(options.session.page, conversationUrl);
-  if (restored !== 'restored') {
-    throw new ChatGptDriverError({
-      code: 'conversation_restore_failed',
-      message: 'ChatGPT Conversation is not restorable',
-    });
-  }
-  return 'append';
+  if (restored === 'restored') return 'append';
+
+  await options.driver.openFresh(options.session.page);
+  return 'context';
 }
 
 async function executeConversation(options: {
@@ -192,8 +203,11 @@ async function executeConversation(options: {
         ? buildAppendPrompt(plan.currentUser)
         : buildContextPrompt({
             instructions: options.canonicalRequest.instructions,
-            history:
-              plan.mode === 'FRESH' || plan.mode === 'REBUILD' ? plan.history : [],
+            history: contextHistory({
+              canonicalRequest: options.canonicalRequest,
+              plan,
+              ...(stored === undefined ? {} : { stored }),
+            }),
             currentUser: plan.currentUser,
           });
     const result: ChatGptTextResult = await options.engine.driver.sendText(session.page, { prompt });
