@@ -26,6 +26,7 @@ const env = {
   NOVNC_PASSWORD: 'smoke-novnc-password',
   MAINTENANCE_URL: 'about:blank',
   CHATGPT_PROXY_SERVER: 'http://127.0.0.1:65534',
+  PAGE_IDLE_TIMEOUT_MINUTES: '12',
   CHATGPT_PROFILE_DIR: '/data/e2e-browser-profile',
 };
 
@@ -360,6 +361,9 @@ function assertProfileUnlocked(profilePath) {
 
 async function main() {
   const base = serviceConfig(false);
+  if (String(base.environment?.PAGE_IDLE_TIMEOUT_MINUTES) !== '12') {
+    throw new Error('Base Compose did not pass PAGE_IDLE_TIMEOUT_MINUTES=12');
+  }
   if (publishedTargets(base).includes(novncPort) || publishedTargets(base).includes(6080)) {
     throw new Error('Base Compose unexpectedly publishes a noVNC port');
   }

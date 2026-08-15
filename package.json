@@ -21,6 +21,7 @@
     "docker:smoke": "node scripts/docker-smoke.mjs",
     "inspect:chatgpt": "xvfb-run -a tsx scripts/inspect-chatgpt.ts",
     "test:e2e:chatgpt": "xvfb-run -a tsx scripts/test-chatgpt-e2e.ts",
+    "test:e2e:chatgpt:phase4": "xvfb-run -a tsx scripts/test-chatgpt-phase4-e2e.ts",
     "check:docs": "node scripts/check-docs.mjs",
     "check:project-memory": "node scripts/check-project-memory.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",

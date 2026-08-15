@@ -607,11 +607,11 @@ git commit -m "✨ 将 Phase 4 Conversation Engine 接入运行时"
 - Produces an explicit Phase 4 E2E command that is not part of deterministic `verify`.
 - Uses existing `CHATGPT_E2E`, isolated profile, proxy and Gateway API key gates.
 
-- [ ] **Step 1: Inspect the existing Phase 3 E2E gate and Docker smoke script**
+- [x] **Step 1: Inspect the existing Phase 3 E2E gate and Docker smoke script**
 
 Reuse its profile safety checks, proxy handling and diagnostic isolation. Do not invent another browser ownership model.
 
-- [ ] **Step 2: Write the gated Phase 4 E2E test**
+- [x] **Step 2: Write the gated Phase 4 E2E test**
 
 The test must:
 
@@ -626,7 +626,7 @@ The test must:
 
 The test must not claim DOM proof of APPEND solely from response text; deterministic fake-Driver tests provide the exact prompt non-replay proof, while this real E2E proves the resulting web Conversation continuity.
 
-- [ ] **Step 3: Add an explicit package script**
+- [x] **Step 3: Add an explicit package script**
 
 Add a script such as:
 
@@ -636,19 +636,19 @@ Add a script such as:
 
 Keep it outside `verify`.
 
-- [ ] **Step 4: Extend Docker smoke for active idle-timeout config**
+- [x] **Step 4: Extend Docker smoke for active idle-timeout config**
 
 The smoke test must pass a non-default `PAGE_IDLE_TIMEOUT_MINUTES` value and verify the Gateway starts successfully with it. Do not add external ChatGPT network requirements to Docker smoke.
 
-- [ ] **Step 5: Run deterministic E2E gate/unit checks and Docker smoke**
+- [x] **Step 5: Run deterministic E2E gate/unit checks and Docker smoke**
 
 Run the existing E2E gate unit test, repository verify, a fresh Docker build if smoke requires it, then the project’s documented Docker smoke command.
 
-- [ ] **Step 6: Run explicit real Phase 4 ChatGPT E2E**
+- [!] **Step 6: Run explicit real Phase 4 ChatGPT E2E**
 
 Use the already authenticated isolated E2E Profile and the configured LAN proxy when required by the environment. If the real environment exposes an external blocker, record the exact boundary and do not mark Phase 4 complete.
 
-- [ ] **Step 7: Update plan with actual evidence and commit**
+- [x] **Step 7: Update plan with actual evidence and commit**
 
 Record deterministic test counts, Docker image/smoke evidence and real E2E result in this plan before committing.
 
@@ -658,6 +658,8 @@ git commit -m "🧪 增加 Phase 4 多轮恢复真实验收"
 ```
 
 Only add paths that actually changed.
+
+2026-08-15 execution evidence: focused E2E-gate/Conversation checks passed, then `corepack pnpm verify` passed with 32 test files / 176 tests. A fresh `linux/amd64` Docker build produced image `sha256:7fd07b887b7b951e3824a6bc565acfa2264b276132fe2bea16b26a5a5ee2106a`, and `corepack pnpm docker:smoke` passed with non-default `PAGE_IDLE_TIMEOUT_MINUTES=12`. The first real Phase 4 E2E attempt was blocked by a stale `SingletonLock` from removed container `d4153d86b354`; read-only checks proved that container no longer exists, no Chromium process uses the Profile, and the Singleton socket target is absent. The E2E harness now clones the authenticated source Profile into a temporary copy while excluding `SingletonLock` / `SingletonCookie` / `SingletonSocket`, with a red→green unit test proving the source Profile remains untouched. The second real E2E attempt reached ChatGPT but turn 1 returned stable `auth_required` (HTTP 503), so the previously authenticated isolated Profile is no longer authenticated. Gateway automation intentionally does not enter credentials, MFA, or CAPTCHA. Phase 4 therefore remains active until the isolated E2E Profile is manually re-authenticated and this real multi-turn APPEND + restart RESTORE test passes.
 
 ---
 
