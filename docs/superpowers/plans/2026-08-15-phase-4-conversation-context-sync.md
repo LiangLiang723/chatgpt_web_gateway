@@ -823,7 +823,7 @@ export function createConversationEngine(
 ): NormalizedExecutionHandler;
 ```
 
-- [ ] **Step 1: Build a fake Driver/Page integration harness**
+- [x] **Step 1: Build a fake Driver/Page integration harness**
 
 The fake Driver records calls:
 
@@ -837,7 +837,7 @@ and returns deterministic Assistant text and conversation URLs.
 
 Use a real temporary SQLite DB/PersistenceContext, not an in-memory fake Store.
 
-- [ ] **Step 2: Write first-key FRESH integration test**
+- [x] **Step 2: Write first-key FRESH integration test**
 
 POST-level or Engine-level input with `conversationKey='thread-1'`, one user Message. Assert:
 
@@ -852,7 +852,7 @@ sync clean/count=2
 keyed Page session complete() retains affinity
 ```
 
-- [ ] **Step 3: Write keyed APPEND tests for both client styles**
+- [x] **Step 3: Write keyed APPEND tests for both client styles**
 
 Case A full history:
 
@@ -868,7 +868,7 @@ request = [u2]
 
 For both, assert the second prompt is Append Envelope and does not include a unique token from `u1` or `a1`.
 
-- [ ] **Step 4: Run red**
+- [x] **Step 4: Run red**
 
 ```bash
 corepack pnpm exec vitest run tests/integration/conversation-engine.test.ts
@@ -876,7 +876,7 @@ corepack pnpm exec vitest run tests/integration/conversation-engine.test.ts
 
 Expected: FAIL because Conversation Engine does not exist.
 
-- [ ] **Step 5: Implement keyed queue/load/plan/page preparation**
+- [x] **Step 5: Implement keyed queue/load/plan/page preparation**
 
 Inside `queue.run(key, async () => ...)`, load `conversationStore.loadByKey(key)` **after** entering the queue. Build canonical stored state and call Planner.
 
@@ -884,17 +884,17 @@ For a new Conversation, create/save a minimal in-flight aggregate only after `op
 
 For an existing APPEND, call `openConversation(savedUrl)` on the affinity Page, then `markSyncInFlight()` immediately before `sendText()`.
 
-- [ ] **Step 6: Implement final success commit**
+- [x] **Step 6: Implement final success commit**
 
 Use `buildFinalConversationAggregate()` and one `conversationStore.save(finalAggregate)`, then `pageSession.complete()`.
 
 On any error after acquiring a session, call `pageSession.fail()` in `catch/finally` without modifying an already in-flight checkpoint back to clean.
 
-- [ ] **Step 7: Implement unkeyed FRESH persistence**
+- [x] **Step 7: Implement unkeyed FRESH persistence**
 
 Do not enter `ConversationQueue`. Create a new `conversation_key = undefined` aggregate, run FRESH, save complete data, and ensure the transient Page session releases instead of retaining affinity.
 
-- [ ] **Step 8: Run FRESH/APPEND tests green**
+- [x] **Step 8: Run FRESH/APPEND tests green**
 
 ```bash
 corepack pnpm exec vitest run tests/integration/conversation-engine.test.ts
@@ -902,12 +902,14 @@ corepack pnpm exec vitest run tests/integration/conversation-engine.test.ts
 
 Expected: FRESH, full-history APPEND, incremental APPEND, and unkeyed persistence cases PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/conversations/conversation-engine.ts tests/integration/conversation-engine.test.ts
  git commit -m "✨ 接入 Conversation FRESH 与 APPEND"
 ```
+
+2026-08-15 execution evidence: the integration file first failed because the new Engine module did not exist. The first implementation produced one test failure because the test's full-history fixture did not match the actually persisted tokenized history; after correcting that test input, the Engine suite passed 1 file / 4 tests and `corepack pnpm typecheck` passed. The tests observe real temporary SQLite state at `sendText()`: new FRESH is already `in_flight/count=0`, existing APPEND is `in_flight` with the old confirmed count, success atomically becomes clean, and unkeyed requests persist a NULL-key aggregate without using the keyed queue.
 
 ---
 

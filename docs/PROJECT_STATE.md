@@ -13,16 +13,16 @@ STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-7
+NEXT_TASK=execute-phase-4-plan-task-8
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–6 已完成 checkpoint、pure Planner、Request Adapter/FIFO、Page Registry、Driver split 与 Prompt/aggregate reconciliation，进入核心 Conversation Engine。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；Task 1–7 已完成 checkpoint、Planner、FIFO/Page Registry、Driver split、Prompt/aggregate 与 Conversation Engine FRESH/APPEND/unkeyed persistence，继续补齐 RESTORE/REBUILD/crash convergence。
 - **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 7 — 新建 Conversation Engine，接入真实 SQLite、Page Registry、Queue、Planner，先完成 FRESH、full/incremental APPEND 与无 key 持久化。
+- **下一个可执行任务：** Plan Task 8 — 增加 RESTORE、`not_restorable → REBUILD`、history/instructions REBUILD 与 post-checkpoint crash convergence。
 - **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
@@ -77,7 +77,8 @@ UPDATED_AT=2026-08-15
 - ✅ Phase 4 PageLease 已使用互斥 `release | close` 终态；Conversation Page Registry 已实现 keyed affinity、transient lease、idle deadline close、LRU capacity eviction、busy 保护和 deterministic tie-break。
 - ✅ ChatGPT Driver 已拆分 `openFresh` / `openConversation` / `sendText`；persisted URL 只接受安全 `https://chatgpt.com` non-root URL，identity 比较忽略 query/hash，`not_restorable` 不吞 auth/selector/browser error。
 - ✅ Context/Append Envelope 使用版本化 JSON-only payload；aggregate builder 按 canonical longest common prefix 复用 Message identity，并在成功后收敛为 clean checkpoint。
-- 🟡 Conversation + Context Sync 仍需按批准 Task 7+ 建立新 Conversation Engine；无 key 持久化及完整 crash-convergence 等仍待补齐。
+- ✅ 新 Conversation Engine 已接入真实 `ConversationStore`、same-key Queue、Page Registry 与 pure Planner；FRESH、full/incremental APPEND、NULL-key 持久化及 checkpoint 写入顺序已有真实临时 SQLite 集成测试。
+- 🟡 RESTORE/REBUILD 与 crash-convergence 仍需按批准 Task 8 补齐；runtime 仍将在 Task 9 切换到新 Engine。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -162,7 +163,7 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 按批准 Plan Task 7 实现 Conversation Engine FRESH + APPEND + unkeyed persistence，并继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
+1. 按批准 Plan Task 8 完成 RESTORE/REBUILD/crash-convergence，再继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
 2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
 3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 
