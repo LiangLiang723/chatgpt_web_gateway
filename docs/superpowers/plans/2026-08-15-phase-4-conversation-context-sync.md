@@ -270,7 +270,7 @@ git commit -m "✨ 新增四态 Context Sync 纯规划器"
 - Produces lease `{ page, reused, release({ discard? }) }`.
 - Page manager retains underlying Page Pool leases only for keyed Conversations.
 
-- [ ] **Step 1: Write failing queue tests**
+- [x] **Step 1: Write failing queue tests**
 
 Use deferred promises to prove:
 
@@ -279,21 +279,21 @@ Use deferred promises to prove:
 3. a rejected `alpha` task does not block the next `alpha` task;
 4. queue bookkeeping returns to zero after the last waiter using a test-visible `pendingKeyCount` getter.
 
-- [ ] **Step 2: Run queue tests and confirm RED**
+- [x] **Step 2: Run queue tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/conversation-queue.test.ts
 ```
 
-- [ ] **Step 3: Implement keyed serialization**
+- [x] **Step 3: Implement keyed serialization**
 
 Use a per-key Promise tail. The current task waits for the prior tail after converting prior rejection to settlement, while a separate completion Promise becomes the new tail. Delete the map entry only if it still points at the current tail.
 
-- [ ] **Step 4: Run queue tests and confirm GREEN**
+- [x] **Step 4: Run queue tests and confirm GREEN**
 
 Run the same queue test command.
 
-- [ ] **Step 5: Write failing Page-affinity tests**
+- [x] **Step 5: Write failing Page-affinity tests**
 
 Use a fake `PagePool`/`PageLease` and fake clock to prove:
 
@@ -307,13 +307,13 @@ Use a fake `PagePool`/`PageLease` and fake clock to prove:
 - `close()` clears the sweep timer and discards every retained affinity;
 - release is idempotent.
 
-- [ ] **Step 6: Run Page-affinity tests and confirm RED**
+- [x] **Step 6: Run Page-affinity tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/conversation-pages.test.ts
 ```
 
-- [ ] **Step 7: Implement the Conversation Page manager**
+- [x] **Step 7: Implement the Conversation Page manager**
 
 The manager stores per key:
 
@@ -329,14 +329,14 @@ Start one `setInterval` sweep with an interval no larger than `min(idleTimeoutMs
 
 On Page Pool capacity error, discard exactly one least-recent idle affinity and retry acquire once. Do not implement a global request wait queue.
 
-- [ ] **Step 8: Run Task 3 tests and typecheck**
+- [x] **Step 8: Run Task 3 tests and typecheck**
 
 ```bash
 corepack pnpm vitest run tests/unit/conversation-queue.test.ts tests/unit/conversation-pages.test.ts tests/unit/page-pool.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 9: Update plan and commit**
+- [x] **Step 9: Update plan and commit**
 
 ```bash
 git add src/conversations/conversation-queue.ts src/conversations/conversation-pages.ts tests/unit/conversation-queue.test.ts tests/unit/conversation-pages.test.ts docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
