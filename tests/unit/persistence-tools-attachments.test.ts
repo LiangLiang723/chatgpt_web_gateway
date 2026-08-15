@@ -57,6 +57,7 @@ function conversation(id = '11111111-1111-4111-8111-111111111111'): Conversation
     instructions: [],
     tools: [],
     toolChoice: { mode: 'auto' },
+    sync: { status: 'clean', syncedMessageCount: 0 },
     createdAt: 1000,
     updatedAt: 1000,
     lastUsedAt: 1000,

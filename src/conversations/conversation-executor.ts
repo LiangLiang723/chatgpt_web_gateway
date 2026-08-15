@@ -140,6 +140,7 @@ function buildSuccessfulAggregate(options: {
       instructions: options.request.instructions,
       tools: [],
       toolChoice: { mode: 'auto' },
+      sync: { status: 'clean', syncedMessageCount: options.request.messages.length + 1 },
       createdAt: options.existing?.conversation.createdAt ?? options.completedAt,
       updatedAt: options.completedAt,
       lastUsedAt: options.completedAt,

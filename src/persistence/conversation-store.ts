@@ -19,6 +19,9 @@ export interface ConversationStoreRepositories {
 
 function validateAggregate(aggregate: ConversationAggregate): void {
   const conversationId = aggregate.conversation.id;
+  if (aggregate.conversation.sync.syncedMessageCount > aggregate.messages.length) {
+    throw new DataIntegrityError('Conversation sync message count exceeds aggregate Messages');
+  }
   const messageIds = new Set<string>();
   const sequences = new Set<number>();
 
@@ -98,6 +101,20 @@ export class ConversationStore {
         this.repositories.attachments.insert(attachment);
       for (const image of aggregate.generatedImages)
         this.repositories.generatedImages.insert(image);
+    });
+  }
+
+  markSyncInFlight(conversationId: string, startedAt: number): void {
+    const aggregate = this.loadById(conversationId);
+    if (!aggregate) {
+      throw new DataIntegrityError(`Conversation ${conversationId} does not exist`);
+    }
+    transaction(this.database, () => {
+      this.repositories.conversations.updateSyncCheckpoint(conversationId, {
+        status: 'in_flight',
+        syncedMessageCount: aggregate.conversation.sync.syncedMessageCount,
+        startedAt,
+      });
     });
   }
 

@@ -59,6 +59,7 @@ function insertConversationAndMessage(context: TestContext): void {
     instructions: [],
     tools: [],
     toolChoice: { mode: 'auto' },
+    sync: { status: 'clean', syncedMessageCount: 0 },
     createdAt: 1000,
     updatedAt: 1000,
     lastUsedAt: 1000,

@@ -16,6 +16,12 @@ export function assertUuidV4(value: string, context: string): void {
   }
 }
 
+export interface ConversationSyncCheckpoint {
+  status: 'clean' | 'in_flight';
+  syncedMessageCount: number;
+  startedAt?: number;
+}
+
 export interface ConversationRecord {
   id: string;
   conversationKey?: string;
@@ -24,6 +30,7 @@ export interface ConversationRecord {
   tools: NormalizedTool[];
   toolChoice: NormalizedToolChoice;
   toolFingerprint?: string;
+  sync: ConversationSyncCheckpoint;
   createdAt: number;
   updatedAt: number;
   lastUsedAt: number;

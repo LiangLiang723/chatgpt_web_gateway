@@ -61,6 +61,7 @@ function aggregate(): ConversationAggregate {
       ],
       toolChoice: { mode: 'required' },
       toolFingerprint: 'weather-v1',
+      sync: { status: 'clean', syncedMessageCount: 4 },
       createdAt: 1000,
       updatedAt: 8000,
       lastUsedAt: 8000,
@@ -178,6 +179,57 @@ describe('Conversation persistence recovery', () => {
     expect(second.conversationStore.loadByKey('agent-thread-1')).toEqual(expectedAggregate);
     expect(second.files.getById(fileId)).toEqual(expectedFile);
     second.close();
+  });
+
+  it('marks sync in flight without replacing child rows and persists it across reopen', () => {
+    const paths = temp();
+    const expectedAggregate = aggregate();
+    const first = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    first.files.insert(fileRecord());
+    first.conversationStore.save(expectedAggregate);
+    const before = first.conversationStore.loadById(conversationId)!;
+
+    first.conversationStore.markSyncInFlight(conversationId, 9000);
+    const marked = first.conversationStore.loadById(conversationId)!;
+    expect(marked.conversation.sync).toEqual({
+      status: 'in_flight',
+      syncedMessageCount: 4,
+      startedAt: 9000,
+    });
+    expect(marked.messages).toEqual(before.messages);
+    expect(marked.toolCalls).toEqual(before.toolCalls);
+    expect(marked.attachments).toEqual(before.attachments);
+    expect(marked.generatedImages).toEqual(before.generatedImages);
+    first.close();
+
+    const second = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    expect(second.conversationStore.loadById(conversationId)?.conversation.sync).toEqual({
+      status: 'in_flight',
+      syncedMessageCount: 4,
+      startedAt: 9000,
+    });
+    second.close();
+  });
+
+  it('rejects aggregate sync counts beyond the persisted Message length', () => {
+    const paths = temp();
+    const context = createPersistenceContext({
+      databasePath: paths.databasePath,
+      migrationsDir: paths.migrationsDir,
+    });
+    context.files.insert(fileRecord());
+    const invalid = aggregate();
+    invalid.conversation.sync = { status: 'clean', syncedMessageCount: 5 };
+
+    expect(() => context.conversationStore.save(invalid)).toThrowError(DataIntegrityError);
+    expect(context.conversationStore.loadById(conversationId)).toBeUndefined();
+    context.close();
   });
 
   it('keeps the previous snapshot unchanged when aggregate validation fails', () => {

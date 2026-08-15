@@ -13,16 +13,16 @@ STATUS=implementing-approved-phase-4-plan
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
-NEXT_TASK=execute-phase-4-plan-task-1
+NEXT_TASK=execute-phase-4-plan-task-2
 UPDATED_AT=2026-08-15
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；已存在一批 Queue/Page affinity/Driver/Executor 实现，但刚与远端已批准的完整 13-Task 计划重新对齐，仍需补齐 sync checkpoint、single-user incremental、无 key 持久化等批准要求。
+- **当前阶段：** Phase 4 — Conversation + Context Sync 实施中；已与远端批准的 13-Task 计划重新对齐，Task 1 sync checkpoint 已完成，继续补齐 pure canonical planner、single-user incremental、无 key 持久化等批准要求。
 - **当前状态：** `implementing-approved-phase-4-plan`
 - **活动计划：** [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md)。
-- **下一个可执行任务：** Plan Task 1 — 增加 `002_add_conversation_sync_checkpoint.sql` 与 `clean | in_flight` 持久化 checkpoint，再按批准计划逐 Task 验收现有/新增实现。
+- **下一个可执行任务：** Plan Task 2 — 建立 canonicalization/fingerprint 与完整 `FRESH | APPEND | RESTORE | REBUILD` 纯 Planner，覆盖 full/incremental 和 checkpoint uncertainty。
 - **验收事实：** 当前分支已有的较窄 Phase 4 实现曾通过 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke；这不能替代新恢复出的批准计划验收。此前 real E2E 还暴露隔离 Profile `auth_required`，最终 Phase 4 real E2E 仍需在完整计划实现后重新人工认证并重跑。
 
 ## Implemented Now（当前已实现）
@@ -71,7 +71,8 @@ UPDATED_AT=2026-08-15
 - ✅ `inspect:chatgpt` 与 `test:e2e:chatgpt` 显式真实 E2E harness、安全隔离 Profile 门槛和可选诊断产物边界；支持显式代理，authenticated inspect / Driver / Gateway HTTP real E2E 均已通过。
 - ✅ 产品级 Playwright Chromium 生命周期 / Browser Manager 已接入正常 Gateway runtime；Docker smoke 已验证普通 headless 与 maintenance headed Chromium 的 Profile 单 owner、PUID/PGID 和 restart 边界。
 - ✅ ChatGPT Driver（网页驱动）Fresh 非流式纯文本路径已完成，并在 Phase 3 通过真实 ChatGPT DOM/登录态/问答 E2E 验收。
-- 🟡 Conversation + Context Sync 已有部分运行时实现（Queue、Page affinity、Driver target、较窄的四态 Planner、SQLite aggregate 保存），但尚未满足已批准完整 Phase 4 规格：sync checkpoint、single-user incremental、无 key 持久化及 crash-convergence 等仍待补齐。
+- ✅ Phase 4 SQLite sync checkpoint 已实现：`002_add_conversation_sync_checkpoint`、`clean | in_flight`、`syncedMessageCount`、metadata-only `markSyncInFlight` 与越界 aggregate 校验。
+- 🟡 Conversation + Context Sync 已有部分运行时实现（Queue、Page affinity、Driver target、较窄的四态 Planner、SQLite aggregate 保存），但尚未满足已批准完整 Phase 4 规格：single-user incremental、无 key 持久化及完整 crash-convergence 等仍待补齐。
 - ❌ 真 Streaming（流式输出）。
 - ❌ 文件 / 图片实际解析、落盘和上传；Phase 1 仅标准化输入描述。
 - ❌ Tool Calling（工具调用）Prompt / Parser / 执行闭环；Phase 1 仅标准化 Tool Schema。
@@ -156,7 +157,7 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 按批准 Plan Task 1 实现 SQLite sync checkpoint，并继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
+1. 按批准 Plan Task 2 实现 canonicalization/fingerprint 与完整 pure Context Planner，再继续逐 Task 补齐/复验 Phase 4 全部 13 个 Task。
 2. 完成 full/incremental、RESTORE/REBUILD、crash-convergence、无 key 持久化、Docker migration smoke 的确定性验收。
 3. 最后重新人工认证隔离 E2E Profile并运行真实 Phase 4 E2E；通过后才关闭 Phase 4 并进入 Phase 5 Streaming 设计。
 

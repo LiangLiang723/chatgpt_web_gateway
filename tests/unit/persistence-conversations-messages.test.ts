@@ -57,6 +57,7 @@ function conversation(overrides: Partial<ConversationRecord> = {}): Conversation
     ],
     toolChoice: { mode: 'auto' },
     toolFingerprint: 'tools-v1',
+    sync: { status: 'clean', syncedMessageCount: 0 },
     createdAt: 1000,
     updatedAt: 2000,
     lastUsedAt: 3000,
@@ -127,12 +128,44 @@ describe('ConversationRepository', () => {
       tools: [],
       toolChoice: { mode: 'none' },
       toolFingerprint: undefined,
+      sync: { status: 'clean', syncedMessageCount: 0 },
       updatedAt: 5000,
       lastUsedAt: 6000,
     });
     conversations.update(updated);
 
     expect(conversations.getById(original.id)).toEqual(updated);
+  });
+
+  it('updates only sync checkpoint metadata and validates checkpoint shape', () => {
+    const { conversations } = setup();
+    const record = conversation({ sync: { status: 'clean', syncedMessageCount: 3 } });
+    conversations.insert(record);
+
+    conversations.updateSyncCheckpoint(record.id, {
+      status: 'in_flight',
+      syncedMessageCount: 3,
+      startedAt: 9000,
+    });
+    expect(conversations.getById(record.id)?.sync).toEqual({
+      status: 'in_flight',
+      syncedMessageCount: 3,
+      startedAt: 9000,
+    });
+
+    expect(() =>
+      conversations.updateSyncCheckpoint(record.id, {
+        status: 'clean',
+        syncedMessageCount: 3,
+        startedAt: 9000,
+      }),
+    ).toThrow(/Clean Conversation sync/);
+    expect(() =>
+      conversations.updateSyncCheckpoint(record.id, {
+        status: 'in_flight',
+        syncedMessageCount: 3,
+      }),
+    ).toThrow(/In-flight Conversation sync/);
   });
 
   it('rejects non-UUID primary keys at the repository boundary', () => {

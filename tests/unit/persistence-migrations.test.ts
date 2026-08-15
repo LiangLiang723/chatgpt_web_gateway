@@ -29,7 +29,7 @@ function tableNames(database: ReturnType<typeof openDatabase>): string[] {
 }
 
 describe('SQLite database and migrations', () => {
-  it('opens a file database with required pragmas and applies the initial schema once', () => {
+  it('opens a file database with required pragmas and applies all schema migrations once', () => {
     const paths = temp();
     const database = openDatabase(paths.databasePath);
 
@@ -48,8 +48,21 @@ describe('SQLite database and migrations', () => {
         name: 'initial',
         appliedAt: 1_786_714_000_000,
       }),
+      expect.objectContaining({
+        version: 2,
+        name: 'add_conversation_sync_checkpoint',
+        appliedAt: 1_786_714_000_000,
+      }),
     ]);
-    expect(applied[0]?.checksum).toMatch(/^[a-f0-9]{64}$/);
+    expect(applied.map((migration) => migration.checksum)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    ]);
+    expect(
+      database.prepare('PRAGMA table_info(conversations)').all().map((row) => String(row.name)),
+    ).toEqual(
+      expect.arrayContaining(['sync_status', 'synced_message_count', 'sync_started_at']),
+    );
     expect(tableNames(database)).toEqual(
       expect.arrayContaining([
         'attachments',
@@ -70,32 +83,35 @@ describe('SQLite database and migrations', () => {
     ).toEqual([]);
     expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toMatchObject(
       {
-        count: 1,
+        count: 2,
       },
     );
 
     closeDatabase(database);
   });
 
-  it('rejects a previously applied migration whose SQL bytes changed', () => {
-    const paths = temp();
-    const database = openDatabase(paths.databasePath);
-    runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 1000 });
+  it.each(['001_initial.sql', '002_add_conversation_sync_checkpoint.sql'])(
+    'rejects a previously applied migration whose SQL bytes changed: %s',
+    (migrationFilename) => {
+      const paths = temp();
+      const database = openDatabase(paths.databasePath);
+      runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 1000 });
 
-    const migrationPath = join(paths.migrationsDir, '001_initial.sql');
-    writeFileSync(migrationPath, `${readFileSync(migrationPath, 'utf8')}\n-- tampered\n`);
+      const migrationPath = join(paths.migrationsDir, migrationFilename);
+      writeFileSync(migrationPath, `${readFileSync(migrationPath, 'utf8')}\n-- tampered\n`);
 
-    expect(() =>
-      runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 2000 }),
-    ).toThrowError(
-      expect.objectContaining<Partial<MigrationError>>({
-        name: 'MigrationError',
-        code: 'migration_checksum_mismatch',
-      }),
-    );
+      expect(() =>
+        runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 2000 }),
+      ).toThrowError(
+        expect.objectContaining<Partial<MigrationError>>({
+          name: 'MigrationError',
+          code: 'migration_checksum_mismatch',
+        }),
+      );
 
-    closeDatabase(database);
-  });
+      closeDatabase(database);
+    },
+  );
 
   it('rejects malformed or non-contiguous migration versions before applying them', () => {
     const paths = temp({ copyMigrations: false });

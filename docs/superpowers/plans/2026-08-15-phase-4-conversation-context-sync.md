@@ -114,7 +114,7 @@
   ```
 - `ConversationStore.save()` remains the final full-aggregate transaction and persists the supplied checkpoint.
 
-- [ ] **Step 1: Write migration and mapping tests that fail against the Phase 3 schema**
+- [x] **Step 1: Write migration and mapping tests that fail against the Phase 3 schema**
 
 Add assertions equivalent to:
 
@@ -138,7 +138,7 @@ expect(store.loadById(id)?.messages).toEqual(before.messages);
 
 Also extend migration tests to expect versions `[1, 2]` and checksum protection for `002`.
 
-- [ ] **Step 2: Run focused persistence tests and confirm red**
+- [x] **Step 2: Run focused persistence tests and confirm red**
 
 Run:
 
@@ -151,7 +151,7 @@ corepack pnpm exec vitest run \
 
 Expected: FAIL because sync columns/types and `markSyncInFlight` do not exist.
 
-- [ ] **Step 3: Add the exact forward-only migration**
+- [x] **Step 3: Add the exact forward-only migration**
 
 `migrations/002_add_conversation_sync_checkpoint.sql`:
 
@@ -170,7 +170,7 @@ ALTER TABLE conversations
 
 Do not edit `001_initial.sql`.
 
-- [ ] **Step 4: Extend persistence types and repository SQL**
+- [x] **Step 4: Extend persistence types and repository SQL**
 
 Map the three columns to nested `record.sync`. Add repository method:
 
@@ -192,7 +192,7 @@ if (checkpoint.status === 'in_flight' && checkpoint.startedAt === undefined) {
 }
 ```
 
-- [ ] **Step 5: Add metadata-only `markSyncInFlight`**
+- [x] **Step 5: Add metadata-only `markSyncInFlight`**
 
 Implement with the existing synchronous `transaction()` helper so no async work occurs inside SQLite transaction:
 
@@ -212,15 +212,15 @@ markSyncInFlight(conversationId: string, startedAt: number): void {
 
 Keep child rows untouched.
 
-- [ ] **Step 6: Extend aggregate validation**
+- [x] **Step 6: Extend aggregate validation**
 
 Reject `syncedMessageCount > aggregate.messages.length`, but deliberately do **not** require clean count to equal Message length because migrated legacy rows are allowed to load and must REBUILD later.
 
-- [ ] **Step 7: Run persistence tests green**
+- [x] **Step 7: Run persistence tests green**
 
 Run the same focused Vitest command. Expected: PASS.
 
-- [ ] **Step 8: Run typecheck for interface fallout**
+- [x] **Step 8: Run typecheck for interface fallout**
 
 ```bash
 corepack pnpm typecheck
@@ -228,12 +228,14 @@ corepack pnpm typecheck
 
 Expected: FAIL only at existing ConversationRecord fixtures that have not yet supplied `sync`; update those fixture builders to default `{ status: 'clean', syncedMessageCount: messages.length-or-0-as-explicit-test-intent }`, then rerun to PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add migrations/002_add_conversation_sync_checkpoint.sql src/persistence tests
  git commit -m "🗃️ 增加 Conversation 同步检查点"
 ```
+
+2026-08-15 execution evidence: the focused persistence suite first failed on the missing `002` migration, missing sync mapping/methods and missing count validation (11 expected failures). After implementation, the same command passed 3 files / 20 tests; `corepack pnpm typecheck` then exposed three legacy fixture/build sites, which were updated with explicit clean checkpoints and rerun to PASS.
 
 ---
 
