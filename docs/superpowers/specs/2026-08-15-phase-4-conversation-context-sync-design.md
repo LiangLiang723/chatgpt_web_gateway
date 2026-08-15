@@ -133,7 +133,8 @@ Choose `APPEND` only when all of the following are true:
 1. persisted instructions exactly equal current instructions;
 2. every persisted message exactly matches the same-position prefix of the current request;
 3. the only unsynchronized tail is exactly one final non-empty user text message;
-4. the Conversation currently owns a warm bound Page.
+4. the persisted ChatGPT conversation URL exists and identifies the expected Conversation;
+5. the Conversation currently owns a warm bound Page.
 
 Only that final new user turn is sent to ChatGPT. The prior history is not replayed.
 
@@ -151,7 +152,7 @@ Choose `REBUILD` for any existing Conversation that cannot safely APPEND/RESTORE
 - stored messages are not an exact prefix of the caller history;
 - caller history was edited, compressed, rolled back or forked;
 - more than one unsynchronized turn appears;
-- the persisted URL is absent after the warm Page was lost;
+- the persisted URL is absent, even if a warm Page happens to exist, because the Page URL cannot be used to self-attest Conversation identity;
 - a RESTORE navigation proves that the saved ChatGPT Conversation is no longer available.
 
 REBUILD opens the Fresh ChatGPT start page and sends one full-context reconstruction envelope. After success, the local Conversation keeps its stable id/key but replaces its persisted ChatGPT URL and synchronized snapshot.

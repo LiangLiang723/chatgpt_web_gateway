@@ -96,7 +96,9 @@ export function planContextSync(options: PlanContextSyncOptions): ContextSyncPla
     return { mode: 'REBUILD', appendMessages: [] };
   }
 
-  if (options.hasWarmPage) return { mode: 'APPEND', appendMessages };
+  if (options.hasWarmPage && options.persisted.conversationUrl) {
+    return { mode: 'APPEND', appendMessages };
+  }
   if (options.persisted.conversationUrl) return { mode: 'RESTORE', appendMessages };
   return { mode: 'REBUILD', appendMessages: [] };
 }

@@ -63,15 +63,25 @@ describe('planContextSync', () => {
     ).toEqual({ mode: 'RESTORE', appendMessages: [next] });
   });
 
-  it('selects REBUILD when a safe prefix exists but both warm page and persisted URL are absent', () => {
+  it('selects REBUILD when a safe prefix exists but the persisted URL is absent', () => {
     const stored = [user('one'), assistant('reply one')];
+    const withoutUrl = { ...persisted(stored), conversationUrl: undefined };
 
     expect(
       planContextSync({
         instructions,
         messages: [...stored, user('two')],
-        persisted: { ...persisted(stored), conversationUrl: undefined },
+        persisted: withoutUrl,
         hasWarmPage: false,
+      }),
+    ).toEqual({ mode: 'REBUILD', appendMessages: [] });
+
+    expect(
+      planContextSync({
+        instructions,
+        messages: [...stored, user('two')],
+        persisted: withoutUrl,
+        hasWarmPage: true,
       }),
     ).toEqual({ mode: 'REBUILD', appendMessages: [] });
   });
