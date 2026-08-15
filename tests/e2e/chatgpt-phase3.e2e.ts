@@ -65,7 +65,10 @@ export async function runPhase3ChatGptE2E(
 
       const token = challengeToken();
       const driver = createChatGptDriver();
-      const result = await driver.sendText(lease.page, { prompt: challengePrompt(token) });
+      const result = await driver.sendText(lease.page, {
+        prompt: challengePrompt(token),
+        target: { kind: 'fresh' },
+      });
       assert.match(result.text, new RegExp(token));
       assertConversationUrl(result.conversationUrl);
     } finally {

@@ -359,7 +359,7 @@ git commit -m "✨ 增加同会话队列与 Page affinity"
 - Adds Driver error code `conversation_restore_failed`.
 - Existing Phase 3 real E2E caller is updated to pass `{ kind: 'fresh' }`; no selector/completion behavior is changed.
 
-- [ ] **Step 1: Add failing Driver target tests**
+- [x] **Step 1: Add failing Driver target tests**
 
 Prove:
 
@@ -370,13 +370,13 @@ Prove:
 - wrong origin/path or redirect from expected `/c/<id>` to Fresh root throws `conversation_restore_failed` before composer submission;
 - existing auth, selector and completion tests remain valid with the new target argument.
 
-- [ ] **Step 2: Run Driver tests and confirm RED**
+- [x] **Step 2: Run Driver tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-driver.test.ts
 ```
 
-- [ ] **Step 3: Implement navigation targets and identity validation**
+- [x] **Step 3: Implement navigation targets and identity validation**
 
 Use:
 
@@ -397,7 +397,7 @@ pathname starts with /c/
 
 Ignore search/hash. Never infer Conversation identity from page content.
 
-- [ ] **Step 4: Update deterministic and Phase 3 explicit E2E callers**
+- [x] **Step 4: Update deterministic and Phase 3 explicit E2E callers**
 
 Every Fresh-only caller passes:
 
@@ -407,14 +407,14 @@ target: { kind: 'fresh' }
 
 No real E2E is run yet in this step.
 
-- [ ] **Step 5: Run Driver/Phase 3 executor tests and typecheck**
+- [x] **Step 5: Run Driver/Phase 3 executor tests and typecheck**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-driver.test.ts tests/unit/phase3-executor.test.ts tests/unit/chatgpt-e2e-gate.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 6: Update plan and commit**
+- [x] **Step 6: Update plan and commit**
 
 ```bash
 git add src/chatgpt tests/unit/chatgpt-driver.test.ts tests/e2e/chatgpt-phase3.e2e.ts src/conversations/phase3-executor.ts tests/unit/phase3-executor.test.ts docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md

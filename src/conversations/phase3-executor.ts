@@ -94,7 +94,10 @@ export function createPhase3Executor(
     const prompt = buildPhase3Prompt(request);
     const lease = await options.pagePool.acquire();
     try {
-      const result = await options.driver.sendText(lease.page, { prompt });
+      const result = await options.driver.sendText(lease.page, {
+        prompt,
+        target: { kind: 'fresh' },
+      });
       return {
         type: 'text',
         text: result.text,

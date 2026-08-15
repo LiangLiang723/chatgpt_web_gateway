@@ -71,7 +71,10 @@ describe('Phase3Executor', () => {
       conversationUrl: 'https://chatgpt.com/c/test',
       completedAt: 1_786_720_000_123,
     });
-    expect(sendText).toHaveBeenCalledWith(expect.anything(), { prompt });
+    expect(sendText).toHaveBeenCalledWith(expect.anything(), {
+      prompt,
+      target: { kind: 'fresh' },
+    });
     expect(release).toHaveBeenCalledTimes(1);
   });
 

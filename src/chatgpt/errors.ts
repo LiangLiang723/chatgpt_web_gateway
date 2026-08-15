@@ -4,7 +4,8 @@ export type ChatGptDriverErrorCode =
   | 'selector_missing'
   | 'selector_ambiguous'
   | 'chatgpt_generation_timeout'
-  | 'chatgpt_response_missing';
+  | 'chatgpt_response_missing'
+  | 'conversation_restore_failed';
 
 export interface ChatGptDriverErrorOptions {
   code: ChatGptDriverErrorCode;

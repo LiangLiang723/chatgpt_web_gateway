@@ -9,8 +9,14 @@ import { asChatGptDriverError, ChatGptDriverError } from './errors.js';
 import { inspectCollection, inspectUnique, resolveUnique } from './selector-registry.js';
 import { chatGptSelectors } from './selectors.js';
 
+export type ChatGptTextTarget =
+  | { kind: 'fresh' }
+  | { kind: 'current'; conversationUrl: string }
+  | { kind: 'restore'; conversationUrl: string };
+
 export interface ChatGptTextRequest {
   prompt: string;
+  target: ChatGptTextTarget;
 }
 
 export interface ChatGptTextResult {
@@ -31,6 +37,21 @@ export interface CreateChatGptDriverOptions {
   navigationTimeoutMs?: number;
 }
 
+function identifiesConversation(actualUrl: string, expectedUrl: string): boolean {
+  try {
+    const actual = new URL(actualUrl);
+    const expected = new URL(expectedUrl);
+    return (
+      actual.origin === 'https://chatgpt.com' &&
+      expected.origin === 'https://chatgpt.com' &&
+      expected.pathname.startsWith('/c/') &&
+      actual.pathname === expected.pathname
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): ChatGptDriver {
   const authProbe = options.probeAuth ?? probeAuth;
   const inspectCollectionSelector = options.inspectCollection ?? inspectCollection;
@@ -42,10 +63,25 @@ export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): C
   return {
     async sendText(page, request) {
       try {
-        await page.goto('https://chatgpt.com/', {
-          waitUntil: 'domcontentloaded',
-          timeout: navigationTimeoutMs,
-        });
+        if (request.target.kind === 'fresh') {
+          await page.goto('https://chatgpt.com/', {
+            waitUntil: 'domcontentloaded',
+            timeout: navigationTimeoutMs,
+          });
+        } else {
+          if (request.target.kind === 'restore') {
+            await page.goto(request.target.conversationUrl, {
+              waitUntil: 'domcontentloaded',
+              timeout: navigationTimeoutMs,
+            });
+          }
+          if (!identifiesConversation(page.url(), request.target.conversationUrl)) {
+            throw new ChatGptDriverError({
+              code: 'conversation_restore_failed',
+              message: 'ChatGPT Conversation URL could not be restored',
+            });
+          }
+        }
 
         const auth = await authProbe(page);
         if (auth.state === 'auth_required') {
