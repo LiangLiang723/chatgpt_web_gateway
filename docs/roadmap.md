@@ -38,9 +38,15 @@
 
 ## Phase 4：Conversation + Context Sync
 
+状态：**设计完成，待实施计划与实现**。
+
+已批准设计：显式 `X-Conversation-Key` identity；无 key 不做隐式绑定；同 key FIFO、跨 key 并行；full-history / incremental 双输入；clean/in_flight sync checkpoint；Page affinity + 30 分钟 idle 回收 + capacity-pressure LRU；`FRESH | APPEND | RESTORE | REBUILD` 遵循“能证明一致才 APPEND，否则 REBUILD”。
+
 交付：Conversation Key、同会话 Queue、跨会话并行、`FRESH | APPEND | RESTORE | REBUILD`、Page idle（空闲）回收和 URL 恢复。
 
-验收：第二轮不重复灌入第一轮完整历史；进程重启可 RESTORE。
+验收：第二轮 full-history 请求不重复灌入第一轮完整历史；Gateway 重启可 RESTORE 同一 ChatGPT Conversation URL；历史分叉可 REBUILD 到新 URL；真实 E2E 与确定性并发/崩溃测试均通过。
+
+设计规格：[`superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md`](superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md)。
 
 ## Phase 5：真 Streaming
 
