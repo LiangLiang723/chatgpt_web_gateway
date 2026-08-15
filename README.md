@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：Phase 4 Conversation + Context Sync 实施中
+## 当前状态：Phase 4 代码与确定性/Docker 验收完成，real E2E 等待重新认证
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E。Phase 4 已实现 Queue、Page affinity、Driver restore target 和一版 Conversation Executor，但在恢复远端已批准的完整 Phase 4 设计后，仍需补齐 sync checkpoint、single-user incremental、无 key 持久化与 crash-convergence：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E。Phase 4 的批准实现范围已经全部落地并通过 deterministic `verify` 与 fresh Docker smoke；最终真实 ChatGPT APPEND / RESTORE / REBUILD E2E 当前仅被隔离测试 Profile 的 `auth_required` 阻塞：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -27,14 +27,14 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - 真实文件数据库已通过 save → close → reopen → load 恢复测试。
 - Docker smoke 已验证 `/data/gateway.db`、migration history、`PUID/PGID` owner 和容器 restart 后持续可用。
 - 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
-- bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 支持 `fresh | current | restore` Conversation target。
-- Phase 4 Conversation Executor 已实现 `FRESH | APPEND | RESTORE | REBUILD`、同 key Queue、跨 key 并行、Conversation Page affinity、idle 回收和 SQLite 成功快照持久化。
-- `X-Conversation-Key` 存在时保持稳定 Conversation lifecycle；未提供时请求保持 ephemeral Fresh，不自动生成/猜测会话身份。
+- bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
+- Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
+- full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle。未提供 key 时每个请求仍建立并持久化独立 `conversation_key = NULL` Fresh Conversation，但不会跨请求猜测身份。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入 Conversation/Browser/Driver 执行链，并分别编码 OpenAI-style 非流式文本响应；不会伪造 token usage。Streaming/附件/Tools/Structured Output/image execution 仍明确拒绝。
 - `corepack pnpm inspect:chatgpt`、`corepack pnpm test:e2e:chatgpt` 与 `corepack pnpm test:e2e:chatgpt:phase4` 提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 3 已完成真实验收；Phase 4 仍在实施。** 现有 Phase 4 子集曾通过 deterministic `verify` 与 Docker smoke，显式 real E2E harness 也已建立；但这些证据不覆盖刚恢复出的完整批准计划。最终还需要完成 checkpoint/full+incremental/crash-convergence 等 Task，并在隔离 Profile 重新人工认证后重跑真实 APPEND/RESTORE/REBUILD 验收。
+**Phase 3 已完成真实验收；Phase 4 的代码、deterministic 与 Docker 边界已完成，但 real E2E 尚未通过。** 当前最终 `corepack pnpm verify` 基线为 43 个测试文件 / 272 个测试；fresh `linux/amd64` 镜像 `sha256:d31206e5d39b…` 的 Docker smoke 已验证 migration 001+002、checkpoint columns、idle timeout、normal/maintenance 与 Profile/sandbox/seccomp/restart 边界。显式 Phase 4 harness 已覆盖 APPEND live user-turn、restart RESTORE 和 divergence REBUILD；实际运行时隔离 Profile 在 Phase 3 auth probe 及 standalone Phase 4 turn 1 都返回 `auth_required`，需人工重新认证后重跑才能关闭 Phase 4。
 
 尚未实现的核心能力包括真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
 
@@ -131,7 +131,7 @@ ${DATA_PATH:-./data} → /data
 └── logs/
 ```
 
-Phase 2 启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 `migrations/*.sql`。当前数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`；它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
+启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 checksum migration。当前 migration history 包含 `001_initial` 与 `002_add_conversation_sync_checkpoint`；数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`，它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
 
 Docker smoke 已验证数据库由指定 `PUID/PGID` 非 root 进程创建、migration 只记录一次，并在同一 Bind Mount 下重启容器后继续可用。`/data/files/` 和 `/data/generated/` 目前只有 metadata Repository 边界，真实业务字节写入仍属于后续 Phase。
 
@@ -250,10 +250,10 @@ OpenAI Compatible Client / Agent
        NormalizedRequest
               │
               ▼
-      Conversation Engine         ← Phase 4 实施中；Queue/Page affinity 已有，完整 checkpoint/incremental 待补齐
+      Conversation Engine         ← Phase 4 已实现；四态 + FIFO + checkpoint + Page affinity/LRU
               │
               ▼
-        ChatGPT Driver            ← Fresh/Current/Restore；Phase 4 real E2E 待重新认证后验收
+        ChatGPT Driver            ← openFresh/openConversation/sendText；real E2E 待重新认证后验收
               │
               ▼
      Playwright Chromium

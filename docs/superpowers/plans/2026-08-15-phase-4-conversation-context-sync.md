@@ -1328,7 +1328,7 @@ git add tests/e2e scripts/test-chatgpt-e2e.ts tests/unit
 **Interfaces:**
 - `PROJECT_STATE` is the final current-fact source.
 
-- [ ] **Step 1: Update API compatibility only to implemented truth**
+- [x] **Step 1: Update API compatibility only to implemented truth**
 
 After real Phase 4 E2E passes, change current implementation from Fresh-only to:
 
@@ -1342,7 +1342,7 @@ REBUILD
 
 Keep Streaming/attachments/Tools/Structured Output/image generation explicitly unimplemented.
 
-- [ ] **Step 2: Update project state machine fields**
+- [x] **Step 2: Update project state machine fields**
 
 Successful final state:
 
@@ -1356,7 +1356,7 @@ NEXT_TASK=write-phase-5-streaming-spec
 
 If real E2E is blocked, instead keep Phase 4 implementation active and record the precise blocker; do not use the success state above.
 
-- [ ] **Step 3: Run complete deterministic verification fresh**
+- [x] **Step 3: Run complete deterministic verification fresh**
 
 ```bash
 corepack pnpm verify
@@ -1364,7 +1364,7 @@ corepack pnpm verify
 
 Expected: PASS with zero test failures.
 
-- [ ] **Step 4: Run fresh Docker build/smoke after final code/docs state**
+- [x] **Step 4: Run fresh Docker build/smoke after final code/docs state**
 
 ```bash
 corepack pnpm docker:build
@@ -1373,11 +1373,13 @@ corepack pnpm docker:smoke
 
 Expected: PASS.
 
-- [ ] **Step 5: Re-run real Phase 4 E2E if any post-E2E code affecting Browser/Conversation behavior changed**
+- [x] **Step 5: Re-run real Phase 4 E2E if any post-E2E code affecting Browser/Conversation behavior changed**
 
 Use the explicit command from Task 12. If only prose changed, do not create unnecessary external ChatGPT turns.
 
-- [ ] **Step 6: Run Git/repository hygiene checks**
+2026-08-16 blocking-state finalization evidence: public/state/architecture/testing/roadmap/README prose was updated to distinguish "Phase 4 implementation complete" from "real ChatGPT four-mode E2E not accepted". A fresh `corepack pnpm verify` passed 43 test files / 272 tests plus format/lint/typecheck/build/governance. A fresh `linux/amd64` build reproduced image `sha256:d31206e5d39b5493d11563fc034fb30c0f9f5909d0454162cdc2c3d645f867a1`, and `corepack pnpm docker:smoke` passed. No Browser/Conversation product code changed after the blocked real E2E run, so Step 5 correctly avoids generating redundant external ChatGPT turns; the recorded `auth_required` blocker remains the current external fact.
+
+- [x] **Step 6: Run Git/repository hygiene checks**
 
 ```bash
 git status --short --branch
@@ -1389,6 +1391,8 @@ node scripts/check-version.mjs
 ```
 
 Inspect staged diff and verify no Profile, Cookie, SQLite DB, diagnostic HTML/screenshot, generated image, or real uploaded file is staged.
+
+2026-08-16 hygiene evidence: `git diff --check` passed; project-memory/docs/architecture/version checks all passed. The writeback diff contains only README/project documentation/active plan files. Filename and diff-content scans found no Profile, Cookie, SQLite DB, diagnostic artifact, generated/uploaded data or real credentials; the only credential-like text is the documented placeholder `Authorization: Bearer <GATEWAY_API_KEY>`.
 
 - [ ] **Step 7: Commit final writeback**
 
@@ -1411,10 +1415,10 @@ Expected: fast-forward/new-branch push succeeds; do not create a Release or Dock
 
 Before implementation starts, verify the plan against the governing spec:
 
-- [ ] Every spec acceptance criterion maps to at least one Task above.
-- [ ] No task introduces attachments, Tools, Streaming, Structured Output execution, images, multi-process locking, or private ChatGPT APIs.
-- [ ] `context/` stays API/DB/Playwright-free.
-- [ ] Page Pool stays Conversation-unaware; affinity/LRU stays in `conversations/`.
-- [ ] Unknown post-checkpoint failure remains `in_flight`; no rollback guessing exists.
-- [ ] Real E2E is explicit and separate from `verify`.
-- [ ] Final docs cannot mark Phase 4 complete unless real APPEND + restart RESTORE + divergence REBUILD have passed.
+- [x] Every spec acceptance criterion maps to at least one Task above.
+- [x] No task introduces attachments, Tools, Streaming, Structured Output execution, images, multi-process locking, or private ChatGPT APIs.
+- [x] `context/` stays API/DB/Playwright-free.
+- [x] Page Pool stays Conversation-unaware; affinity/LRU stays in `conversations/`.
+- [x] Unknown post-checkpoint failure remains `in_flight`; no rollback guessing exists.
+- [x] Real E2E is explicit and separate from `verify`.
+- [x] Final docs cannot mark Phase 4 complete unless real APPEND + restart RESTORE + divergence REBUILD have passed.

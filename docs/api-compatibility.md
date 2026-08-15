@@ -26,29 +26,31 @@
 
 ## Current Phase 4 Implementation（当前 Phase 4 实现）
 
-当前代码处于 Phase 4 实施中。Queue、Page affinity、Driver restore target 和一版 Conversation Executor 已存在，但完整批准规格中的 sync checkpoint、single-user incremental、无 key 持久化/crash-convergence 尚未补齐，因此以下只描述当前已落地子集：
+Phase 4 批准的代码实现范围已完成；以下描述当前已经通过 deterministic tests 与 Docker smoke 的实际行为。真实 ChatGPT APPEND / RESTORE / REBUILD E2E 仍因隔离 Profile `auth_required` 未通过，因此“已实现”不等于“当前外部网页已真实验收”:
 
 - `GET /health`：返回 Gateway HTTP 进程级健康状态，不代表 ChatGPT 已登录。
 - `GET /v1/models`：认证后只返回 `chatgpt-web`。
-- `POST /v1/chat/completions` / `POST /v1/responses`：完成 TypeBox/Ajv Schema 校验、统一 Normalizer、Conversation Executor、Browser/Page affinity/Driver 执行链和两套非流式文本响应 Encoder。
-- Headless 生产 runtime 会启动 Persistent BrowserContext、Conversation Queue 与 Page affinity manager；`UI_MODE=novnc` 不启动产品 BrowserManager，ChatGPT POST 返回 `503 browser_maintenance_mode`。
+- `POST /v1/chat/completions` / `POST /v1/responses`：完成 TypeBox/Ajv Schema 校验、统一 Normalizer、Conversation Engine、Browser/Page affinity/Driver 执行链和两套非流式文本响应 Encoder。
+- Headless 生产 runtime 会启动 Persistent BrowserContext、Conversation Queue 与 Conversation Page Registry；`UI_MODE=novnc` 不启动产品 BrowserManager/Queue/Registry，ChatGPT POST 返回 `503 browser_maintenance_mode`。
 - Phase 4 接受**非流式、纯文本、多轮**请求，要求最终消息是非空 `user`。system/developer instructions 继续通过 JSON prompt envelope 近似映射，这不是 OpenAI 原生 role privilege boundary。
-- 有 `X-Conversation-Key` 时，现有实现使用 SQLite aggregate 做一版 `FRESH | APPEND | RESTORE | REBUILD` 决策，同 key 串行、不同 key 可并行；批准计划还要求 single-user incremental 与 `clean | in_flight` checkpoint，当前正在补齐。
-- 当前 APPEND 子集只覆盖完整历史严格前缀 + 恰好新增一个最终 user turn；批准规格还要求仅一条 user message 的 incremental request 能续接既有 Conversation。
-- 当前成功执行会保存完整请求历史、新 Assistant 回复和 ChatGPT Conversation URL；批准规格要求 unknown post-checkpoint failure 保持 `in_flight` 并在下一轮确定性 REBUILD，尚待实现。
+- 有 `X-Conversation-Key` 时使用 SQLite aggregate + `clean | in_flight` sync checkpoint 做 `FRESH | APPEND | RESTORE | REBUILD`；same-key FIFO 串行、不同 key 可并行，排队期间不占 Page。
+- APPEND 同时支持完整历史客户端和 single-user incremental 客户端；只有已确认前缀可证明一致时才追加，历史分叉、instructions 变化、checkpoint uncertainty/mismatch 等走 REBUILD。
+- Page 丢失/进程重启时通过持久化安全 ChatGPT Conversation URL RESTORE；确认 `not_restorable` 时 Fresh REBUILD。auth/selector/browser 错误不会被吞成可重建状态。
+- 可能发送 user turn 前先写 `in_flight`；成功后原子保存完整 reconciled aggregate、新 Assistant、安全 ChatGPT URL 与 clean checkpoint。checkpoint 后未知失败保持 `in_flight`，下一请求确定性 REBUILD；不伪造失败 Assistant。
+- 未提供 `X-Conversation-Key` 时每个请求仍创建并完整持久化独立 `conversation_key = NULL` Fresh Conversation，但不跨请求猜测匿名身份。
 - Streaming、附件、Tools、非默认 Tool Choice、Structured Output execution 和 image output 返回 `501 unsupported_phase4_request`。
 - `conversation_restore_failed` 映射为 HTTP `502`；`auth_required` 使用 HTTP `503`，不会与 Gateway Bearer API Key 的 HTTP `401` 混淆。
 - Chat Completions 不伪造 token usage；Responses 当前返回 `usage: null`。
 
-现有 Phase 4 子集的 Unit/Integration 与 Docker smoke 曾通过，显式 real E2E 也已实际启动但隔离 Profile 返回 `auth_required`。由于完整批准计划仍在补齐，**尚不能把 Phase 4 描述为完整实现或真实网页已验收**。下面的 V1 矩阵仍表示最终批准目标。
+当前最终 deterministic `verify` 基线为 43 个测试文件 / 272 个测试；fresh Docker smoke 已验证 migration 001+002、checkpoint columns、Page idle 配置与原有安全运行边界。显式 Phase 4 real E2E harness 已包含 live user-turn APPEND、restart RESTORE 与 divergence REBUILD，但 standalone turn 1 当前返回 `503 auth_required`；因此**Phase 4 代码可描述为已实现，但真实网页四态仍未验收，阶段不能关闭**。下面的 V1 矩阵仍表示最终批准目标。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 
 - `GET /health` 无需认证。
 - 所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。
 - 客户端可通过 `X-Conversation-Key` 提供稳定会话标识；Gateway 会先标准化为内部 `conversationKey`。
-- Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、同 key Queue 和 Page affinity；Gateway 不把不同 key 放进全局串行锁。
-- 未提供 `X-Conversation-Key` 时保持 ephemeral FRESH；Gateway 不自动生成 key，也不根据消息内容猜测跨请求会话身份。
+- Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、same-key FIFO 和 Page affinity；Gateway 不把不同 key 放进全局串行锁。
+- 未提供 `X-Conversation-Key` 时每次执行独立 FRESH 并持久化 `conversation_key = NULL`；Gateway 不自动生成客户端 key，也不根据消息内容猜测跨请求会话身份。
 
 ## Chat Completions（聊天补全）
 

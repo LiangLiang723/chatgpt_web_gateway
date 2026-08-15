@@ -141,11 +141,11 @@ Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增�
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
 
-Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航目标扩展为 `fresh | current | restore`。`fresh` 导航 ChatGPT 新会话起点，`current` 要求当前 Page 仍属于预期 Conversation identity，`restore` 显式打开持久化 `/c/...` URL 并校验恢复后的 identity。所有 target 最终仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer；完成判断使用 generating/stop/thinking 可观察状态 + 非空文本连续稳定采样，固定约 250ms 只是 polling cadence，不把任意 sleep 或 `networkidle` 当作完成证据。
+Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航/readiness 与提交彻底拆分为 `openFresh(page)`、`openConversation(page, savedUrl)` 和纯 `sendText(page, { prompt })`。`openConversation` 只接受安全 `https://chatgpt.com` non-root Conversation URL，以 canonical pathname 比较 identity（忽略 query/hash）；确认无法恢复时返回显式 `not_restorable`，auth/selector/browser 异常继续作为错误传播。所有路径仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer；完成判断使用 generating/stop/thinking 可观察状态 + 非空文本连续稳定采样，固定约 250ms 只是 polling cadence，不把任意 sleep 或 `networkidle` 当作完成证据。
 
 Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。
 
-Phase 4 Conversation Executor 接受非流式纯文本多轮请求，要求最终消息为非空 `user`。FRESH/REBUILD 使用一次 JSON-serialized full-context prompt envelope；APPEND/RESTORE 只提交新增 user turn，不重复灌入已同步历史。system/developer 仍是 ChatGPT Web 上的 prompt 近似映射，不声称网页具有 OpenAI 原生 privilege channel。Streaming、附件、Tools、Structured Output 与 image execution 仍属于后续 Phase，并以稳定 `unsupported_phase4_request` 明确拒绝。
+Phase 4 Conversation Engine 接受非流式纯文本多轮请求，要求最终消息为非空 `user`。FRESH/REBUILD 使用版本化 JSON-serialized Context Envelope；APPEND/RESTORE 使用只含 `current_user` 的 Append Envelope，不重复灌入已确认历史。same-key 请求通过 Promise-tail FIFO 串行，出队后才重读 SQLite；different-key 可并行。system/developer 仍是 ChatGPT Web 上的 prompt 近似映射，不声称网页具有 OpenAI 原生 privilege channel。Streaming、附件、Tools、Structured Output 与 image execution 仍属于后续 Phase，并以稳定 `unsupported_phase4_request` 明确拒绝。
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
