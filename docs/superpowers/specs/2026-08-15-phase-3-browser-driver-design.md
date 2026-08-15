@@ -1063,7 +1063,10 @@ Phase 3 生产配置新增最小字段：
 
 ```text
 MAX_ACTIVE_PAGES=4
+CHATGPT_PROXY_SERVER=
 ```
+
+`CHATGPT_PROXY_SERVER` 是实现阶段由真实 E2E 网络环境强制暴露出的可选能力：未配置时 Chromium 直连；配置时 normal BrowserManager 与 maintenance browser 使用同一代理。只接受 `http` / `https` / `socks5` server origin，URL 内禁止用户名/密码，避免凭据进入 Chromium 参数或诊断输出。
 
 Browser profile path 不新增生产环境变量，固定派生：
 
@@ -1087,12 +1090,13 @@ CHATGPT_PROFILE_DIR
 CHATGPT_DIAGNOSTICS_DIR
 ```
 
-它们只由显式诊断/E2E CLI 读取。
+`CHATGPT_PROFILE_DIR` 也允许 maintenance overlay 显式传给 headed maintenance browser，用于给隔离 E2E Profile 完成人工 Cloudflare/登录；normal headless Gateway 不读取该变量，生产 Profile 仍固定 `${DATA_DIR}/browser-profile/`。`CHATGPT_PROXY_SERVER` 则属于 production `AppConfig`，同时也由显式诊断/E2E CLI 读取，以保证四条浏览器路径使用一致网络。
 
 ## 23. Security and Privacy（安全与隐私）
 
 - Browser Profile 是敏感凭证数据，继续不得提交 Git。
 - E2E Profile 与 production Profile 隔离。
+- 代理 URL 不允许内嵌用户名/密码；需要带认证的代理属于后续独立设计，不在 Phase 3 当前实现内。
 - 不把 Cookie、Local Storage、Authorization、ChatGPT 页面正文默认写日志。
 - Driver error 返回稳定 code，不返回原始 DOM / Playwright stack。
 - screenshot / DOM snapshot 必须显式开启。

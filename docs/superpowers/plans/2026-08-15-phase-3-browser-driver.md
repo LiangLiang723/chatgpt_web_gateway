@@ -1008,31 +1008,31 @@ Assert HTTP 200 and challenge token in `choices[0].message.content`.
 
 Do not add it to `verify`.
 
-- [!] **Step 7: Run real inspect/auth E2E — blocked by DevSpace network access**
+- [!] **Step 7: Run real inspect/auth E2E — proxy restored network access; blocked on headed Cloudflare/ChatGPT manual auth**
 
 Run only with explicit environment available in the workspace:
 
 ```bash
-E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> corepack pnpm inspect:chatgpt
+E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> CHATGPT_PROXY_SERVER=<proxy-origin> corepack pnpm inspect:chatgpt
 ```
 
 Expected for completion: authenticated + current selector diagnostics healthy.
 
 If no authenticated isolated Profile exists, record `auth_required` as the real Phase 3 blocker; do not fake login.
 
-2026-08-15 execution evidence: no pre-existing isolated E2E Profile was available. A fresh isolated `/tmp/cwg-phase3-e2e-profile` was created only for diagnostics. Bundled Chromium launched, but `page.goto('https://chatgpt.com/')` timed out after 60 seconds before auth/selector inspection. Independent Node `fetch('https://chatgpt.com/')` resolved DNS but failed with `ETIMEDOUT`. The inspect command therefore ended with stable `browser_unavailable`; no selector/auth calibration was possible.
+2026-08-15 initial evidence: direct DevSpace DNS/HTTPS path to `chatgpt.com` was unusable (`ETIMEDOUT` / 60s Playwright navigation timeout). Follow-up investigation confirmed DNS interception/wrong answers and the user-provided LAN proxy can reach ChatGPT. Phase 3 now has optional `CHATGPT_PROXY_SERVER` wired through normal BrowserManager, maintenance browser, inspect and real E2E; proxy URL credentials are rejected. With that proxy, real `inspect:chatgpt` reaches the Cloudflare challenge in under a second and reports `auth=unknown`; a 30s headless observation remains on `Just a moment...`. An isolated headed noVNC instance using `/data/e2e-browser-profile` has therefore been started for the required human Cloudflare/login step.
 
-- [!] **Step 8: Run full real Phase 3 E2E — blocked before auth inspection by the same network timeout**
+- [!] **Step 8: Run full real Phase 3 E2E — pending the same isolated Profile manual login**
 
 ```bash
-E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> corepack pnpm test:e2e:chatgpt
+E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> CHATGPT_PROXY_SERVER=<proxy-origin> corepack pnpm test:e2e:chatgpt
 ```
 
 Expected for completion: auth inspection PASS, Fresh Driver challenge PASS, Gateway HTTP challenge PASS.
 
 If blocked by auth/network/CAPTCHA/current DOM, update `PROJECT_STATE` to Phase 3 blocked with exact evidence and continue Task 9 documentation/verification without falsely closing Phase 3.
 
-2026-08-15 execution evidence: `E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=/tmp/cwg-phase3-e2e-profile corepack pnpm test:e2e:chatgpt` was actually run and failed in the initial real inspection navigation with stable `browser_unavailable`. Driver challenge and Gateway HTTP challenge were not reached and remain unverified.
+2026-08-15 execution evidence: the original full E2E run failed before auth inspection on direct network access. Proxy support is now implemented and verified, but full E2E must wait until the isolated headed Profile has completed Cloudflare/ChatGPT manual auth. Driver challenge and Gateway HTTP challenge remain unverified until then.
 
 - [x] **Step 9: Update plan/state and commit Task 8 implementation/evidence**
 
@@ -1076,7 +1076,7 @@ Current evidence by criterion:
 4. Selector Registry tests prove unique/collection/fallback/missing/ambiguous behavior.
 5. Architecture checker + source search enforce selector literals in `src/chatgpt/selectors.ts`.
 6. Auth tests prove authenticated/auth_required/unknown distinction.
-7. Unit/API mapping proves `auth_required` is stable 503 and does not become Gateway 401; current real network blocker prevents observing a real unauthenticated page.
+7. Unit/API mapping proves `auth_required` is stable 503 and does not become Gateway 401; proxy-backed real inspect now reaches the Cloudflare page, but manual login is still required before an authenticated ChatGPT page can be observed.
 8. Driver tests prove Assistant baseline and new-turn index ownership.
 9. Completion tests prove generating + non-empty stable samples and timeout behavior without `networkidle` completion semantics.
 10. Phase3Executor tests prove Fresh non-stream text-only capability boundary and explicit future-capability errors.
@@ -1087,13 +1087,13 @@ Current evidence by criterion:
 15. API integration tests prove all stable Browser/Driver/maintenance HTTP mappings and no raw error leakage.
 16. `inspect:chatgpt` exists; safety tests reject missing/production E2E Profile.
 17. Inspect tests prove screenshot/HTML only when diagnostics dir is explicit.
-18. Fresh deterministic `corepack pnpm verify` passed with 26 test files / 128 tests after Task 8.
-19. Final-tree Docker build succeeded as image `sha256:f6435e4033733894f1c44b7f9172ace54926a5457cdbb66c5bc4d828b0f332be`; fresh Docker smoke passed headless Chromium, maintenance single-owner, HTTP, SQLite and restart checks.
-20. **BLOCKED:** real auth/selector inspection was run but `chatgpt.com` navigation timed out before auth/selector observation.
-21. **BLOCKED:** real Fresh Driver challenge was not reached because criterion 20 failed at network access.
-22. **BLOCKED:** real Gateway HTTP challenge was not reached because criterion 20 failed at network access.
-23. README/API/architecture/testing/roadmap/PROJECT_STATE are being rewritten in this Task to match the blocked implementation state.
-24. `PROJECT_STATE` is `phase-3-implementation / blocked` with active plan and exact network-access next task.
+18. After proxy support, fresh deterministic `corepack pnpm verify` passed with 26 test files / 130 tests.
+19. Proxy-support Docker build succeeded as image `sha256:ea756b1f8eb830fbb331ec755470c873015f146fbe19c033779c7b856714a3d3`; fresh Docker smoke proves normal/maintenance Chromium both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, and HTTP/SQLite/restart checks still pass.
+20. **BLOCKED:** proxy-backed real auth/selector inspection reaches the genuine Cloudflare challenge, but the isolated headed Profile still requires manual Cloudflare/ChatGPT login before authenticated selector calibration.
+21. **BLOCKED:** real Fresh Driver challenge awaits criterion 20 manual auth.
+22. **BLOCKED:** real Gateway HTTP challenge awaits criterion 20 manual auth.
+23. README/API/architecture/testing/PROJECT_STATE and the governing spec are updated for optional proxy + isolated maintenance E2E Profile behavior.
+24. `PROJECT_STATE` remains `phase-3-implementation / blocked` with the exact manual-auth + real-E2E next task.
 
 Criteria 20–22 are unmet, therefore Phase 3 is not eligible for completion.
 
@@ -1127,17 +1127,17 @@ corepack pnpm docker:smoke
 
 Expected: PASS.
 
-- [!] **Step 5: If Phase 3 is eligible for completion, rerun real E2E on final HEAD — not eligible while criteria 20–22 are network-blocked**
+- [!] **Step 5: If Phase 3 is eligible for completion, rerun real E2E on final HEAD — waiting for isolated Profile manual auth**
 
 ```bash
-E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> corepack pnpm test:e2e:chatgpt
+E2E_CHATGPT=1 CHATGPT_PROFILE_DIR=<isolated-profile> CHATGPT_PROXY_SERVER=<proxy-origin> corepack pnpm test:e2e:chatgpt
 ```
 
 Expected: PASS. A previous E2E run before final code/docs changes is not sufficient evidence for final completion.
 
 If the real E2E cannot run/pass, keep blocked state and report the exact unverified external condition.
 
-Current decision: do not rerun a final-head challenge because Phase 3 is not eligible for completion and the already reproduced DevSpace HTTPS `ETIMEDOUT` occurs before auth/selector inspection. The active blocker must be resolved first; prior real `inspect:chatgpt` and full `test:e2e:chatgpt` attempts remain the execution evidence.
+Current decision: proxy-backed page access is now working and the isolated noVNC Profile is live, but Phase 3 is still not eligible for completion until the human Cloudflare/ChatGPT login step finishes. Immediately after that step, rerun `inspect:chatgpt` and the full real E2E on the same isolated Profile and current proxy.
 
 - [x] **Step 6: Run Git hygiene checks**
 

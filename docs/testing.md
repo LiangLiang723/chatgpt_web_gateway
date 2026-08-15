@@ -45,16 +45,20 @@
 
 ```bash
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm inspect:chatgpt
 
 E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt
 ```
 
-`CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。
+`CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。
 
-2026-08-15 Phase 3 已实际运行上述真实命令。Bundled Chromium 能启动，但当前 DevSpace 到 `https://chatgpt.com/` 的 HTTPS 访问被网络超时阻塞：DNS 可解析，Node `fetch` 为 `ETIMEDOUT`，Playwright `page.goto` 60 秒超时并映射为 `browser_unavailable`。因此 auth/selector inspection、Fresh Driver challenge 和 Gateway HTTP challenge 尚未通过。
+2026-08-15 Phase 3 已实际运行上述真实命令。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用；设置用户提供的 LAN `CHATGPT_PROXY_SERVER` 后 bundled Chromium 能在约 1 秒内进入真实 Cloudflare challenge。Headless challenge 观察 30 秒未自动放行，因此当前阻塞已从网络超时收敛为 headed 人工 Cloudflare/ChatGPT 登录；auth/selector inspection、Fresh Driver challenge 和 Gateway HTTP challenge 仍待该人工步骤完成。
+
+隔离 E2E Profile 可通过 maintenance overlay 人工登录：设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 后，maintenance browser 使用该测试 Profile；normal headless runtime 仍固定使用 `${DATA_DIR}/browser-profile/`。
 
 目标场景：
 
@@ -140,4 +144,4 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 的事实是：real E2E **已启动但在访问 `chatgpt.com` 时网络超时**，因此不能声称 Selector、登录或真实 Fresh 文本路径已经验证。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 的事实是：real E2E **已通过代理进入真实 Cloudflare challenge，但隔离 headed Profile 尚待人工 Cloudflare/ChatGPT 登录**，因此仍不能声称 Selector、登录或真实 Fresh 文本路径已经验证。

@@ -13,6 +13,7 @@ describe('loadConfig', () => {
       pgid: 1000,
       dataDir: '/data',
       maxActivePages: 4,
+      chatgptProxyServer: undefined,
       novncPort: 6080,
       novncPassword: undefined,
     });
@@ -34,6 +35,7 @@ describe('loadConfig', () => {
         PGID: '1300',
         DATA_DIR: '/srv/gateway',
         MAX_ACTIVE_PAGES: '7',
+        CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
         NOVNC_PORT: '7777',
         NOVNC_PASSWORD: 'maintenance-secret',
       }),
@@ -46,6 +48,7 @@ describe('loadConfig', () => {
       pgid: 1300,
       dataDir: '/srv/gateway',
       maxActivePages: 7,
+      chatgptProxyServer: 'http://proxy.example:7890',
       novncPort: 7777,
       novncPassword: 'maintenance-secret',
     });
@@ -67,5 +70,17 @@ describe('loadConfig', () => {
 
   it('rejects unsupported UI modes', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', UI_MODE: 'desktop' })).toThrow(/UI_MODE/);
+  });
+
+  it('rejects invalid or credential-bearing ChatGPT proxy servers', () => {
+    for (const value of [
+      'not-a-url',
+      'ftp://proxy.example:21',
+      'http://user:pass@proxy.example:7890',
+    ]) {
+      expect(() => loadConfig({ GATEWAY_API_KEY: 'x', CHATGPT_PROXY_SERVER: value })).toThrow(
+        /CHATGPT_PROXY_SERVER/,
+      );
+    }
   });
 });

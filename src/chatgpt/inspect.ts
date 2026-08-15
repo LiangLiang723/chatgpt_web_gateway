@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 
 import type { Page } from 'playwright';
 
+import { parseChatGptProxyServer } from '../config/proxy.js';
 import { probeAuth } from './auth.js';
 import { asChatGptDriverError } from './errors.js';
 import { inspectCollection, inspectUnique } from './selector-registry.js';
@@ -12,11 +13,13 @@ export interface InspectEnvironment {
   DATA_DIR?: string;
   CHATGPT_PROFILE_DIR?: string;
   CHATGPT_DIAGNOSTICS_DIR?: string;
+  CHATGPT_PROXY_SERVER?: string;
 }
 
 export interface ParsedInspectEnvironment {
   profileDir: string;
   diagnosticsDir?: string;
+  proxyServer?: string;
 }
 
 export interface InspectChatGptPageOptions {
@@ -51,9 +54,11 @@ export function parseInspectEnvironment(env: InspectEnvironment): ParsedInspectE
   if (profileDir === productionProfile) throw new Error('e2e_profile_must_be_isolated');
 
   const diagnostics = nonEmpty(env.CHATGPT_DIAGNOSTICS_DIR);
+  const proxyServer = parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER);
   return {
     profileDir,
     ...(diagnostics ? { diagnosticsDir: resolve(diagnostics) } : {}),
+    ...(proxyServer ? { proxyServer } : {}),
   };
 }
 

@@ -43,6 +43,9 @@ export async function createGatewayRuntime(
       browser = await (options.createBrowserManager ?? defaultCreateBrowserManager)({
         profileDir: options.browserProfileDir ?? join(options.config.dataDir, 'browser-profile'),
         maxActivePages: options.config.maxActivePages,
+        ...(options.config.chatgptProxyServer
+          ? { proxyServer: options.config.chatgptProxyServer }
+          : {}),
       });
     }
   } catch (error) {

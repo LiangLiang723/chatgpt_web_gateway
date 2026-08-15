@@ -103,7 +103,9 @@ Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。�
 
 镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 
-持久状态统一通过宿主机目录 Bind Mount 到 `/data`；Browser Profile 固定在 `/data/browser-profile/`，未来正常 browser runtime 与当前 noVNC maintenance browser 复用。**同一 Profile 同时只能有一个 Chromium owner**：Phase 3 起 `UI_MODE=headless` 由产品 BrowserManager 占用 Profile；`UI_MODE=novnc` 则明确禁用产品 BrowserManager，只启动 headed maintenance browser。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。noVNC overlay 默认只把维护端口绑定到宿主机 `127.0.0.1`；需要远程 NAS 访问时必须显式调整绑定并自行保证网络访问控制。
+持久状态统一通过宿主机目录 Bind Mount 到 `/data`；normal BrowserManager 的生产 Profile 固定在 `/data/browser-profile/`。**同一 Profile 同时只能有一个 Chromium owner**：Phase 3 起 `UI_MODE=headless` 由产品 BrowserManager 占用生产 Profile；`UI_MODE=novnc` 则明确禁用产品 BrowserManager，只启动 headed maintenance browser。maintenance 默认仍使用 `/data/browser-profile/`，但显式 real E2E 可通过 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 切到隔离测试 Profile；该 override 不改变 normal headless 的生产 Profile。长期 Gateway / Chromium 进程必须非 root，并支持 `PUID/PGID` 与 NAS 文件权限对齐。noVNC overlay 默认只把维护端口绑定到宿主机 `127.0.0.1`；需要远程 NAS 访问时必须显式调整绑定并自行保证网络访问控制。
+
+ChatGPT 浏览器网络可通过可选 `CHATGPT_PROXY_SERVER` 配置。该值只允许 `http` / `https` / `socks5` proxy server origin，URL 内禁止用户名/密码；同一值必须传给 normal BrowserManager、maintenance browser、`inspect:chatgpt` 和 real E2E，避免四条路径出现不同网络行为。未配置时 Chromium 保持直连。
 
 ## Browser（浏览器）
 
@@ -143,7 +145,7 @@ Phase 3 Executor 只接受 Fresh、非流式、纯文本请求；system/develope
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
-当前真实 ChatGPT DOM 和登录态尚未验收：2026-08-15 real E2E 实际启动，但 DevSpace 到 `chatgpt.com` 的 HTTPS 访问超时，停在 auth/selector inspection 之前。
+当前真实 ChatGPT DOM 和登录态尚未验收：2026-08-15 real E2E 实际启动；直连路径超时后已通过 `CHATGPT_PROXY_SERVER` 恢复页面可达，Playwright 能进入真实 Cloudflare challenge。Headless challenge 30 秒未自动放行，当前停在 headed maintenance 人工 Cloudflare/登录步骤，尚未完成 auth/selector inspection。
 
 ## Streaming（流式输出）
 

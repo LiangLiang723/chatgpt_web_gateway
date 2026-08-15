@@ -5,6 +5,7 @@ const options = parseInspectEnvironment(process.env);
 const browser = await createBrowserManager({
   profileDir: options.profileDir,
   maxActivePages: 1,
+  ...(options.proxyServer ? { proxyServer: options.proxyServer } : {}),
 });
 
 try {

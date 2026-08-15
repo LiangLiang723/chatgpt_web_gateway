@@ -9,6 +9,7 @@ import type { BrowserManager } from './types.js';
 export interface BrowserLaunchOptions {
   headless: true;
   viewport: { width: number; height: number };
+  proxy?: { server: string };
 }
 
 export type LaunchPersistentContext = (
@@ -19,6 +20,7 @@ export type LaunchPersistentContext = (
 export interface CreateBrowserManagerOptions {
   profileDir: string;
   maxActivePages: number;
+  proxyServer?: string;
   launchPersistentContext?: LaunchPersistentContext;
 }
 
@@ -37,6 +39,7 @@ export async function createBrowserManager(
       {
         headless: true,
         viewport: { width: 1440, height: 900 },
+        ...(options.proxyServer ? { proxy: { server: options.proxyServer } } : {}),
       },
     );
   } catch (error) {

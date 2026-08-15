@@ -64,6 +64,27 @@ describe('BrowserManager', () => {
     await manager.close();
   });
 
+  it('passes an explicit ChatGPT proxy server to the persistent context', async () => {
+    const profileDir = tempProfile();
+    const context = fakeContext();
+    const launch = vi.fn(async () => context);
+
+    const manager = await createBrowserManager({
+      profileDir,
+      maxActivePages: 4,
+      proxyServer: 'http://proxy.example:7890',
+      launchPersistentContext: launch,
+    });
+
+    expect(launch).toHaveBeenCalledWith(profileDir, {
+      headless: true,
+      viewport: { width: 1440, height: 900 },
+      proxy: { server: 'http://proxy.example:7890' },
+    });
+
+    await manager.close();
+  });
+
   it('maps persistent-context launch failures to browser_unavailable', async () => {
     const profileDir = tempProfile();
     const launch = vi.fn(async () => {

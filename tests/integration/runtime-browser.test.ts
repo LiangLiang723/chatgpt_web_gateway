@@ -50,7 +50,11 @@ describe('Gateway Browser runtime composition', () => {
       expect(existsSync(join(dataDir, 'gateway.db'))).toBe(true);
       return browser;
     });
-    const config = loadConfig({ GATEWAY_API_KEY: 'test-key', DATA_DIR: dataDir });
+    const config = loadConfig({
+      GATEWAY_API_KEY: 'test-key',
+      DATA_DIR: dataDir,
+      CHATGPT_PROXY_SERVER: 'http://proxy.example:7890',
+    });
 
     const runtime = await createGatewayRuntime({
       config,
@@ -63,6 +67,7 @@ describe('Gateway Browser runtime composition', () => {
     expect(createBrowserManager).toHaveBeenCalledWith({
       profileDir: join(dataDir, 'browser-profile'),
       maxActivePages: 4,
+      proxyServer: 'http://proxy.example:7890',
     });
     expect(runtime.browser).toBe(browser);
   });

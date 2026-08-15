@@ -25,6 +25,8 @@ const env = {
   NOVNC_PORT: String(novncPort),
   NOVNC_PASSWORD: 'smoke-novnc-password',
   MAINTENANCE_URL: 'about:blank',
+  CHATGPT_PROXY_SERVER: 'http://127.0.0.1:65534',
+  CHATGPT_PROFILE_DIR: '/data/e2e-browser-profile',
 };
 
 function composeArgs(maintenance, ...args) {
@@ -194,32 +196,36 @@ function assertRuntimeIdentity(id) {
   );
 }
 
-function browserProfileOwner(id) {
+function browserProfileOwner(id, expectedProfileDir) {
   const processList = runDocker(['exec', id, 'ps', '-eo', 'pid=,args='], { quiet: true });
   const owners = processList
     .split('\n')
     .map((line) => line.trim().match(/^(\d+)\s+(.*)$/))
     .filter(
       (match) =>
-        match?.[2]?.includes('--user-data-dir=/data/browser-profile') &&
+        match?.[2]?.includes(`--user-data-dir=${expectedProfileDir}`) &&
         !match[2].includes(' --type='),
     );
 
   if (owners.length !== 1) {
     throw new Error(
-      `Expected exactly one Chromium owner for /data/browser-profile, got ${owners.length}`,
+      `Expected exactly one Chromium owner for ${expectedProfileDir}, got ${owners.length}`,
     );
   }
   return { pid: owners[0][1], args: owners[0][2] };
 }
 
 function assertBrowserMode(id, maintenance) {
-  const owner = browserProfileOwner(id);
+  const expectedProfileDir = maintenance ? env.CHATGPT_PROFILE_DIR : '/data/browser-profile';
+  const owner = browserProfileOwner(id, expectedProfileDir);
   const headless = owner.args.includes('--headless');
   if (maintenance ? headless : !headless) {
     throw new Error(
       `Expected ${maintenance ? 'headed maintenance' : 'headless product'} Chromium, got: ${owner.args}`,
     );
+  }
+  if (!owner.args.includes(`--proxy-server=${env.CHATGPT_PROXY_SERVER}`)) {
+    throw new Error(`Chromium did not receive CHATGPT_PROXY_SERVER: ${owner.args}`);
   }
 
   const identity = runDocker(

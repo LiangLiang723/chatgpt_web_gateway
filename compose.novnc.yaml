@@ -3,5 +3,6 @@ services:
     environment:
       UI_MODE: novnc
       NOVNC_PASSWORD: ${NOVNC_PASSWORD:?Set NOVNC_PASSWORD before enabling maintenance mode}
+      CHATGPT_PROFILE_DIR: ${CHATGPT_PROFILE_DIR:-}
     ports:
       - '${NOVNC_BIND:-127.0.0.1}:${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}'

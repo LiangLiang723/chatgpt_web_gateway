@@ -1,5 +1,6 @@
 import { Ajv } from 'ajv';
 
+import { parseChatGptProxyServer } from './proxy.js';
 import { AppConfigSchema } from './schema.js';
 import type { AppConfig } from './schema.js';
 
@@ -53,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pgid: parseInteger('PGID', env.PGID, 1000, 1),
     dataDir: requireNonEmpty('DATA_DIR', env.DATA_DIR ?? '/data'),
     maxActivePages: parseInteger('MAX_ACTIVE_PAGES', env.MAX_ACTIVE_PAGES, 4, 1, 32),
+    chatgptProxyServer: parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),
     novncPassword: optionalNonEmpty(env.NOVNC_PASSWORD),
   };

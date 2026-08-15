@@ -13,6 +13,7 @@ import { createGatewayRuntime } from '../../src/runtime.js';
 export interface RunPhase3ChatGptE2EOptions {
   profileDir: string;
   diagnosticsDir?: string;
+  proxyServer?: string;
 }
 
 export interface Phase3ChatGptE2EResult {
@@ -42,6 +43,7 @@ export async function runPhase3ChatGptE2E(
   const browser = await createBrowserManager({
     profileDir: options.profileDir,
     maxActivePages: 1,
+    ...(options.proxyServer ? { proxyServer: options.proxyServer } : {}),
   });
 
   try {
@@ -80,6 +82,7 @@ export async function runPhase3ChatGptE2E(
         GATEWAY_API_KEY: 'phase3-e2e-gateway-key',
         DATA_DIR: runtimeDataDir,
         MAX_ACTIVE_PAGES: '1',
+        ...(options.proxyServer ? { CHATGPT_PROXY_SERVER: options.proxyServer } : {}),
       }),
       browserProfileDir: options.profileDir,
       logger: false,

@@ -40,10 +40,12 @@ describe('inspect:chatgpt safety', () => {
         DATA_DIR: '/data',
         CHATGPT_PROFILE_DIR: './e2e-browser-profile',
         CHATGPT_DIAGNOSTICS_DIR: './chatgpt-diagnostics',
+        CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
       }),
     ).toEqual({
       profileDir: resolve('./e2e-browser-profile'),
       diagnosticsDir: resolve('./chatgpt-diagnostics'),
+      proxyServer: 'http://proxy.example:7890',
     });
   });
 
