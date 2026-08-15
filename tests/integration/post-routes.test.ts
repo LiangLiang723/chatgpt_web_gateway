@@ -181,6 +181,8 @@ describe('POST routes', () => {
     ['selector_ambiguous', 502],
     ['chatgpt_generation_timeout', 504],
     ['chatgpt_response_missing', 502],
+    ['conversation_restore_failed', 502],
+    ['unsupported_phase4_request', 501],
     ['conversation_sync_not_implemented', 501],
     ['unsupported_phase3_request', 501],
   ] as const)(

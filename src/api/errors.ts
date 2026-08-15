@@ -122,6 +122,14 @@ const executionErrorMap = {
     statusCode: 502,
     message: 'ChatGPT did not produce a readable Assistant response',
   },
+  conversation_restore_failed: {
+    statusCode: 502,
+    message: 'The saved ChatGPT conversation could not be restored',
+  },
+  unsupported_phase4_request: {
+    statusCode: 501,
+    message: 'This request requires a capability not implemented in Phase 4',
+  },
   conversation_sync_not_implemented: {
     statusCode: 501,
     message: 'Conversation synchronization is not implemented in Phase 3',

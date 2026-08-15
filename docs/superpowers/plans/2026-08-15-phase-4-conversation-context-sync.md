@@ -436,7 +436,7 @@ git commit -m "✨ 扩展 ChatGPT Driver 会话导航目标"
 - Consumes Task 2 planner/prompt functions and Task 3 queue/Page manager.
 - Persists only successful keyed requests.
 
-- [ ] **Step 1: Write failing keyed executor tests for FRESH and APPEND**
+- [x] **Step 1: Write failing keyed executor tests for FRESH and APPEND**
 
 Use in-memory persistence from `tests/helpers/persistence.ts`, fake Driver and fake Page layers.
 
@@ -456,13 +456,13 @@ Second keyed request with full history:
 - persisted URL remains the returned conversation URL;
 - snapshot now contains turn 1 user/assistant + turn 2 user/assistant.
 
-- [ ] **Step 2: Run executor tests and confirm RED**
+- [x] **Step 2: Run executor tests and confirm RED**
 
 ```bash
 corepack pnpm vitest run tests/unit/conversation-executor.test.ts
 ```
 
-- [ ] **Step 3: Implement successful keyed/unkeyed execution**
+- [x] **Step 3: Implement successful keyed/unkeyed execution**
 
 Use `crypto.randomUUID` by default and allow injection for deterministic tests.
 
@@ -477,7 +477,7 @@ Convert caller normalized messages to `MessageRecord[]` with sequential zero-bas
 
 Unkeyed Fresh execution uses ordinary Page Pool acquire/release and never calls `ConversationStore.save()`.
 
-- [ ] **Step 4: Add failing RESTORE/REBUILD/error atomicity tests**
+- [x] **Step 4: Add failing RESTORE/REBUILD/error atomicity tests**
 
 Prove:
 
@@ -490,32 +490,32 @@ Prove:
 - failed keyed execution discards its affinity;
 - success releases affinity without discard.
 
-- [ ] **Step 5: Run executor tests and confirm RED for the new cases**
+- [x] **Step 5: Run executor tests and confirm RED for the new cases**
 
 Run the same executor test command and verify failures correspond to missing restore/rebuild behavior.
 
-- [ ] **Step 6: Implement restore/rebuild fallback and atomic save boundary**
+- [x] **Step 6: Implement restore/rebuild fallback and atomic save boundary**
 
 Catch only `ChatGptDriverError` with `code === 'conversation_restore_failed'` from a RESTORE attempt and retry once with `target: { kind: 'fresh' }` plus full prompt. Save only after the final Driver result exists.
 
 For an APPEND `current` identity failure, retry once using the persisted URL as a RESTORE target when available; if that restore identity also fails, perform the one REBUILD fallback.
 
-- [ ] **Step 7: Update stable API error mapping tests first**
+- [x] **Step 7: Update stable API error mapping tests first**
 
 Change route/error expectations from `unsupported_phase3_request` normal execution to `unsupported_phase4_request` and add mapping for escaped `conversation_restore_failed` as HTTP 502.
 
-- [ ] **Step 8: Implement stable error mapping**
+- [x] **Step 8: Implement stable error mapping**
 
 Update `src/api/errors.ts` without changing existing auth/browser/selector/page-capacity mappings.
 
-- [ ] **Step 9: Run Task 5 focused tests and typecheck**
+- [x] **Step 9: Run Task 5 focused tests and typecheck**
 
 ```bash
 corepack pnpm vitest run tests/unit/conversation-executor.test.ts tests/integration/post-routes.test.ts tests/unit/response-encoders.test.ts
 corepack pnpm typecheck
 ```
 
-- [ ] **Step 10: Update plan and commit**
+- [x] **Step 10: Update plan and commit**
 
 ```bash
 git add src/conversations/conversation-executor.ts src/api/errors.ts tests/unit/conversation-executor.test.ts tests/integration/post-routes.test.ts docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md
