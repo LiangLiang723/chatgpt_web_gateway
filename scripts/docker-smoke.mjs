@@ -253,6 +253,9 @@ function assertBrowserMode(id, maintenance) {
   if (!owner.args.includes(`--proxy-server=${env.CHATGPT_PROXY_SERVER}`)) {
     throw new Error(`Chromium did not receive CHATGPT_PROXY_SERVER: ${owner.args}`);
   }
+  if (maintenance && owner.args.includes('--remote-debugging-pipe')) {
+    throw new Error(`Maintenance Chromium must not be Playwright-controlled: ${owner.args}`);
+  }
 
   const identity = runDocker(
     [

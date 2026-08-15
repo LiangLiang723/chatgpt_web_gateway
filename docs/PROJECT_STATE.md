@@ -23,7 +23,7 @@ UPDATED_AT=2026-08-15
 - **当前状态：** `blocked`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
 - **下一个可执行任务：** 使用已启动的隔离 E2E noVNC Profile 完成 ChatGPT 人工登录/MFA，然后重跑 `inspect:chatgpt` 和完整 Phase 3 real E2E。
-- **当前 blocker（阻塞）：** DevSpace 直连 `chatgpt.com` 受错误 DNS/网络路径影响；代理 + Xvfb/full Chromium 已解决真实页面可达性和 Cloudflare challenge，真实 Guest 页面 inspection 已稳定返回 `auth_required`。隔离 `/data/e2e-browser-profile` 的 headed noVNC maintenance 实例已启动，当前只待人工完成 ChatGPT 登录/MFA 后校准 authenticated Selector 并运行 Fresh Driver / Gateway HTTP challenge。
+- **当前 blocker（阻塞）：** DevSpace 直连 `chatgpt.com` 受错误 DNS/网络路径影响；代理 + Xvfb/full Chromium 已解决真实 Guest 页面可达性，真实 inspection 已稳定返回 `auth_required`。人工登录时 `auth.openai.com` Turnstile 在 Playwright-controlled maintenance Chromium 中发生重复 challenge，因此 maintenance 登录路径已改成直接 spawn bundled Chromium（无 `--remote-debugging-pipe`、不创建 Playwright BrowserContext）；隔离 `/data/e2e-browser-profile` 的新实例已启动，当前只待人工重新完成安全验证/ChatGPT 登录后校准 authenticated Selector 并运行 Fresh Driver / Gateway HTTP challenge。
 
 ## Implemented Now（当前已实现）
 
@@ -128,6 +128,7 @@ UPDATED_AT=2026-08-15
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-15：人工登录进一步暴露 `auth.openai.com` Turnstile 在 Playwright-controlled maintenance Chromium 中重复 challenge；maintenance browser 已改为 Node 直接 spawn 同一 bundled Chromium binary，仅保留 Profile/proxy/人工 UI，不创建 Playwright BrowserContext、不带 `--remote-debugging-pipe`。Docker smoke 新增该负向断言并通过，最新镜像 `sha256:38877d61…` 已用于真实 6088 E2E Profile 重试。
 - 2026-08-15：修复 real noVNC 登录入口长期停在 `Connecting...`：根因是 Ubuntu x11vnc `0.9.16` 默认单线程在 Xvfb 下高 CPU 且不发送 RFB banner；`-threads` A/B 实测约 104ms 返回 `RFB 003.008`。Docker smoke 新增真实 `/websockify` RFB banner 验证，新镜像 `sha256:d2cf5c2c…` 通过；真实 6088 noVNC 页面已验证进入 `Credentials are required` 密码状态。
 - 2026-08-15：maintenance mode switch 增加 PersistentContext readiness handshake、有序 shutdown 和受 hostname/PID 约束的 stale Chromium `Singleton*` 清理；新镜像 `sha256:99a0c44b…` Docker smoke 验证 maintenance `down` 后测试 Profile 无 Singleton marker，人工登录后可安全切回 normal runtime。
 - 2026-08-15：真实 Cloudflare 对照验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT Guest 页面并由 Auth Probe 报告 `auth_required`。normal `UI_MODE=headless` 因此实现为“无暴露 UI 的 Xvfb + full Chromium”；确定性 `verify` 继续通过 26 个测试文件 / 130 个测试，Docker smoke 通过 normal/maintenance virtual display、proxy/Profile single-owner、HTTP/SQLite/restart 验证。

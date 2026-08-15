@@ -106,7 +106,7 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - `/data` Bind Mount 可写，长期进程非 root。
 - noVNC overlay 只在维护配置下启动并发布端口；默认宿主机绑定为 `127.0.0.1`。
 - Xvfb 在 normal/maintenance 两种模式都以指定 `PUID/PGID` 运行；noVNC HTML、x11vnc / websockify / maintenance browser 只在 maintenance 可用。
-- maintenance smoke 不只检查 noVNC HTML 200，还必须通过 `/websockify` WebSocket 实际收到 `RFB 003.008` banner，证明 x11vnc → websockify → noVNC 协议链可用。
+- maintenance smoke 不只检查 noVNC HTML 200，还必须通过 `/websockify` WebSocket 实际收到 `RFB 003.008` banner，证明 x11vnc → websockify → noVNC 协议链可用；maintenance 根 Chromium 还必须不存在 `--remote-debugging-pipe`，证明人工登录浏览器不是 Playwright-controlled session。
 - 当前 Ubuntu x11vnc `0.9.16` 必须使用 `-threads`；真实故障复现表明默认单线程模式会持续高 CPU 且不发送 RFB banner。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。

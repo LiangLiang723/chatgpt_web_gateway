@@ -1,4 +1,5 @@
-import { readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { lstatSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import path from 'node:path';
 
@@ -14,26 +15,19 @@ const profileDir = requestedProfileDir
 if (profileDir !== dataDir && !profileDir.startsWith(`${dataDir}${path.sep}`)) {
   throw new Error('CHATGPT_PROFILE_DIR must stay inside DATA_DIR');
 }
+
 const maintenanceUrl = process.env.MAINTENANCE_URL ?? 'https://chatgpt.com/';
 const proxyServer = parseChatGptProxyServer(process.env.CHATGPT_PROXY_SERVER);
 const readyFile = '/tmp/maintenance-browser.ready';
 const pidFile = '/tmp/maintenance-browser.pid';
+const lockPath = path.join(profileDir, 'SingletonLock');
 
 process.once('exit', () => {
   rmSync(readyFile, { force: true });
   rmSync(pidFile, { force: true });
 });
 
-let context;
-let closePromise;
-let shutdownRequested = false;
-let resolveSignal;
-const signalReceived = new Promise((resolve) => {
-  resolveSignal = resolve;
-});
-
 function removeOwnStaleSingletonFiles() {
-  const lockPath = path.join(profileDir, 'SingletonLock');
   let target;
   try {
     target = readlinkSync(lockPath);
@@ -59,60 +53,73 @@ function removeOwnStaleSingletonFiles() {
   }
 }
 
+const chromeArgs = [
+  '--no-sandbox',
+  '--disable-dev-shm-usage',
+  `--user-data-dir=${profileDir}`,
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--password-store=basic',
+  '--use-mock-keychain',
+  ...(proxyServer ? [`--proxy-server=${proxyServer}`, '--proxy-bypass-list=<-loopback>'] : []),
+  maintenanceUrl,
+];
+
+let shutdownRequested = false;
+let requestedSignal = 'SIGTERM';
+let browser;
+
 function requestShutdown(signal) {
   shutdownRequested = true;
-  resolveSignal(signal);
-  if (context && !closePromise) {
-    closePromise = context.close();
+  requestedSignal = signal;
+  if (browser && browser.exitCode === null) {
+    browser.kill(signal);
   }
 }
 
 process.once('SIGTERM', () => requestShutdown('SIGTERM'));
 process.once('SIGINT', () => requestShutdown('SIGINT'));
 
-context = await chromium.launchPersistentContext(profileDir, {
-  headless: false,
-  viewport: { width: 1440, height: 900 },
-  ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+browser = spawn(chromium.executablePath(), chromeArgs, {
+  stdio: 'inherit',
 });
+
+const browserExit = new Promise((resolve, reject) => {
+  browser.once('error', reject);
+  browser.once('exit', (code, signal) => resolve({ code, signal }));
+});
+
+if (shutdownRequested && browser.exitCode === null) {
+  browser.kill(requestedSignal);
+}
+
+let ready = false;
+for (let attempt = 0; attempt < 100; attempt += 1) {
+  if (browser.exitCode !== null) break;
+  try {
+    lstatSync(lockPath);
+    ready = true;
+    break;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+
+if (!ready) {
+  if (browser.exitCode === null) browser.kill('SIGTERM');
+  const result = await browserExit;
+  removeOwnStaleSingletonFiles();
+  throw new Error(
+    `Maintenance Chromium exited before Profile lock became ready: ${JSON.stringify(result)}`,
+  );
+}
+
 writeFileSync(readyFile, 'ready\n', { mode: 0o600 });
 
-if (shutdownRequested) {
-  closePromise ??= context.close();
-  await closePromise;
-  removeOwnStaleSingletonFiles();
-} else {
-  const page = context.pages()[0] ?? (await context.newPage());
-  if (maintenanceUrl !== 'about:blank') {
-    try {
-      await page.goto(maintenanceUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    } catch (error) {
-      if (!shutdownRequested) {
-        console.error(
-          'Maintenance browser navigation failed; the browser remains open for manual use.',
-          error,
-        );
-      }
-    }
-  }
+const result = await browserExit;
+removeOwnStaleSingletonFiles();
 
-  if (shutdownRequested) {
-    closePromise ??= context.close();
-    await closePromise;
-    removeOwnStaleSingletonFiles();
-  } else {
-    const contextClosed = new Promise((resolve) => {
-      context.once('close', () => resolve('context_closed'));
-    });
-    const closeReason = await Promise.race([contextClosed, signalReceived]);
-    if (closeReason !== 'context_closed') {
-      closePromise ??= context.close();
-      try {
-        await closePromise;
-        removeOwnStaleSingletonFiles();
-      } catch (error) {
-        console.error(`Failed to close maintenance browser context: ${String(error)}`);
-      }
-    }
-  }
+if (!shutdownRequested && result.code !== 0) {
+  throw new Error(`Maintenance Chromium exited unexpectedly: ${JSON.stringify(result)}`);
 }

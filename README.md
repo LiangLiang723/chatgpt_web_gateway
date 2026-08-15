@@ -158,7 +158,7 @@ docker compose -f compose.yaml -f compose.novnc.yaml up -d
 
 如果 NAS 需要从其他设备访问，可以显式修改 `NOVNC_BIND`，但这会扩大访问面，应由部署网络、防火墙或反向代理保证安全。
 
-维护模式默认使用同一 `/data/browser-profile/`，因此与普通 `UI_MODE=headless` BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner；real E2E 可通过 `CHATGPT_PROFILE_DIR` 改用隔离测试 Profile。maintenance 停机时会先优雅关闭 PersistentContext，并清理经 hostname/PID 证明属于当前已退出 Chromium 的 stale `Singleton*` marker，避免切回 normal 后被旧 Profile lock 阻塞。完成登录或排障后恢复普通模式：
+维护模式默认使用同一 `/data/browser-profile/`，因此与普通 `UI_MODE=headless` BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner；real E2E 可通过 `CHATGPT_PROFILE_DIR` 改用隔离测试 Profile。maintenance 登录浏览器直接启动同一 Playwright bundled Chromium binary，但不创建 Playwright BrowserContext、不开 `--remote-debugging-pipe`，只提供纯人工账号/MFA/安全验证 UI。maintenance 停机时会先请求 Chromium 退出，并清理经 hostname/PID 证明属于当前已退出 Chromium 的 stale `Singleton*` marker，避免切回 normal 后被旧 Profile lock 阻塞。完成登录或排障后恢复普通模式：
 
 ```bash
 docker compose -f compose.yaml -f compose.novnc.yaml down

@@ -99,7 +99,7 @@ interface NormalizedRequest {
 
 Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
 
-仓库提供单一完整镜像。Phase 3 起正常 `UI_MODE=headless` 会先启动仅供浏览器使用的 Xvfb，再由 Gateway BrowserManager 以 `headless:false` 启动 full Playwright bundled Chromium / Persistent BrowserContext；**headless 在这里表示无可访问 UI，而不是 Chromium 的 `--headless` 指纹**。真实环境验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 ChatGPT Cloudflare challenge，而 Xvfb 上的 full Chromium 可进入正常 ChatGPT 页面，因此这是实现强制调整。正常模式不启动 x11vnc/websockify/noVNC，也不发布维护端口。首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser；maintenance 模式不启动产品 BrowserManager，ChatGPT POST 返回稳定 `browser_maintenance_mode`，从而保证同一 Profile 只有一个 Chromium owner。
+仓库提供单一完整镜像。Phase 3 起正常 `UI_MODE=headless` 会先启动仅供浏览器使用的 Xvfb，再由 Gateway BrowserManager 以 `headless:false` 启动 full Playwright bundled Chromium / Persistent BrowserContext；**headless 在这里表示无可访问 UI，而不是 Chromium 的 `--headless` 指纹**。真实环境验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 ChatGPT Cloudflare challenge，而 Xvfb 上的 full Chromium 可进入正常 ChatGPT 页面，因此这是实现强制调整。正常模式不启动 x11vnc/websockify/noVNC，也不发布维护端口。首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser。maintenance browser 直接 spawn 同一 Playwright bundled Chromium binary，不创建 Playwright BrowserContext、不开 `--remote-debugging-pipe`，确保账号/MFA/Cloudflare 等人工验证发生在不受自动化控制的浏览器进程中；maintenance 模式不启动产品 BrowserManager，ChatGPT POST 返回稳定 `browser_maintenance_mode`，从而保证同一 Profile 只有一个 Chromium owner。
 
 镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 

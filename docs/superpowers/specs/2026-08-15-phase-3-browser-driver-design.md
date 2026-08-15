@@ -276,7 +276,7 @@ listen
 
 Browser/Xvfb 启动失败属于正常 `UI_MODE=headless` startup failure；ChatGPT 未登录不属于 startup failure。
 
-`UI_MODE=novnc` 是 maintenance 模式：entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance browser 必须在 PersistentContext 建立后发布 readiness marker；停机时 entrypoint 先请求 maintenance browser 优雅 `context.close()`，再停止 Gateway。Linux Chromium 若在关闭后留下 `Singleton*` marker，只允许在 `SingletonLock` hostname 等于当前容器且其中 PID 已确认不存在时清理，禁止盲删可能属于其他 owner 的 lock。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
+`UI_MODE=novnc` 是 maintenance 模式：entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance browser 直接 spawn Playwright bundled Chromium binary，不创建 Playwright BrowserContext，也不得出现 `--remote-debugging-pipe`；这条路径只用于人工账号/MFA/Cloudflare 验证。maintenance browser 必须在 Chromium Profile lock 建立后发布 readiness marker；停机时 entrypoint 先请求 maintenance browser 退出，再停止 Gateway。Linux Chromium 若在关闭后留下 `Singleton*` marker，只允许在 `SingletonLock` hostname 等于当前容器且其中 PID 已确认不存在时清理，禁止盲删可能属于其他 owner 的 lock。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
 
 Gateway shutdown：
 
