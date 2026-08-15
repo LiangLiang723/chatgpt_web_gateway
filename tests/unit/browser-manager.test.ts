@@ -42,7 +42,7 @@ function fakeContext(events: string[] = []): BrowserContext {
 }
 
 describe('BrowserManager', () => {
-  it('creates the profile directory and launches a persistent headless context', async () => {
+  it('creates the profile directory and launches full Chromium on the virtual display', async () => {
     const profileDir = tempProfile();
     const context = fakeContext();
     const launch = vi.fn(async () => context);
@@ -54,7 +54,7 @@ describe('BrowserManager', () => {
     });
 
     expect(launch).toHaveBeenCalledWith(profileDir, {
-      headless: true,
+      headless: false,
       viewport: { width: 1440, height: 900 },
     });
     expect(manager.context).toBe(context);
@@ -77,7 +77,7 @@ describe('BrowserManager', () => {
     });
 
     expect(launch).toHaveBeenCalledWith(profileDir, {
-      headless: true,
+      headless: false,
       viewport: { width: 1440, height: 900 },
       proxy: { server: 'http://proxy.example:7890' },
     });

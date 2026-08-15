@@ -22,8 +22,8 @@ UPDATED_AT=2026-08-15
 - **当前阶段：** Phase 3 — Playwright Chromium + Minimal ChatGPT Driver（最小网页驱动）实施中。
 - **当前状态：** `blocked`
 - **活动计划：** [`2026-08-15-phase-3-browser-driver.md`](superpowers/plans/2026-08-15-phase-3-browser-driver.md)。
-- **下一个可执行任务：** 使用已启动的隔离 E2E noVNC Profile 完成 Cloudflare challenge / ChatGPT 人工登录，然后重跑 `inspect:chatgpt` 和完整 Phase 3 real E2E。
-- **当前 blocker（阻塞）：** DevSpace 直连 `chatgpt.com` 受错误 DNS/网络路径影响，但配置 `CHATGPT_PROXY_SERVER` 后 Playwright 已能在约 1 秒内到达真实 ChatGPT Cloudflare challenge；headless challenge 30 秒不会自动放行。隔离 `/data/e2e-browser-profile` 的 headed noVNC maintenance 实例已启动，当前只待人工完成 Cloudflare/账号/MFA 后才能校准 Selector 并运行 Fresh Driver / Gateway HTTP challenge。
+- **下一个可执行任务：** 使用已启动的隔离 E2E noVNC Profile 完成 ChatGPT 人工登录/MFA，然后重跑 `inspect:chatgpt` 和完整 Phase 3 real E2E。
+- **当前 blocker（阻塞）：** DevSpace 直连 `chatgpt.com` 受错误 DNS/网络路径影响；代理 + Xvfb/full Chromium 已解决真实页面可达性和 Cloudflare challenge，真实 Guest 页面 inspection 已稳定返回 `auth_required`。隔离 `/data/e2e-browser-profile` 的 headed noVNC maintenance 实例已启动，当前只待人工完成 ChatGPT 登录/MFA 后校准 authenticated Selector 并运行 Fresh Driver / Gateway HTTP challenge。
 
 ## Implemented Now（当前已实现）
 
@@ -116,20 +116,21 @@ UPDATED_AT=2026-08-15
 - Persistence 业务实体使用 UUID v4 主键、Unix 毫秒时间；复杂 payload 使用受 JSON 校验保护的 `TEXT`。
 - `ConversationStore` 是 Phase 2 的恢复聚合边界；同步事务拒绝 async callback。
 - Docker 从 Phase 1 起是正式运行边界；目标平台先锁定 `linux/amd64`。
-- Phase 3 普通 Compose 的 Gateway 进程会启动产品级 headless BrowserManager / Persistent BrowserContext；Docker smoke 已验证 Chromium 与 Gateway 使用指定 `PUID/PGID`。
+- Phase 3 普通 `UI_MODE=headless` Compose 会启动 Xvfb + 产品 BrowserManager / Persistent BrowserContext；BrowserManager 内部使用 full Chromium `headless:false`，但不启动/发布 x11vnc/noVNC。Docker smoke 已验证 Xvfb、Chromium 与 Gateway 使用指定 `PUID/PGID`。
 - noVNC 只通过维护 overlay 按需启用，默认宿主机绑定 `127.0.0.1`；maintenance 模式禁用产品 BrowserManager，只启动 headed maintenance browser。
 - `/data/browser-profile/` 是 normal BrowserManager 与 maintenance browser 共用但互斥占用的持久 Profile 边界；Docker smoke 验证两种模式都只有一个 browser owner。
 - `/health` 无需认证；所有 `/v1/*` 默认要求 Gateway Bearer API Key。
 - `X-Conversation-Key` 是受控兼容扩展；协议层负责标准化，Phase3Executor 看到该 key 会明确返回 `conversation_sync_not_implemented`，不静默忽略。
-- Phase 3 使用一个 Persistent BrowserContext + bounded Page Pool；Selector/Auth/Driver/Completion 都已实现确定性边界。当前真实页面已通过代理可达，但 selector/login/answer 仍待 headed maintenance 完成人工 Cloudflare/登录后验证。
+- Phase 3 使用一个 Persistent BrowserContext + bounded Page Pool；Selector/Auth/Driver/Completion 都已实现确定性边界。真实 Guest 页面已通过代理 + virtual display 验证 `auth_required`，authenticated selector/login/answer 仍待 headed maintenance 完成人工账号登录后验证。
 - 后续仍保持 Context Sync `FRESH | APPEND | RESTORE | REBUILD`、SQLite 为 Conversation 事实来源、约 200ms DOM polling + Stable Prefix Streaming。
 
 详细约束见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-15：新增可选 `CHATGPT_PROXY_SERVER`，normal/maintenance/inspect/E2E 共用同一代理；Compose 同步补齐 `MAX_ACTIVE_PAGES` 透传。确定性 `verify` 通过 26 个测试文件 / 130 个测试，新镜像 `sha256:ea756b1f…` Docker smoke 证明 normal/maintenance Chromium 都收到 proxy，且 maintenance 可切换独立 E2E Profile。
-- 2026-08-15：真实 Phase 3 网络 blocker 已进一步定位：系统 DNS/直连路径对 `chatgpt.com` 不可用；通过用户提供的 LAN 代理后 Playwright 可快速到达真实 Cloudflare challenge。Headless challenge 30 秒未自动通过，因此当前 blocker 收敛为人工 Cloudflare/ChatGPT 登录。
+- 2026-08-15：真实 Cloudflare 对照验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT Guest 页面并由 Auth Probe 报告 `auth_required`。normal `UI_MODE=headless` 因此实现为“无暴露 UI 的 Xvfb + full Chromium”；确定性 `verify` 继续通过 26 个测试文件 / 130 个测试，新镜像 `sha256:0471e9b7…` Docker smoke 通过 normal/maintenance virtual display、proxy/Profile single-owner、HTTP/SQLite/restart 验证。
+- 2026-08-15：新增可选 `CHATGPT_PROXY_SERVER`，normal/maintenance/inspect/E2E 共用同一代理；Compose 同步补齐 `MAX_ACTIVE_PAGES` 透传。代理 URL 禁止内嵌凭据，maintenance 可显式切换独立 E2E Profile。
+- 2026-08-15：真实 Phase 3 网络/Cloudflare blocker 已收敛：系统 DNS/直连路径不可用，但用户提供的 LAN 代理 + Xvfb/full Chromium 能稳定进入 HTTP 200 ChatGPT Guest 页面，真实 inspect 返回 `auth_required`；当前 blocker 只剩隔离 E2E Profile 的人工 ChatGPT 登录/MFA。
 - 2026-08-15：完成 Phase 3 BrowserManager / PagePool / Selector Registry / Auth Probe / Fresh Driver / Phase3Executor / OpenAI-style text encoder / inspect + real E2E harness 代码实现；此前最终文档回写后的 `corepack pnpm verify` 通过 26 个测试文件 / 128 个测试，镜像 `sha256:f6435e40…` 的 Docker smoke 通过 Chromium 单-owner / SQLite / HTTP / restart 验证。
 - 2026-08-14：完成 Phase 2 SQLite / Conversation persistence 实施：单 `DatabaseSync`、checksum migration、六类业务 Repository、原子 aggregate save/load、真实文件 DB close/reopen 恢复和 Gateway/Docker 生命周期接入。
 - 2026-08-14：Phase 2 最终确定性验证通过 15 个测试文件 / 67 个测试；Docker smoke 验证 `/data/gateway.db`、`001_initial`、非 root owner 和 restart 持久性。
@@ -142,14 +143,14 @@ UPDATED_AT=2026-08-15
 
 ## Next Steps（下一步）
 
-1. 在已启动的隔离 noVNC E2E Profile 中完成人工 Cloudflare challenge / ChatGPT 登录；不向 Gateway 提供账号密码或 MFA。
+1. 在已启动的隔离 noVNC E2E Profile 中完成人工 ChatGPT 登录/MFA；不向 Gateway 提供账号密码或 MFA。
 2. 使用相同独立 Profile + `CHATGPT_PROXY_SERVER` 运行 `corepack pnpm inspect:chatgpt`，校准当前真实 Selector / Auth 状态。
 3. 运行 `corepack pnpm test:e2e:chatgpt`，完成 Fresh Driver challenge 与 Gateway HTTP challenge。
 4. 只有上述 real E2E 全部通过后，才关闭 Phase 3 并进入 Phase 4 Context Sync 设计。
 
 ## Known Risks（已知风险）
 
-- **真实 ChatGPT Web E2E 已启动但未通过。** 代理已解决页面网络可达性，但当前 Cloudflare challenge 需要 headed 人工交互；在登录完成前仍不能证明当前 Selector、真实登录或 Fresh 文本问答可用。
+- **真实 ChatGPT Web E2E 已启动但未通过。** 代理 + Xvfb/full Chromium 已解决网络/Cloudflare 页面访问并验证 Guest `auth_required`；在人工账号登录完成前仍不能证明 authenticated Selector 或 Fresh 文本问答可用。
 - maintenance browser 已通过 Docker smoke 验证 proxy + 隔离 E2E Profile 运行边界，并已启动真实 ChatGPT 页面；首次人工登录仍在进行中。
 - 当前 POST 端点已经接入 Phase3Executor/Browser/Driver 的 Fresh 非流式纯文本路径，但真实 `chatgpt.com` E2E 尚未通过；Conversation persistence 仍未接入运行时 Conversation Engine，Context Sync 属于 Phase 4。
 - 当前 Docker 验收矩阵只有 `linux/amd64`，未验证 ARM64。

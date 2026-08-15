@@ -64,7 +64,7 @@ Phase 3 可以为 Phase 4+ 提供稳定接口和错误边界，但不得把未�
 Playwright 当前官方行为与本设计依赖关系：
 
 - `chromium.launchPersistentContext(userDataDir, ...)` 使用指定 User Data Directory 保存 cookies / local storage 等浏览器会话数据，并返回唯一 BrowserContext；关闭该 Context 会关闭浏览器。
-- 浏览器不允许两个实例同时使用同一个 User Data Directory，因此正常 headless BrowserManager 与 noVNC maintenance browser 必须保持互斥运行。
+- 浏览器不允许两个实例同时使用同一个 User Data Directory，因此正常 `UI_MODE=headless` BrowserManager 与 noVNC maintenance browser 必须保持互斥运行。
 - 一个 BrowserContext 可以承载多个 Page。
 - Locator 单目标动作默认严格匹配；多匹配会报错。`.first()` / `.last()` / `.nth()` 虽可绕过 strictness，但不适合作为本应唯一目标的长期修复。
 - Playwright actionability / auto-wait 已覆盖 visible、stable、enabled 等交互前条件，因此业务同步不得以固定 sleep 代替真实 DOM 状态。
@@ -225,8 +225,8 @@ export interface BrowserManager {
 
 export interface CreateBrowserManagerOptions {
   profileDir: string;
-  headless: true;
   maxActivePages: number;
+  proxyServer?: string;
 }
 ```
 
@@ -234,10 +234,13 @@ export interface CreateBrowserManagerOptions {
 
 ```ts
 chromium.launchPersistentContext(profileDir, {
-  headless: true,
+  headless: false,
   viewport: { width: 1440, height: 900 },
+  ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
 });
 ```
+
+这里是实现阶段由真实 ChatGPT Cloudflare 验证强制产生的调整：`UI_MODE=headless` 仍表示正常运行**没有可访问 UI/noVNC**，但容器会启动 Xvfb，Chromium 本身使用 full headed mode。Playwright headless-shell 与 Chromium new-headless 在当前真实环境都持续停在 Cloudflare challenge，而 Xvfb + full Chromium 能稳定进入正常 ChatGPT 页面。不得通过伪造 UA、任意 Chromium args 或绕过 challenge 的脚本替代这个边界。
 
 不得配置外部 Chrome executable path。
 
@@ -271,9 +274,9 @@ build Fastify
 listen
 ```
 
-Browser 启动失败属于 headless startup failure；ChatGPT 未登录不属于 startup failure。
+Browser/Xvfb 启动失败属于正常 `UI_MODE=headless` startup failure；ChatGPT 未登录不属于 startup failure。
 
-`UI_MODE=novnc` 是 maintenance 模式：现有 entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 headless BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
+`UI_MODE=novnc` 是 maintenance 模式：entrypoint 会启动 Xvfb / noVNC / headed maintenance browser，并随后启动 Gateway HTTP 进程。因此 GatewayRuntime 在该模式下**不得**再启动产品 BrowserManager，否则两个 Chromium 会争抢同一 `/data/browser-profile/`。maintenance 模式的 ChatGPT POST 请求返回稳定 `browser_maintenance_mode`，而 `/health` / `/v1/models` 继续可用于维护诊断。
 
 Gateway shutdown：
 
@@ -1042,11 +1045,11 @@ POST /v1/chat/completions
 
 普通 Docker smoke 继续**不访问真实 ChatGPT**，但 Phase 3 后新增：
 
-- Gateway 正常 headless runtime 确实启动 BrowserManager / Chromium。
-- Chromium 进程运行 UID/GID 与配置的 `PUID/PGID` 一致。
+- Gateway 正常 `UI_MODE=headless` runtime 确实启动 Xvfb + BrowserManager / full Chromium，Chromium 命令行不带 `--headless`。
+- Chromium 与 Xvfb 进程运行 UID/GID 与配置的 `PUID/PGID` 一致。
 - `/data/browser-profile/` 可由长期非 root 进程创建/使用。
-- 普通 Compose 不启动 noVNC / Xvfb / x11vnc / maintenance browser。
-- maintenance overlay 只启动 headed maintenance browser，不再启动产品 headless BrowserManager；HTTP POST 返回 `browser_maintenance_mode`，从而保证同一 Profile 单 owner。
+- 普通 Compose 不启动 x11vnc / websockify / noVNC / maintenance browser，也不发布 noVNC 端口。
+- maintenance overlay 启动 headed maintenance browser，不再启动产品 BrowserManager；HTTP POST 返回 `browser_maintenance_mode`，从而保证同一 Profile 单 owner。
 - shutdown 同时正确关闭 Fastify、Browser、SQLite。
 
 普通 `docker:smoke` 不能证明：
@@ -1090,7 +1093,7 @@ CHATGPT_PROFILE_DIR
 CHATGPT_DIAGNOSTICS_DIR
 ```
 
-`CHATGPT_PROFILE_DIR` 也允许 maintenance overlay 显式传给 headed maintenance browser，用于给隔离 E2E Profile 完成人工 Cloudflare/登录；normal headless Gateway 不读取该变量，生产 Profile 仍固定 `${DATA_DIR}/browser-profile/`。`CHATGPT_PROXY_SERVER` 则属于 production `AppConfig`，同时也由显式诊断/E2E CLI 读取，以保证四条浏览器路径使用一致网络。
+`CHATGPT_PROFILE_DIR` 也允许 maintenance overlay 显式传给 headed maintenance browser，用于给隔离 E2E Profile 完成人工 ChatGPT 登录/MFA；normal `UI_MODE=headless` Gateway 不读取该变量，生产 Profile 仍固定 `${DATA_DIR}/browser-profile/`。`CHATGPT_PROXY_SERVER` 则属于 production `AppConfig`，同时也由显式诊断/E2E CLI 读取，以保证四条浏览器路径使用一致网络。
 
 ## 23. Security and Privacy（安全与隐私）
 
@@ -1139,7 +1142,7 @@ Phase 3 后真实实现：
 
 Phase 3 只有全部满足才可标记 complete：
 
-1. Playwright bundled Chromium 通过 Persistent BrowserContext 接入正常 Gateway headless runtime；`UI_MODE=novnc` 时产品 BrowserManager 明确禁用，避免 Profile 双 owner。
+1. Playwright bundled Chromium 通过 Persistent BrowserContext 接入正常 `UI_MODE=headless` runtime；normal 模式使用 Xvfb + full Chromium `headless:false` 且不暴露 noVNC，`UI_MODE=novnc` 时产品 BrowserManager 明确禁用，避免 Profile 双 owner。
 2. Production Profile 固定 `${DATA_DIR}/browser-profile/`，BrowserManager 幂等关闭。
 3. Page Pool 默认容量 4，支持 acquire/release/reuse/capacity error/page removal。
 4. Selector Registry 具有 unique/collection cardinality、fallback、missing/ambiguous 诊断。
@@ -1157,7 +1160,7 @@ Phase 3 只有全部满足才可标记 complete：
 16. `inspect:chatgpt` 完成，缺少显式 E2E Profile 时拒绝运行。
 17. screenshot/DOM artifact 只有显式 diagnostics dir 时保存。
 18. `corepack pnpm verify` 确定性全绿且不访问真实 ChatGPT。
-19. fresh Docker build / smoke 全绿，普通 smoke 启动生产 headless Chromium 但不访问真实 ChatGPT。
+19. fresh Docker build / smoke 全绿，普通 smoke 启动生产 Xvfb + full Chromium（无 `--headless`、无 noVNC）但不访问真实 ChatGPT。
 20. 独立测试 Profile 的真实 ChatGPT auth/selector inspection 通过。
 21. 独立测试 Profile 的真实 Fresh Driver 文本问答通过。
 22. 至少一次真实 Gateway HTTP → ChatGPT Web → Chat Completions response E2E 通过。

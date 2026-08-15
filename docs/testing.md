@@ -56,7 +56,7 @@ corepack pnpm test:e2e:chatgpt
 
 `CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。
 
-2026-08-15 Phase 3 已实际运行上述真实命令。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用；设置用户提供的 LAN `CHATGPT_PROXY_SERVER` 后 bundled Chromium 能在约 1 秒内进入真实 Cloudflare challenge。Headless challenge 观察 30 秒未自动放行，因此当前阻塞已从网络超时收敛为 headed 人工 Cloudflare/ChatGPT 登录；auth/selector inspection、Fresh Driver challenge 和 Gateway HTTP challenge 仍待该人工步骤完成。
+2026-08-15 Phase 3 已实际运行上述真实命令。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用；用户提供的 LAN `CHATGPT_PROXY_SERVER` 恢复网络后，Playwright headless-shell/new-headless 均会长期停在 Cloudflare challenge，而 Xvfb + full Chromium 能稳定进入 HTTP 200 ChatGPT Guest 页面。当前真实 `inspect:chatgpt` 已返回 `auth_required`，所以网络/Cloudflare 已验证通过；auth/selector authenticated inspection、Fresh Driver challenge 和 Gateway HTTP challenge 只待隔离 Profile 人工 ChatGPT 登录/MFA。
 
 隔离 E2E Profile 可通过 maintenance overlay 人工登录：设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 后，maintenance browser 使用该测试 Profile；normal headless runtime 仍固定使用 `${DATA_DIR}/browser-profile/`。
 
@@ -100,18 +100,18 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - `linux/amd64` 镜像可构建。
 - 容器内 Node 版本符合批准 LTS 基线。
 - Playwright package 与官方基础镜像版本约束一致。
-- 默认 headless Compose 可启动 Gateway。
+- 默认 `UI_MODE=headless` Compose 可启动 Gateway、Xvfb 和产品 full Chromium，但不启动/发布 noVNC。
 - `/health` 可访问。
 - `/v1/models` 的 API Key 认证正确。
 - `/data` Bind Mount 可写，长期进程非 root。
 - noVNC overlay 只在维护配置下启动并发布端口；默认宿主机绑定为 `127.0.0.1`。
-- noVNC HTML 入口可访问，Xvfb / x11vnc / websockify / maintenance browser 均以指定 `PUID/PGID` 运行。
+- Xvfb 在 normal/maintenance 两种模式都以指定 `PUID/PGID` 运行；noVNC HTML、x11vnc / websockify / maintenance browser 只在 maintenance 可用。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
 - `schema_migrations` 包含且只包含一次 `001_initial` 当前基线。
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
-- 正常 headless Compose 存在且只存在一个 `/data/browser-profile/` Chromium browser owner，并以指定 `PUID/PGID` 运行。
-- maintenance overlay 存在且只存在一个 headed maintenance Chromium owner；产品 headless BrowserManager 不并发占用同一 Profile。
+- 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
+- maintenance overlay 存在且只存在一个 headed maintenance Chromium owner；产品 BrowserManager 不并发占用同一 Profile。
 
 Docker smoke 不等于真实 ChatGPT E2E，不能用来证明当前 Selector、登录、Fresh 文本回答、上传或图片生成有效。
 
@@ -144,4 +144,4 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 的事实是：real E2E **已通过代理进入真实 Cloudflare challenge，但隔离 headed Profile 尚待人工 Cloudflare/ChatGPT 登录**，因此仍不能声称 Selector、登录或真实 Fresh 文本路径已经验证。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 的事实是：real E2E **已通过代理 + Xvfb/full Chromium 进入真实 ChatGPT Guest 页面并验证 `auth_required`，但隔离 headed Profile 尚待人工 ChatGPT 登录/MFA**，因此仍不能声称 authenticated Selector 或真实 Fresh 文本路径已经验证。

@@ -152,7 +152,7 @@ Use an injected `launchPersistentContext` fake to assert exact launch boundary:
 
 ```ts
 expect(launch).toHaveBeenCalledWith(profileDir, expect.objectContaining({
-  headless: true,
+  headless: false,
   viewport: { width: 1440, height: 900 },
 }));
 ```
@@ -769,7 +769,7 @@ const runtime = await createGatewayRuntime({ config, logger: true });
 const profileDir = options.browserProfileDir ?? join(options.config.dataDir, 'browser-profile');
 ```
 
-Production `src/index.ts` never supplies this option. On headless Browser startup failure, close Persistence before rethrow. On maintenance mode, do not launch BrowserManager.
+Production `src/index.ts` never supplies this option. On normal `UI_MODE=headless` Xvfb/Browser startup failure, close Persistence before rethrow. On maintenance mode, do not launch BrowserManager.
 
 - [x] **Step 4: Write failing inspect CLI safety tests**
 
@@ -840,7 +840,7 @@ Commit:
 - Modify: `tests/integration/runtime-browser.test.ts`
 
 **Interfaces:**
-- Docker smoke proves production headless Chromium starts without accessing ChatGPT.
+- Docker smoke proves production `UI_MODE=headless` starts Xvfb + full Chromium without accessing ChatGPT or exposing noVNC.
 - Architecture checker enforces Browser/ChatGPT/API boundaries and selector-centralization.
 
 - [x] **Step 1: Add failing Docker smoke expectations before changing runtime assertions**
@@ -853,7 +853,7 @@ Maintenance overlay must prove:
 
 ```text
 headed maintenance browser exists
-product headless BrowserManager does not exist as a second Chromium owner
+product BrowserManager does not exist as a second Chromium owner
 ```
 
 If process-pattern differentiation needs an explicit Chromium argument marker, add one deterministic BrowserManager launch arg only if supported and safe; otherwise assert expected process count/profile lock behavior without relying on unstable command-line internals.
@@ -865,7 +865,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-Expected: new headless Chromium assertion fails before Browser runtime image is rebuilt/integrated.
+Expected: new virtual-display full Chromium assertion fails before Browser runtime image is rebuilt/integrated.
 
 - [x] **Step 3: Add architecture checker rules with failing evidence**
 
@@ -1008,7 +1008,7 @@ Assert HTTP 200 and challenge token in `choices[0].message.content`.
 
 Do not add it to `verify`.
 
-- [!] **Step 7: Run real inspect/auth E2E — proxy restored network access; blocked on headed Cloudflare/ChatGPT manual auth**
+- [!] **Step 7: Run real inspect/auth E2E — Guest auth verified; blocked only on isolated Profile manual ChatGPT login/MFA**
 
 Run only with explicit environment available in the workspace:
 
@@ -1020,7 +1020,7 @@ Expected for completion: authenticated + current selector diagnostics healthy.
 
 If no authenticated isolated Profile exists, record `auth_required` as the real Phase 3 blocker; do not fake login.
 
-2026-08-15 initial evidence: direct DevSpace DNS/HTTPS path to `chatgpt.com` was unusable (`ETIMEDOUT` / 60s Playwright navigation timeout). Follow-up investigation confirmed DNS interception/wrong answers and the user-provided LAN proxy can reach ChatGPT. Phase 3 now has optional `CHATGPT_PROXY_SERVER` wired through normal BrowserManager, maintenance browser, inspect and real E2E; proxy URL credentials are rejected. With that proxy, real `inspect:chatgpt` reaches the Cloudflare challenge in under a second and reports `auth=unknown`; a 30s headless observation remains on `Just a moment...`. An isolated headed noVNC instance using `/data/e2e-browser-profile` has therefore been started for the required human Cloudflare/login step.
+2026-08-15 execution evidence: direct DevSpace DNS/HTTPS path to `chatgpt.com` was unusable (`ETIMEDOUT` / 60s Playwright navigation timeout), while the user-provided LAN proxy restores reachability. Real comparison then showed Playwright headless-shell and Chromium new-headless both remain on Cloudflare `Just a moment...` for 30 seconds, but Xvfb + full Chromium (`headless:false`) returns HTTP 200 and reaches the normal ChatGPT Guest page. Phase 3 normal `UI_MODE=headless`, inspect and real E2E were therefore changed to virtual-display full Chromium; no x11vnc/noVNC is exposed in normal mode. A real proxy-backed `corepack pnpm inspect:chatgpt` now reaches `https://chatgpt.com/` and reports stable `auth_required`, proving Cloudflare/network and Guest Auth Probe behavior. The remaining criterion is an authenticated isolated Profile, so a headed noVNC instance using `/data/e2e-browser-profile` is live for the required human ChatGPT login/MFA step.
 
 - [!] **Step 8: Run full real Phase 3 E2E — pending the same isolated Profile manual login**
 
@@ -1032,7 +1032,7 @@ Expected for completion: auth inspection PASS, Fresh Driver challenge PASS, Gate
 
 If blocked by auth/network/CAPTCHA/current DOM, update `PROJECT_STATE` to Phase 3 blocked with exact evidence and continue Task 9 documentation/verification without falsely closing Phase 3.
 
-2026-08-15 execution evidence: the original full E2E run failed before auth inspection on direct network access. Proxy support is now implemented and verified, but full E2E must wait until the isolated headed Profile has completed Cloudflare/ChatGPT manual auth. Driver challenge and Gateway HTTP challenge remain unverified until then.
+2026-08-15 execution evidence: the original full E2E run failed before auth inspection on direct network access. Proxy + virtual-display full Chromium now reaches the real Guest page and `inspect:chatgpt` reports `auth_required`; full E2E must wait until the isolated headed Profile has completed ChatGPT manual login/MFA. Driver challenge and Gateway HTTP challenge remain unverified until then.
 
 - [x] **Step 9: Update plan/state and commit Task 8 implementation/evidence**
 
@@ -1070,13 +1070,13 @@ If E2E is blocked, commit harness plus blocker evidence/state with a specific me
 
 Current evidence by criterion:
 
-1. `src/runtime.ts` + runtime integration tests + Docker smoke prove headless BrowserManager and novnc maintenance exclusion.
+1. `src/runtime.ts` + runtime integration tests + Docker smoke prove `UI_MODE=headless` Xvfb + full Chromium BrowserManager and novnc maintenance exclusion.
 2. Runtime fixes production Profile to `${DATA_DIR}/browser-profile`; BrowserManager tests prove idempotent close.
 3. PagePool tests prove default config `4`, acquire/release/reuse/capacity/page removal.
 4. Selector Registry tests prove unique/collection/fallback/missing/ambiguous behavior.
 5. Architecture checker + source search enforce selector literals in `src/chatgpt/selectors.ts`.
 6. Auth tests prove authenticated/auth_required/unknown distinction.
-7. Unit/API mapping proves `auth_required` is stable 503 and does not become Gateway 401; proxy-backed real inspect now reaches the Cloudflare page, but manual login is still required before an authenticated ChatGPT page can be observed.
+7. Unit/API mapping proves `auth_required` is stable 503 and does not become Gateway 401; proxy-backed Xvfb/full-Chromium real inspect also observed the actual ChatGPT Guest page and returned `auth_required`.
 8. Driver tests prove Assistant baseline and new-turn index ownership.
 9. Completion tests prove generating + non-empty stable samples and timeout behavior without `networkidle` completion semantics.
 10. Phase3Executor tests prove Fresh non-stream text-only capability boundary and explicit future-capability errors.
@@ -1088,8 +1088,8 @@ Current evidence by criterion:
 16. `inspect:chatgpt` exists; safety tests reject missing/production E2E Profile.
 17. Inspect tests prove screenshot/HTML only when diagnostics dir is explicit.
 18. After proxy support, fresh deterministic `corepack pnpm verify` passed with 26 test files / 130 tests.
-19. Proxy-support Docker build succeeded as image `sha256:ea756b1f8eb830fbb331ec755470c873015f146fbe19c033779c7b856714a3d3`; fresh Docker smoke proves normal/maintenance Chromium both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, and HTTP/SQLite/restart checks still pass.
-20. **BLOCKED:** proxy-backed real auth/selector inspection reaches the genuine Cloudflare challenge, but the isolated headed Profile still requires manual Cloudflare/ChatGPT login before authenticated selector calibration.
+19. Virtual-display Docker build succeeded as image `sha256:0471e9b7530c2221cc706d33ed51a8e64df76991fd9343305337f64533be4e61`; fresh Docker smoke proves normal `UI_MODE=headless` runs Xvfb + full Chromium without noVNC, normal/maintenance both receive the proxy, normal keeps `/data/browser-profile`, maintenance can use isolated `/data/e2e-browser-profile`, and HTTP/SQLite/restart checks still pass.
+20. **BLOCKED:** proxy-backed Xvfb/full-Chromium real inspection passes Cloudflare and validates Guest `auth_required`, but completion requires the isolated headed Profile to finish manual ChatGPT login before authenticated composer/selector calibration.
 21. **BLOCKED:** real Fresh Driver challenge awaits criterion 20 manual auth.
 22. **BLOCKED:** real Gateway HTTP challenge awaits criterion 20 manual auth.
 23. README/API/architecture/testing/PROJECT_STATE and the governing spec are updated for optional proxy + isolated maintenance E2E Profile behavior.
@@ -1137,7 +1137,7 @@ Expected: PASS. A previous E2E run before final code/docs changes is not suffici
 
 If the real E2E cannot run/pass, keep blocked state and report the exact unverified external condition.
 
-Current decision: proxy-backed page access is now working and the isolated noVNC Profile is live, but Phase 3 is still not eligible for completion until the human Cloudflare/ChatGPT login step finishes. Immediately after that step, rerun `inspect:chatgpt` and the full real E2E on the same isolated Profile and current proxy.
+Current decision: proxy-backed Xvfb/full-Chromium page access and Guest Auth Probe are verified and the isolated noVNC Profile is live, but Phase 3 is still not eligible for completion until the human ChatGPT login/MFA step finishes. Immediately after that step, rerun `inspect:chatgpt` and the full real E2E on the same isolated Profile and current proxy.
 
 - [x] **Step 6: Run Git hygiene checks**
 

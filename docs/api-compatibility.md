@@ -40,7 +40,7 @@
 
 Phase 2 的 SQLite 结构化持久化层仍完整存在：checksum migration、Conversation / Message / Tool Call / Attachment / File / Generated Image Repository，以及 `ConversationStore` 原子 aggregate 保存/加载和 close → reopen 恢复。Phase 3 尚未把这些 Repository 接入 Conversation lifecycle；该工作属于 Phase 4 Context Sync。
 
-**真实 ChatGPT Web 验收当前仍被阻塞。** Phase 3 real E2E 命令已经实际执行；DevSpace 直连 `chatgpt.com` 的 DNS/HTTPS 路径不可用，但显式 `CHATGPT_PROXY_SERVER` 已让 Playwright 能快速进入真实 Cloudflare challenge。当前只待隔离 headed Profile 人工完成 Cloudflare/ChatGPT 登录，再继续 Selector、登录态和 Fresh 文本回答确认。下面的 V1 矩阵仍表示最终批准目标；Phase 3 当前实际支持范围以上述 Fresh text 边界为准。
+**真实 ChatGPT Web 验收当前仍被阻塞。** Phase 3 real E2E 命令已经实际执行；DevSpace 直连 `chatgpt.com` 的 DNS/HTTPS 路径不可用，但显式 `CHATGPT_PROXY_SERVER` + Xvfb/full Chromium 已稳定进入真实 ChatGPT Guest 页面并验证 `auth_required`。当前只待隔离 headed Profile 人工完成 ChatGPT 登录/MFA，再继续 authenticated Selector 和 Fresh 文本回答确认。下面的 V1 矩阵仍表示最终批准目标；Phase 3 当前实际支持范围以上述 Fresh text 边界为准。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 

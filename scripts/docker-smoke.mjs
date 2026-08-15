@@ -219,9 +219,9 @@ function assertBrowserMode(id, maintenance) {
   const expectedProfileDir = maintenance ? env.CHATGPT_PROFILE_DIR : '/data/browser-profile';
   const owner = browserProfileOwner(id, expectedProfileDir);
   const headless = owner.args.includes('--headless');
-  if (maintenance ? headless : !headless) {
+  if (headless) {
     throw new Error(
-      `Expected ${maintenance ? 'headed maintenance' : 'headless product'} Chromium, got: ${owner.args}`,
+      `Expected full Chromium on a virtual display in ${maintenance ? 'maintenance' : 'normal'} mode, got: ${owner.args}`,
     );
   }
   if (!owner.args.includes(`--proxy-server=${env.CHATGPT_PROXY_SERVER}`)) {
@@ -244,11 +244,21 @@ function assertBrowserMode(id, maintenance) {
 }
 
 function assertMaintenanceProcesses(id, expected) {
-  for (const pattern of ['Xvfb', 'x11vnc', 'websockify', 'maintenance-browser.mjs']) {
+  const xvfbPid = runDocker(['exec', id, 'pgrep', '-f', '^Xvfb '], { quiet: true }).split(/\s+/)[0];
+  if (!xvfbPid) throw new Error('Xvfb must run in both normal and maintenance modes');
+  const xvfbIdentity = runDocker(
+    ['exec', id, 'sh', '-lc', `awk '/^Uid:/{print $2} /^Gid:/{print $2}' /proc/${xvfbPid}/status`],
+    { quiet: true },
+  ).split(/\s+/);
+  if (xvfbIdentity[0] !== String(puid) || xvfbIdentity[1] !== String(pgid)) {
+    throw new Error(`Xvfb must run as ${puid}:${pgid}, got ${xvfbIdentity.join(':')}`);
+  }
+
+  for (const pattern of ['x11vnc', 'websockify', 'maintenance-browser.mjs']) {
     const found = commandSucceeds(['exec', id, 'pgrep', '-f', pattern]);
     if (found !== expected) {
       throw new Error(
-        `${pattern} process ${expected ? 'was not started in maintenance mode' : 'unexpectedly runs in headless mode'}`,
+        `${pattern} process ${expected ? 'was not started in maintenance mode' : 'unexpectedly runs in normal mode'}`,
       );
     }
     if (expected) {

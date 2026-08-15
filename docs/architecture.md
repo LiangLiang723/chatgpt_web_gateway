@@ -99,7 +99,7 @@ interface NormalizedRequest {
 
 Docker 从 Phase 1 起就是正式运行边界，而不是后期附加包装。目标平台先锁定 `linux/amd64`。
 
-仓库提供单一完整镜像。Phase 3 起正常 `UI_MODE=headless` 会随 Gateway 启动产品级 BrowserManager，并通过 Playwright bundled Chromium 打开一个 Persistent BrowserContext；首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 显式启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser。maintenance 模式不启动产品 BrowserManager，ChatGPT POST 返回稳定 `browser_maintenance_mode`，从而保证同一 Profile 只有一个 Chromium owner。正常模式不启动维护进程，也不发布 noVNC 端口。
+仓库提供单一完整镜像。Phase 3 起正常 `UI_MODE=headless` 会先启动仅供浏览器使用的 Xvfb，再由 Gateway BrowserManager 以 `headless:false` 启动 full Playwright bundled Chromium / Persistent BrowserContext；**headless 在这里表示无可访问 UI，而不是 Chromium 的 `--headless` 指纹**。真实环境验证表明 Playwright headless-shell 与 Chromium new-headless 都会长期停在 ChatGPT Cloudflare challenge，而 Xvfb 上的 full Chromium 可进入正常 ChatGPT 页面，因此这是实现强制调整。正常模式不启动 x11vnc/websockify/noVNC，也不发布维护端口。首次登录、重新认证或人工排障时，通过 Compose noVNC overlay 启动 Xvfb / x11vnc / noVNC 和独立 headed maintenance browser；maintenance 模式不启动产品 BrowserManager，ChatGPT POST 返回稳定 `browser_maintenance_mode`，从而保证同一 Profile 只有一个 Chromium owner。
 
 镜像以官方 Playwright Node Docker 镜像为基础并固定明确版本。Phase 1 实现固定 `mcr.microsoft.com/playwright:v1.62.1-noble` 与 `playwright@1.62.1`；实测镜像运行时为 Node `v24.18.1` / `linux/amd64`。后续升级仍必须重新检查 package / image / Node LTS 组合，不能把这次结果当作永久事实。
 
@@ -145,7 +145,7 @@ Phase 3 Executor 只接受 Fresh、非流式、纯文本请求；system/develope
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
-当前真实 ChatGPT DOM 和登录态尚未验收：2026-08-15 real E2E 实际启动；直连路径超时后已通过 `CHATGPT_PROXY_SERVER` 恢复页面可达，Playwright 能进入真实 Cloudflare challenge。Headless challenge 30 秒未自动放行，当前停在 headed maintenance 人工 Cloudflare/登录步骤，尚未完成 auth/selector inspection。
+当前 authenticated ChatGPT DOM 和登录态尚未验收：2026-08-15 real E2E 实际启动；直连路径超时后已通过 `CHATGPT_PROXY_SERVER` 恢复网络，并通过 Xvfb + full Chromium 自动越过 Cloudflare、进入 HTTP 200 ChatGPT Guest 页面。真实 inspect 已验证 Guest `auth_required`；当前只停在隔离 headed maintenance 的人工 ChatGPT 登录/MFA，尚未完成 authenticated composer/selector inspection。
 
 ## Streaming（流式输出）
 

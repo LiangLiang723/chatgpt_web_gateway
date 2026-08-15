@@ -7,7 +7,7 @@ import { createPagePool } from './page-pool.js';
 import type { BrowserManager } from './types.js';
 
 export interface BrowserLaunchOptions {
-  headless: true;
+  headless: false;
   viewport: { width: number; height: number };
   proxy?: { server: string };
 }
@@ -37,7 +37,7 @@ export async function createBrowserManager(
     context = await (options.launchPersistentContext ?? defaultLaunchPersistentContext)(
       options.profileDir,
       {
-        headless: true,
+        headless: false,
         viewport: { width: 1440, height: 900 },
         ...(options.proxyServer ? { proxy: { server: options.proxyServer } } : {}),
       },

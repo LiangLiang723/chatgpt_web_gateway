@@ -6,7 +6,7 @@
 
 ## 当前已实现：Phase 3 代码路径（真实 E2E 阻塞）
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化；Phase 3 已实现 Browser / Driver / Fresh text execution 代码路径和确定性验收。开发环境需要代理访问 ChatGPT，代理链已打通，当前 real E2E 只待 headed maintenance 完成人工 Cloudflare/ChatGPT 登录：
+Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化；Phase 3 已实现 Browser / Driver / Fresh text execution 代码路径和确定性验收。开发环境需要代理访问 ChatGPT，代理 + virtual display 已打通真实 Guest 页面，当前 real E2E 只待 headed maintenance 完成人工 ChatGPT 登录/MFA：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -26,14 +26,14 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - `ConversationStore` 在单事务内保存完整 Conversation aggregate；失败会 rollback，不留下半状态。
 - 真实文件数据库已通过 save → close → reopen → load 恢复测试。
 - Docker smoke 已验证 `/data/gateway.db`、migration history、`PUID/PGID` owner 和容器 restart 后持续可用。
-- 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext / bundled Chromium，`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
+- 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
 - bounded Page Pool、Selector Registry、Auth Probe、Fresh ChatGPT text Driver 和非流式 completion observer 已实现。
 - `Phase3Executor` 只允许 Fresh、非流式、纯文本请求；历史会话/Conversation Key 明确返回 Phase 4 未实现，Streaming/附件/Tools/Structured Output 等未来能力明确拒绝。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入 Browser/Driver 执行链，并分别编码 OpenAI-style 非流式文本响应；不会伪造 token usage。
 - `corepack pnpm inspect:chatgpt` 与 `corepack pnpm test:e2e:chatgpt` 已提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 3 还不能标记完成。** DevSpace 直连 `chatgpt.com` 的 DNS/HTTPS 路径不可用，但配置代理后 Playwright 已能快速进入真实 Cloudflare challenge；headless challenge 30 秒不会自动放行。当前已启动独立 E2E Profile 的 noVNC headed browser，待人工完成 Cloudflare/账号/MFA 后才能继续真实 Selector 和 Fresh 文本回答验收。
+**Phase 3 还不能标记完成。** DevSpace 直连 `chatgpt.com` 的 DNS/HTTPS 路径不可用，但代理 + Xvfb/full Chromium 已能稳定进入 HTTP 200 ChatGPT Guest 页面，真实 `inspect:chatgpt` 返回 `auth_required`。当前已启动独立 E2E Profile 的 noVNC headed browser，只待人工完成 ChatGPT 登录/MFA 后继续 authenticated Selector 和 Fresh 文本回答验收。
 
 尚未实现的核心能力包括 Phase 4 Conversation Engine / Context Sync、真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
 
@@ -94,7 +94,7 @@ docker compose up -d
 - 默认 `UI_MODE=headless`。
 - **不会启动 noVNC / Xvfb / x11vnc / maintenance browser。**
 - **不会发布 noVNC 端口。**
-- 普通模式会启动产品级 headless Persistent BrowserContext / Chromium；不启动 noVNC 维护进程。
+- 普通模式会启动 Xvfb + 产品级 full Chromium Persistent BrowserContext；不启动 x11vnc/websockify/noVNC，也不发布维护端口。
 
 健康检查：
 
@@ -158,7 +158,7 @@ docker compose -f compose.yaml -f compose.novnc.yaml up -d
 
 如果 NAS 需要从其他设备访问，可以显式修改 `NOVNC_BIND`，但这会扩大访问面，应由部署网络、防火墙或反向代理保证安全。
 
-维护模式使用同一 `/data/browser-profile/`，因此与普通 headless BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner。完成登录或排障后恢复普通模式：
+维护模式默认使用同一 `/data/browser-profile/`，因此与普通 `UI_MODE=headless` BrowserManager **互斥**。`UI_MODE=novnc` 时产品 BrowserManager 不启动，确保同一 Profile 只有一个 Chromium owner；real E2E 可通过 `CHATGPT_PROFILE_DIR` 改用隔离测试 Profile。完成登录或排障后恢复普通模式：
 
 ```bash
 docker compose -f compose.yaml -f compose.novnc.yaml down

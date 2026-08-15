@@ -18,6 +18,28 @@ validate_positive_integer() {
 validate_positive_integer PUID "$PUID"
 validate_positive_integer PGID "$PGID"
 
+start_virtual_display() {
+  export DISPLAY="${DISPLAY:-:99}"
+  gosu pwuser Xvfb "$DISPLAY" -screen 0 1440x900x24 -nolisten tcp >"$DATA_DIR/logs/xvfb.log" 2>&1 &
+  local xvfb_pid=$!
+  local ready=0
+  for _ in $(seq 1 50); do
+    if [[ -S "/tmp/.X11-unix/X${DISPLAY#:}" ]]; then
+      ready=1
+      break
+    fi
+    if ! kill -0 "$xvfb_pid" 2>/dev/null; then
+      echo 'Xvfb exited before the display became ready' >&2
+      exit 70
+    fi
+    sleep 0.1
+  done
+  if [[ "$ready" != 1 ]]; then
+    echo 'Timed out waiting for Xvfb display readiness' >&2
+    exit 70
+  fi
+}
+
 current_gid="$(id -g pwuser)"
 current_uid="$(id -u pwuser)"
 if [[ "$current_gid" != "$PGID" ]]; then
@@ -50,6 +72,7 @@ fi
 
 case "$UI_MODE" in
   headless)
+    start_virtual_display
     ;;
   novnc)
     if [[ -z "${NOVNC_PASSWORD:-}" ]]; then
