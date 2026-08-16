@@ -24,6 +24,7 @@ import type {
 } from '../context/types.js';
 import type { ConversationStore } from '../persistence/conversation-store.js';
 import type { ConversationAggregate, ConversationRecord } from '../persistence/types.js';
+import { TextStreamAbortedError } from '../stream/errors.js';
 import { streamAssistantText } from '../stream/text-stream.js';
 import type { StreamClock } from '../stream/types.js';
 
@@ -372,6 +373,7 @@ async function streamConversation(options: {
     });
     const startedAt = options.now();
     await options.streamOptions.sink({ type: 'started', startedAt });
+    if (options.streamOptions.signal.aborted) throw new TextStreamAbortedError();
 
     const initial = startCheckpoint({
       engine: options.engine,
@@ -387,7 +389,10 @@ async function streamConversation(options: {
       plan,
       stored,
     });
-    turn = await driver.startText(session.page, { prompt });
+    turn = await driver.startText(session.page, {
+      prompt,
+      signal: options.streamOptions.signal,
+    });
     const assistantText = await streamAssistantText({
       observe: turn.observe,
       onDelta: async (delta) => {
