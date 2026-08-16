@@ -6,7 +6,7 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -19,16 +19,6 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - name: Format Streaming context-sync test once
-        run: |
-          corepack pnpm exec prettier --write tests/integration/conversation-streaming.test.ts
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add tests/integration/conversation-streaming.test.ts
-            git commit -m "📝 格式化 Streaming 四态测试"
-            git push
-          fi
       - run: corepack pnpm verify
       - run: corepack pnpm docker:build
       - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
