@@ -36,8 +36,11 @@ export interface ChatGptTextTurn {
 export interface ChatGptTextDriver {
   openFresh(page: Page): Promise<void>;
   openConversation(page: Page, conversationUrl: string): Promise<'restored' | 'not_restorable'>;
-  startText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn>;
   sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult>;
+}
+
+export interface ChatGptStreamingTextDriver extends ChatGptTextDriver {
+  startText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn>;
 }
 
 export type ChatGptDriver = ChatGptTextDriver;
@@ -53,7 +56,9 @@ export interface CreateChatGptDriverOptions {
   stopTimeoutMs?: number;
 }
 
-export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): ChatGptTextDriver {
+export function createChatGptDriver(
+  options: CreateChatGptDriverOptions = {},
+): ChatGptStreamingTextDriver {
   const authProbe = options.probeAuth ?? probeAuth;
   const inspectCollectionSelector = options.inspectCollection ?? inspectCollection;
   const inspectUniqueSelector = options.inspectUnique ?? inspectUnique;
