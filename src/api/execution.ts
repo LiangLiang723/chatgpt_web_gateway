@@ -1,3 +1,4 @@
+import type { TextStreamEvent } from '../stream/events.js';
 import { BackendNotImplementedError } from './errors.js';
 import type { NormalizedRequest } from './normalized.js';
 
@@ -13,6 +14,23 @@ export type NormalizedExecutionResult = TextExecutionResult;
 export type NormalizedExecutionHandler = (
   request: NormalizedRequest,
 ) => Promise<NormalizedExecutionResult>;
+
+export type TextStreamSink = (event: TextStreamEvent) => Promise<void>;
+
+export interface StreamingExecutionOptions {
+  signal: AbortSignal;
+  sink: TextStreamSink;
+}
+
+export type NormalizedStreamingExecutionHandler = (
+  request: NormalizedRequest,
+  options: StreamingExecutionOptions,
+) => Promise<TextExecutionResult>;
+
+export interface ConversationExecutionEngine {
+  execute: NormalizedExecutionHandler;
+  stream: NormalizedStreamingExecutionHandler;
+}
 
 export class BrowserMaintenanceModeError extends Error {
   readonly code = 'browser_maintenance_mode';
@@ -30,3 +48,13 @@ export const backendNotImplementedExecution: NormalizedExecutionHandler = async 
 export const browserMaintenanceModeExecution: NormalizedExecutionHandler = async () => {
   throw new BrowserMaintenanceModeError();
 };
+
+export const backendNotImplementedStreamingExecution: NormalizedStreamingExecutionHandler =
+  async () => {
+    throw new BackendNotImplementedError();
+  };
+
+export const browserMaintenanceModeStreamingExecution: NormalizedStreamingExecutionHandler =
+  async () => {
+    throw new BrowserMaintenanceModeError();
+  };
