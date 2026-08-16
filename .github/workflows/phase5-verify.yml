@@ -19,4 +19,6 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm format
+      - run: git diff --check && git diff -- src/chatgpt/driver.ts src/chatgpt/completion.ts src/stream
       - run: corepack pnpm verify
