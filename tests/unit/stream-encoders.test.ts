@@ -98,7 +98,9 @@ describe('Responses streaming encoder', () => {
       'response.completed',
     ]);
     expect(events.map((event) => event.sequence_number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(events.filter((event) => event.response).every((event) => event.response.id === 'resp_test')).toBe(true);
+    expect(
+      events.filter((event) => event.response).every((event) => event.response.id === 'resp_test'),
+    ).toBe(true);
     expect(events[4]).toMatchObject({
       item_id: 'msg_test',
       output_index: 0,

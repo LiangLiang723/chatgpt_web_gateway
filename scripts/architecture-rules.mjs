@@ -22,7 +22,8 @@ const rules = [
       value.startsWith('playwright/') ||
       value === 'node:sqlite' ||
       /(?:^|\/)(?:api|browser|chatgpt|persistence)(?:\/|$)/.test(value),
-    message: 'stream/ must stay pure and independent from api/browser/chatgpt/persistence/playwright/sqlite',
+    message:
+      'stream/ must stay pure and independent from api/browser/chatgpt/persistence/playwright/sqlite',
   },
   {
     dir: 'persistence',

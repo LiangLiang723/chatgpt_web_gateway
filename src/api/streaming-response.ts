@@ -1,9 +1,6 @@
 import type { FastifyReply } from 'fastify';
 
-import type {
-  NormalizedStreamingExecutionHandler,
-  TextStreamSink,
-} from './execution.js';
+import type { NormalizedStreamingExecutionHandler, TextStreamSink } from './execution.js';
 import {
   GatewayError,
   gatewayErrorFromExecution,

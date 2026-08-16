@@ -204,9 +204,7 @@ function startCheckpoint(options: {
 
   const initial = createInFlightConversation({
     conversationId: options.conversationId,
-    ...(options.conversationKey === undefined
-      ? {}
-      : { conversationKey: options.conversationKey }),
+    ...(options.conversationKey === undefined ? {} : { conversationKey: options.conversationKey }),
     request: options.request,
     startedAt: options.startedAt,
   });

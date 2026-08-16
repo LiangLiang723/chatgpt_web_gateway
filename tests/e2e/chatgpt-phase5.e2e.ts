@@ -117,7 +117,10 @@ async function assertCurrentTurnStillGenerating(runtime: GatewayRuntime): Promis
   const page = runtime.browser?.context.pages().at(-1);
   assert.ok(page, 'Expected a live ChatGPT page');
   const turns = await inspectCollection(page, chatGptSelectors.assistantTurns);
-  assert.ok(turns.count > 0, 'Expected the target Assistant turn to exist after a meaningful delta');
+  assert.ok(
+    turns.count > 0,
+    'Expected the target Assistant turn to exist after a meaningful delta',
+  );
   const turn = turns.locator.nth(turns.count - 1);
   const marker = chatGptSelectors.assistantTurnCompletion.locate(turn);
   assert.equal(
@@ -198,7 +201,9 @@ export async function runPhase5ChatGptE2E(
       }
     });
     assert.equal(checkedLiveGeneration, true, 'Expected at least one meaningful live text delta');
-    const chatDeltas = chatFrames.map(chatDelta).filter((value): value is string => value !== undefined);
+    const chatDeltas = chatFrames
+      .map(chatDelta)
+      .filter((value): value is string => value !== undefined);
     assert.ok(chatDeltas.length > 1, 'Expected multiple Chat Completions deltas');
     const chatText = chatDeltas.join('');
     assert.equal(chatFrames.filter((frame) => frame.data === '[DONE]').length, 1);
@@ -254,7 +259,10 @@ export async function runPhase5ChatGptE2E(
     const sequenceNumbers = responseFrames.map(
       (frame) => (JSON.parse(frame.data) as { sequence_number: number }).sequence_number,
     );
-    assert.deepEqual(sequenceNumbers, sequenceNumbers.map((_, index) => index + 1));
+    assert.deepEqual(
+      sequenceNumbers,
+      sequenceNumbers.map((_, index) => index + 1),
+    );
     const responseDeltas = responseFrames
       .map(responseDelta)
       .filter((value): value is string => value !== undefined);
@@ -285,7 +293,8 @@ export async function runPhase5ChatGptE2E(
         messages: [
           {
             role: 'user',
-            content: 'Write 100 numbered lines, each with a different short sentence. Do not stop early.',
+            content:
+              'Write 100 numbered lines, each with a different short sentence. Do not stop early.',
           },
         ],
       }),
