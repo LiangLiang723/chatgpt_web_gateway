@@ -140,11 +140,7 @@ function clock(): StreamClock {
   };
 }
 
-function engine(options: {
-  db: PersistenceContext;
-  driver: GatedDriver;
-  registry: FakeRegistry;
-}) {
+function engine(options: { db: PersistenceContext; driver: GatedDriver; registry: FakeRegistry }) {
   let id = 0;
   return createConversationExecutionEngine({
     pageRegistry: options.registry,
