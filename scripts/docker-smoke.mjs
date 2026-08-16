@@ -434,8 +434,35 @@ async function main() {
   console.log('Docker smoke passed.');
 }
 
+function cleanupDataPath() {
+  const cleanup = spawnSync(
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--user',
+      '0:0',
+      '--entrypoint',
+      'sh',
+      '-v',
+      dataPath + ':/cleanup',
+      env.IMAGE_NAME,
+      '-lc',
+      'find /cleanup -mindepth 1 -delete',
+    ],
+    { cwd: process.cwd(), env, encoding: 'utf8' },
+  );
+  if (cleanup.status !== 0) {
+    throw new Error(
+      'Failed to clean Docker smoke bind mount: ' +
+        (cleanup.stderr || cleanup.stdout || 'unknown error'),
+    );
+  }
+  rmSync(dataPath, { recursive: true, force: true });
+}
+
 try {
   await main();
 } finally {
-  rmSync(dataPath, { recursive: true, force: true });
+  cleanupDataPath();
 }
