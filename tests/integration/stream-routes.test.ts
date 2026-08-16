@@ -137,4 +137,60 @@ describe('Streaming HTTP routes', () => {
     expect(response.headers.get('content-type')).toContain('application/json');
     expect(streamCalls).toBe(0);
   });
+
+  it('returns a normal mapped JSON error when streaming fails before started', async () => {
+    const app = appWith({
+      execute: async () => result,
+      stream: async () => {
+        throw Object.assign(new Error('maintenance'), { code: 'browser_maintenance_mode' });
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        stream: true,
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(body).toMatchObject({
+      error: { code: 'browser_maintenance_mode', type: 'server_error' },
+    });
+  });
+
+  it('encodes a post-start Chat Completions error in-stream without a success terminator', async () => {
+    const app = appWith({
+      execute: async () => result,
+      stream: async (_request, { sink }) => {
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'text.delta', delta: 'partial' });
+        throw Object.assign(new Error('diverged'), { code: 'chatgpt_stream_diverged' });
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        stream: true,
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(body).toContain('"code":"chatgpt_stream_diverged"');
+    expect(body).not.toContain('"finish_reason":"stop"');
+    expect(body).not.toContain('data: [DONE]');
+  });
 });
