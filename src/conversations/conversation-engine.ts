@@ -423,10 +423,14 @@ async function streamConversation(options: {
     });
     await session.complete();
     completed = true;
-    await options.streamOptions.sink({ type: 'completed', result: finalResult });
+    try {
+      await options.streamOptions.sink({ type: 'completed', result: finalResult });
+    } catch (error) {
+      if (!isStreamAborted(error)) throw error;
+    }
     return finalResult;
   } catch (error) {
-    if (turn !== undefined && isStreamAborted(error)) {
+    if (!completed && turn !== undefined && isStreamAborted(error)) {
       try {
         await turn.stop();
       } catch {
