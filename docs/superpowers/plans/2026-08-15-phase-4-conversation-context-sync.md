@@ -1392,7 +1392,7 @@ node scripts/check-version.mjs
 
 Inspect staged diff and verify no Profile, Cookie, SQLite DB, diagnostic HTML/screenshot, generated image, or real uploaded file is staged.
 
-2026-08-16 hygiene evidence: `git diff --check` passed; project-memory/docs/architecture/version checks all passed. The writeback diff contains only README/project documentation/active plan files. Filename and diff-content scans found no Profile, Cookie, SQLite DB, diagnostic artifact, generated/uploaded data or real credentials; the only credential-like text is the documented placeholder `Authorization: Bearer <GATEWAY_API_KEY>`.
+2026-08-16 final hygiene evidence: `git diff --check` passed; project-memory/docs/architecture/version checks all passed, and the final `corepack pnpm verify` passed 43 files / 274 tests. The task diff contained only the Completion Driver/centralized selector/two regression tests plus README/project documentation/plan writeback. Filename and added-line scans found no Profile, Cookie, SQLite DB, diagnostic artifact, generated/uploaded data or real credentials.
 
 - [x] **Step 7: Commit final writeback**
 
@@ -1409,7 +1409,7 @@ git push -u origin phase-4-context-sync
 
 Expected: fast-forward/new-branch push succeeds; do not create a Release or Docker registry image unless explicitly requested.
 
-2026-08-16 Git completion evidence: final blocking-state writeback committed as `644736a` (`📝 回写 Phase 4 认证阻塞验收状态`). A fresh fetch showed the local branch 0 commits behind / 26 commits ahead of `origin/phase-4-context-sync`; `git push -u origin phase-4-context-sync` then fast-forwarded the remote from `4c6eaf8` to `644736a` without force. No Release or registry image was published.
+2026-08-16 final Git evidence: the real-DOM Completion fix committed as `0d75794` (`🐛 修复 ChatGPT 回复完成判定`) and the successful Phase 4 completion writeback committed as `64a34e5` (`📝 完成 Phase 4 Conversation Sync 验收回写`). A fresh fetch showed the branch 0 commits behind / 2 commits ahead of `origin/phase-4-context-sync`; normal `git push -u origin phase-4-context-sync` then fast-forwarded the remote from `c47e511` to `64a34e5` without force. No Release or Docker registry image was published.
 
 ---
 
