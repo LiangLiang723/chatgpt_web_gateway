@@ -319,12 +319,15 @@ describe('Conversation true Streaming', () => {
     registry.affinity = false;
     const engine = createEngine({ db, driver, registry, queue: new DirectQueue() });
 
-    await engine.stream(streamRequest('stream-thread', [
-      { role: 'user', content: [{ type: 'text', text: 'incremental user' }] },
-    ]), {
-      signal: new AbortController().signal,
-      sink: discardEvents,
-    });
+    await engine.stream(
+      streamRequest('stream-thread', [
+        { role: 'user', content: [{ type: 'text', text: 'incremental user' }] },
+      ]),
+      {
+        signal: new AbortController().signal,
+        sink: discardEvents,
+      },
+    );
 
     expect(driver.openFreshCalls).toBe(0);
     expect(driver.restoredUrls).toEqual(['https://chatgpt.com/c/stored-thread']);
