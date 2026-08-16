@@ -6,7 +6,7 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -19,49 +19,6 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - name: Patch streaming abort boundary once
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/conversations/conversation-engine.ts")
-          source = path.read_text()
-
-          replacements = [
-              (
-                  "import { streamAssistantText } from '../stream/text-stream.js';",
-                  "import { TextStreamAbortedError } from '../stream/errors.js';\n"
-                  "import { streamAssistantText } from '../stream/text-stream.js';",
-              ),
-              (
-                  "    await options.streamOptions.sink({ type: 'started', startedAt });\n\n"
-                  "    const initial = startCheckpoint({",
-                  "    await options.streamOptions.sink({ type: 'started', startedAt });\n"
-                  "    if (options.streamOptions.signal.aborted) throw new TextStreamAbortedError();\n\n"
-                  "    const initial = startCheckpoint({",
-              ),
-              (
-                  "    turn = await driver.startText(session.page, { prompt });",
-                  "    turn = await driver.startText(session.page, {\n"
-                  "      prompt,\n"
-                  "      signal: options.streamOptions.signal,\n"
-                  "    });",
-              ),
-          ]
-
-          for old, new in replacements:
-              if old not in source:
-                  raise SystemExit(f"Expected snippet not found: {old!r}")
-              source = source.replace(old, new, 1)
-
-          path.write_text(source)
-          PY
-          corepack pnpm exec prettier --write src/conversations/conversation-engine.ts
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/conversations/conversation-engine.ts
-          git commit -m "🐛 阻止 Streaming 断开后继续提交网页 Turn"
-          git push
       - run: corepack pnpm verify
       - run: corepack pnpm docker:build
       - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
