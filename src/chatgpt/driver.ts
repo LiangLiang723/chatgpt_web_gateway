@@ -151,7 +151,10 @@ export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): C
         while (Date.now() - startedAt <= stopTimeoutMs) {
           const observation = await observe();
           if (observation.exists && observation.completionMarkerPresent) return 'stopped';
-          const remainingStopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
+          const remainingStopControl = await inspectUniqueSelector(
+            page,
+            chatGptSelectors.stopControl,
+          );
           if (remainingStopControl.status === 'missing') return 'stopped';
           if (remainingStopControl.status === 'ambiguous') {
             throw new ChatGptDriverError({
