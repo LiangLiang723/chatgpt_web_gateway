@@ -9,20 +9,21 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-4-complete
-STATUS=ready-for-phase-5-design
+STATUS=phase-5-design-review
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-15-phase-4-conversation-context-sync-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-5-streaming-spec
+NEXT_TASK=review-and-approve-phase-5-streaming-spec
 UPDATED_AT=2026-08-16
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 4 — Conversation + Context Sync 已完成代码、deterministic、Docker 与真实 ChatGPT Web E2E 验收。
-- **当前状态：** `ready-for-phase-5-design`
+- **当前状态：** `phase-5-design-review`；Phase 5 真 Streaming 设计规格已完成草案，等待用户审阅批准，尚未进入实施计划或代码实现。
 - **活动计划：** `none`；已完成计划保留在 [`docs/superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md`](superpowers/plans/2026-08-15-phase-4-conversation-context-sync.md) 作为实施历史。
-- **下一个可执行任务：** 编写 Phase 5 真 Streaming 设计规格，继续保持 DOM-only、Stable Prefix 与显式 real E2E 边界。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。当前锁定 DOM-only target Assistant observation、约 200ms polling、3-sample Stable Prefix、target-turn completion marker、双 SSE Encoder、backpressure 与 client abort → best-effort Stop + `in_flight` 收敛方向。
+- **下一个可执行任务：** 审阅并批准 Phase 5 真 Streaming 设计规格；批准后再编写实施计划。
 - **验收事实：** 修复当前 ChatGPT DOM 中全局 Stop control 可能滞留导致的假 `chatgpt_generation_timeout` 后，当前树 `corepack pnpm verify` 通过 43 个测试文件 / 274 个测试；显式 combined `corepack pnpm test:e2e:chatgpt` 已真实通过 Phase 3 authenticated/composer/Driver/Gateway 回归，以及 Phase 4 `append=true`、`restore=true`、`rebuild=true`。最终 fresh `linux/amd64` 镜像为 `sha256:a7a9dd99cb3c7f48d2cf13d829cc83d6d577778806a1605011ab257fbca8fd71`，Docker smoke 已通过。
 
 ## Implemented Now（当前已实现）
@@ -146,6 +147,7 @@ UPDATED_AT=2026-08-16
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-16：完成 Phase 5 真 Streaming 设计规格草案：保持 DOM-only，以目标 Assistant turn snapshot 驱动约 200ms polling；使用 3-sample Stable Prefix 防止 Markdown/React DOM 回写造成重复；完成以 target-turn completion marker + final stable confirmation 为终态；Conversation Engine 继续拥有 same-key Queue、SQLite `in_flight`/clean checkpoint 与最终 aggregate commit；Chat Completions / Responses 使用独立 SSE Encoder；client abort 在生成中 best-effort Stop 且不保存 partial Assistant。当前仅为设计事实，Streaming 仍未实现。
 - 2026-08-16：Phase 4 最终真实验收完成。旧隔离 Profile 重新认证时再次陷入 challenge loop，因此保留旧 Profile 并创建新的干净隔离 Profile；maintenance Google Chrome Stable 登录后 `inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`。首次 combined E2E 随即暴露当前 ChatGPT DOM 的 Stop control 可能在可见答案稳定后继续滞留，导致 Completion Observer 假超时；真实 DOM 采样确认目标 Assistant turn 的 `copy-turn-action-button` 只在 turn 完成后挂载，修复后红→绿单测通过，combined real E2E 最终返回 Phase 3 `driverChallenge=true` / `gatewayChallenge=true` 与 Phase 4 `append=true` / `restore=true` / `rebuild=true`。
 - 2026-08-15：恢复远端已批准 Phase 4 设计/13-Task 计划后发现本地实施分支只覆盖其子集；当前已非破坏性合并设计历史，并继续实施 sync checkpoint、single-user incremental、无 key 持久化和 crash-convergence。此前较窄实现的 `verify` 为 33 个测试文件 / 177 个测试、镜像 `sha256:7fd07b887b7b…` Docker smoke 通过，作为回归基线保留。
 - 2026-08-15：Phase 3 真实验收完成：独立 Profile 通过固定 Google Chrome Stable 151.0.7922.137 人工登录；真实 `inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`，完整 `test:e2e:chatgpt` 返回 `driverChallenge=true` / `gatewayChallenge=true`。authenticated 实测发现 Composer 延迟挂载，Auth Probe 已用 Locator attachment wait + strict re-probe 修复并有红→绿单测。
@@ -168,9 +170,9 @@ UPDATED_AT=2026-08-16
 
 ## Next Steps（下一步）
 
-1. 编写并批准 Phase 5 真 Streaming 设计规格。
-2. 设计 Assistant Snapshot、Stable Prefix、约 200ms DOM polling、Completion Detector 与 Chat Completions / Responses SSE Encoder 的共同边界。
-3. 为 Streaming 保留显式真实 ChatGPT E2E，不能以 Phase 4 非流式通过外推长回复 Streaming 正确性。
+1. 审阅并批准 [`Phase 5 True Streaming Design`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。
+2. 设计批准后编写 Phase 5 implementation plan；当前 `ACTIVE_PLAN=none`，不提前进入代码实现。
+3. 后续实施必须保留显式真实 ChatGPT E2E，使用真实 TCP HTTP listener 证明首个 meaningful delta 发生在目标 Assistant turn completion marker 之前，不能以 Phase 4 非流式通过外推 Streaming 正确性。
 
 ## Known Risks（已知风险）
 

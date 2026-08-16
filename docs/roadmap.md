@@ -46,7 +46,7 @@
 
 ## Phase 5：真 Streaming
 
-状态：**下一阶段，待设计规格批准**。
+状态：**设计规格草案已编写，待用户审阅批准**。规格见 [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。
 
 交付：Assistant Snapshot、200ms polling、Stable Prefix、Completion Detector（完成检测）、两套 SSE Encoder、Client abort 停止生成。
 
