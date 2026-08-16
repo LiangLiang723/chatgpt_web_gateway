@@ -1,4 +1,7 @@
-import { ChatGptDriverError } from './errors.js';
+import { waitForStreamingCompletion } from '../stream/completion.js';
+import { TextStreamError } from '../stream/errors.js';
+import type { StreamClock } from '../stream/types.js';
+import { ChatGptDriverError, type ChatGptDriverErrorCode } from './errors.js';
 
 export interface AssistantCompletionObservation {
   exists: boolean;
@@ -6,10 +9,7 @@ export interface AssistantCompletionObservation {
   text: string;
 }
 
-export interface CompletionClock {
-  now(): number;
-  sleep(ms: number): Promise<void>;
-}
+export interface CompletionClock extends StreamClock {}
 
 export interface WaitForAssistantCompletionOptions {
   observe(): Promise<AssistantCompletionObservation>;
@@ -19,62 +19,34 @@ export interface WaitForAssistantCompletionOptions {
   timeoutMs?: number;
 }
 
-const defaultClock: CompletionClock = {
-  now: () => Date.now(),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-};
+function toDriverError(error: TextStreamError): ChatGptDriverError {
+  return new ChatGptDriverError({
+    code: error.code as ChatGptDriverErrorCode,
+    message: error.message,
+    cause: error,
+  });
+}
 
 export async function waitForAssistantCompletion(
   options: WaitForAssistantCompletionOptions,
 ): Promise<string> {
-  const clock = options.clock ?? defaultClock;
-  const pollIntervalMs = options.pollIntervalMs ?? 250;
-  const stableSamples = options.stableSamples ?? 3;
-  const timeoutMs = options.timeoutMs ?? 120_000;
-  const startedAt = clock.now();
-  let sawTurn = false;
-  let lastText = '';
-  let consecutiveStable = 0;
-
-  while (clock.now() - startedAt <= timeoutMs) {
-    const observation = await options.observe();
-    if (observation.exists) sawTurn = true;
-
-    if (observation.exists && !observation.generating && observation.text.trim().length > 0) {
-      if (observation.text === lastText) consecutiveStable += 1;
-      else {
-        lastText = observation.text;
-        consecutiveStable = 1;
-      }
-
-      if (consecutiveStable >= stableSamples) {
-        const finalObservation = await options.observe();
-        if (
-          finalObservation.exists &&
-          !finalObservation.generating &&
-          finalObservation.text === observation.text
-        ) {
-          return finalObservation.text;
-        }
-        lastText = finalObservation.text;
-        consecutiveStable = 0;
-      }
-    } else {
-      consecutiveStable = 0;
-      if (observation.text !== lastText) lastText = observation.text;
-    }
-
-    await clock.sleep(pollIntervalMs);
-  }
-
-  if (!sawTurn) {
-    throw new ChatGptDriverError({
-      code: 'chatgpt_response_missing',
-      message: 'ChatGPT did not produce a new Assistant turn',
+  try {
+    return await waitForStreamingCompletion({
+      observe: async () => {
+        const observation = await options.observe();
+        return {
+          exists: observation.exists,
+          text: observation.text,
+          completionMarkerPresent: observation.exists && !observation.generating,
+        };
+      },
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+      ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
+      ...(options.stableSamples === undefined ? {} : { stableSamples: options.stableSamples }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     });
+  } catch (error) {
+    if (error instanceof TextStreamError) throw toDriverError(error);
+    throw error;
   }
-  throw new ChatGptDriverError({
-    code: 'chatgpt_generation_timeout',
-    message: 'ChatGPT generation did not complete before the timeout',
-  });
 }
