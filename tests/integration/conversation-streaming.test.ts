@@ -14,6 +14,7 @@ import type {
 } from '../../src/conversations/page-registry.js';
 import type { ConversationQueue } from '../../src/conversations/conversation-queue.js';
 import { createPersistenceContext, type PersistenceContext } from '../../src/persistence/index.js';
+import { TextStreamAbortedError } from '../../src/stream/errors.js';
 import type { AssistantSnapshot, StreamClock } from '../../src/stream/types.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
 
@@ -138,36 +139,48 @@ function clock(): StreamClock {
   };
 }
 
+function completeSnapshots(driver: FakeStreamingDriver): void {
+  driver.snapshots.push(
+    { exists: false, text: '', completionMarkerPresent: false },
+    { exists: true, text: 'H', completionMarkerPresent: false },
+    { exists: true, text: 'He', completionMarkerPresent: false },
+    { exists: true, text: 'Hel', completionMarkerPresent: false },
+    { exists: true, text: 'Hell', completionMarkerPresent: false },
+    { exists: true, text: 'Hello', completionMarkerPresent: true },
+    { exists: true, text: 'Hello!', completionMarkerPresent: true },
+    { exists: true, text: 'Hello!', completionMarkerPresent: true },
+    { exists: true, text: 'Hello!', completionMarkerPresent: true },
+    { exists: true, text: 'Hello!', completionMarkerPresent: true },
+  );
+}
+
+function createEngine(options: {
+  db: PersistenceContext;
+  driver: FakeStreamingDriver;
+  registry: FakePageRegistry;
+  queue: DirectQueue;
+}) {
+  return createConversationExecutionEngine({
+    pageRegistry: options.registry,
+    queue: options.queue,
+    driver: options.driver,
+    conversationStore: options.db.conversationStore,
+    now: () => 1000,
+    randomUuid: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    streamClock: clock(),
+    streamPollIntervalMs: 10,
+    streamTimeoutMs: 200,
+  });
+}
+
 describe('Conversation true Streaming', () => {
   it('starts SSE before the checkpoint, streams stable deltas, then commits clean before completed', async () => {
     const db = persistence();
     const driver = new FakeStreamingDriver();
     const registry = new FakePageRegistry();
     const queue = new DirectQueue();
-    driver.snapshots.push(
-      { exists: false, text: '', completionMarkerPresent: false },
-      { exists: true, text: 'H', completionMarkerPresent: false },
-      { exists: true, text: 'He', completionMarkerPresent: false },
-      { exists: true, text: 'Hel', completionMarkerPresent: false },
-      { exists: true, text: 'Hell', completionMarkerPresent: false },
-      { exists: true, text: 'Hello', completionMarkerPresent: true },
-      { exists: true, text: 'Hello!', completionMarkerPresent: true },
-      { exists: true, text: 'Hello!', completionMarkerPresent: true },
-      { exists: true, text: 'Hello!', completionMarkerPresent: true },
-      { exists: true, text: 'Hello!', completionMarkerPresent: true },
-    );
-
-    const engine = createConversationExecutionEngine({
-      pageRegistry: registry,
-      queue,
-      driver,
-      conversationStore: db.conversationStore,
-      now: () => 1000,
-      randomUuid: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      streamClock: clock(),
-      streamPollIntervalMs: 10,
-      streamTimeoutMs: 200,
-    });
+    completeSnapshots(driver);
+    const engine = createEngine({ db, driver, registry, queue });
     const events: Array<{ type: string; delta?: string }> = [];
     driver.onStart = () => {
       expect(db.conversationStore.loadByKey('stream-thread')?.conversation.sync.status).toBe(
@@ -208,6 +221,61 @@ describe('Conversation true Streaming', () => {
 
     const saved = db.conversationStore.loadByKey('stream-thread')!;
     expect(saved.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 2 });
+    expect(saved.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Hello!' }]);
+  });
+
+  it('best-effort stops generation and keeps the checkpoint in_flight when the client aborts', async () => {
+    const db = persistence();
+    const driver = new FakeStreamingDriver();
+    const registry = new FakePageRegistry();
+    const queue = new DirectQueue();
+    driver.snapshots.push(
+      { exists: true, text: 'A', completionMarkerPresent: false },
+      { exists: true, text: 'AB', completionMarkerPresent: false },
+      { exists: true, text: 'ABC', completionMarkerPresent: false },
+      { exists: true, text: 'ABCD', completionMarkerPresent: false },
+    );
+    const engine = createEngine({ db, driver, registry, queue });
+    const controller = new AbortController();
+
+    await expect(
+      engine.stream(streamRequest(), {
+        signal: controller.signal,
+        sink: async (event) => {
+          if (event.type === 'text.delta') controller.abort();
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'stream_aborted' });
+
+    expect(driver.stopCalls).toBe(1);
+    expect(registry.completed).toEqual([]);
+    expect(registry.failed).toEqual(['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']);
+    const saved = db.conversationStore.loadByKey('stream-thread')!;
+    expect(saved.conversation.sync.status).toBe('in_flight');
+    expect(saved.messages).toEqual([]);
+  });
+
+  it('does not stop or undo a clean turn when the terminal protocol write closes after commit', async () => {
+    const db = persistence();
+    const driver = new FakeStreamingDriver();
+    const registry = new FakePageRegistry();
+    const queue = new DirectQueue();
+    completeSnapshots(driver);
+    const engine = createEngine({ db, driver, registry, queue });
+
+    await expect(
+      engine.stream(streamRequest(), {
+        signal: new AbortController().signal,
+        sink: async (event) => {
+          if (event.type === 'completed') throw new TextStreamAbortedError();
+        },
+      }),
+    ).resolves.toMatchObject({ text: 'Hello!' });
+
+    expect(driver.stopCalls).toBe(0);
+    expect(registry.completed).toEqual(['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']);
+    const saved = db.conversationStore.loadByKey('stream-thread')!;
+    expect(saved.conversation.sync.status).toBe('clean');
     expect(saved.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Hello!' }]);
   });
 });
