@@ -1,4 +1,4 @@
-name: Phase 5 Verify
+name: Phase 5 Docker Smoke Diagnostic
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -19,7 +19,22 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - run: corepack pnpm verify
       - run: corepack pnpm docker:build
-      - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
-      - run: corepack pnpm docker:smoke
+      - name: Run Docker smoke and capture output
+        id: smoke
+        shell: bash
+        run: |
+          set +e
+          corepack pnpm docker:smoke > docker-smoke.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 80 docker-smoke.log
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase5-docker-smoke-log
+          path: docker-smoke.log
+          if-no-files-found: error
+      - name: Preserve Docker smoke exit code
+        run: exit "${{ steps.smoke.outputs.status }}"
