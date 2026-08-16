@@ -1,0 +1,34 @@
+name: Phase 5 Final Proof
+
+on:
+  push:
+    branches:
+      - phase-5-streaming
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm verify
+      - run: git diff --check a6e168e...HEAD
+      - name: Record successful final verification
+        run: |
+          printf 'verified_commit=%s\nrun_id=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > docs/.phase5-final-verify-passed
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/.phase5-final-verify-passed
+          git commit -m "👷 记录 Phase 5 最终验证通过"
+          git push
