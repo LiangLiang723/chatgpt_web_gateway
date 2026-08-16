@@ -130,10 +130,20 @@ const executionErrorMap = {
     type: 'server_error',
     message: 'ChatGPT did not produce a readable Assistant response',
   },
+  chatgpt_stream_diverged: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT rewrote an Assistant prefix that was already streamed',
+  },
   conversation_restore_failed: {
     statusCode: 502,
     type: 'server_error',
     message: 'The saved ChatGPT conversation could not be restored',
+  },
+  unsupported_phase5_request: {
+    statusCode: 501,
+    type: 'server_error',
+    message: 'This request requires a capability not implemented in Phase 5',
   },
   unsupported_phase4_request: {
     statusCode: 501,
@@ -143,7 +153,7 @@ const executionErrorMap = {
   invalid_conversation_request: {
     statusCode: 400,
     type: 'invalid_request_error',
-    message: 'The Conversation request is invalid for Phase 4',
+    message: 'The Conversation request is invalid',
   },
   conversation_sync_not_implemented: {
     statusCode: 501,
