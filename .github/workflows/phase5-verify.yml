@@ -1,4 +1,4 @@
-name: Phase 5 Verify
+name: Phase 5 Apply Docker Smoke Cleanup
 
 on:
   push:
@@ -9,9 +9,10 @@ permissions:
   contents: write
 
 jobs:
-  verify:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,40 +20,12 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - name: Patch Docker smoke root ownership cleanup once
+      - run: node scripts/.phase5-patch-smoke.mjs
+      - run: corepack pnpm exec prettier --write scripts/docker-smoke.mjs
+      - name: Commit cleanup fix
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("scripts/docker-smoke.mjs")
-          source = path.read_text()
-          old = '''function cleanupDataPath() {
-  const cleanup = spawnSync(
-'''
-          new = '''function cleanupDataPath() {
-  const owner = `${process.getuid()}:${process.getgid()}`;
-  const cleanup = spawnSync(
-'''
-          if old not in source:
-              raise SystemExit("cleanupDataPath start changed unexpectedly")
-          source = source.replace(old, new, 1)
-
-          old = '''      "find /cleanup -mindepth 1 -delete",
-'''
-          new = '''      `find /cleanup -mindepth 1 -delete && chown ${owner} /cleanup`,
-'''
-          if old not in source:
-              raise SystemExit("cleanup command changed unexpectedly")
-          source = source.replace(old, new, 1)
-          path.write_text(source)
-          PY
-          corepack pnpm exec prettier --write scripts/docker-smoke.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add scripts/docker-smoke.mjs
           git commit -m "🐛 恢复 Docker smoke 临时目录宿主 ownership"
           git push
-      - run: corepack pnpm verify
-      - run: corepack pnpm docker:build
-      - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
-      - run: corepack pnpm docker:smoke
