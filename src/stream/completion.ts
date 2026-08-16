@@ -1,8 +1,4 @@
-import {
-  ChatGptStreamDivergedError,
-  TextStreamAbortedError,
-  TextStreamError,
-} from './errors.js';
+import { ChatGptStreamDivergedError, TextStreamAbortedError, TextStreamError } from './errors.js';
 import { normalizeAssistantText } from './normalize.js';
 import type { AssistantSnapshot, StreamClock } from './types.js';
 
