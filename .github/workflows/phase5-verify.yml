@@ -1,4 +1,4 @@
-name: Phase 5 Docker Smoke Diagnostic
+name: Phase 5 Verify
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -19,22 +19,40 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - run: corepack pnpm docker:build
-      - name: Run Docker smoke and capture output
-        id: smoke
-        shell: bash
+      - name: Patch Docker smoke root ownership cleanup once
         run: |
-          set +e
-          corepack pnpm docker:smoke > docker-smoke.log 2>&1
-          status=$?
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          tail -n 80 docker-smoke.log
-          exit 0
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: phase5-docker-smoke-log
-          path: docker-smoke.log
-          if-no-files-found: error
-      - name: Preserve Docker smoke exit code
-        run: exit "${{ steps.smoke.outputs.status }}"
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/docker-smoke.mjs")
+          source = path.read_text()
+          old = '''function cleanupDataPath() {
+  const cleanup = spawnSync(
+'''
+          new = '''function cleanupDataPath() {
+  const owner = `${process.getuid()}:${process.getgid()}`;
+  const cleanup = spawnSync(
+'''
+          if old not in source:
+              raise SystemExit("cleanupDataPath start changed unexpectedly")
+          source = source.replace(old, new, 1)
+
+          old = '''      "find /cleanup -mindepth 1 -delete",
+'''
+          new = '''      `find /cleanup -mindepth 1 -delete && chown ${owner} /cleanup`,
+'''
+          if old not in source:
+              raise SystemExit("cleanup command changed unexpectedly")
+          source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+          corepack pnpm exec prettier --write scripts/docker-smoke.mjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/docker-smoke.mjs
+          git commit -m "🐛 恢复 Docker smoke 临时目录宿主 ownership"
+          git push
+      - run: corepack pnpm verify
+      - run: corepack pnpm docker:build
+      - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
+      - run: corepack pnpm docker:smoke
