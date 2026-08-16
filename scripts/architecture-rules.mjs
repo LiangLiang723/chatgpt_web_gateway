@@ -17,8 +17,12 @@ const rules = [
   },
   {
     dir: 'stream',
-    forbidden: (value) => /chatgpt\/selectors/.test(value),
-    message: 'stream/ must not import ChatGPT selectors',
+    forbidden: (value) =>
+      value === 'playwright' ||
+      value.startsWith('playwright/') ||
+      value === 'node:sqlite' ||
+      /(?:^|\/)(?:api|browser|chatgpt|persistence)(?:\/|$)/.test(value),
+    message: 'stream/ must stay pure and independent from api/browser/chatgpt/persistence/playwright/sqlite',
   },
   {
     dir: 'persistence',
