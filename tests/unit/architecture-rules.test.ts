@@ -8,6 +8,12 @@ describe('architecture import rules', () => {
     ['context', '../persistence/types.js'],
     ['context', '../chatgpt/driver.js'],
     ['context', 'playwright'],
+    ['stream', '../api/execution.js'],
+    ['stream', '../browser/types.js'],
+    ['stream', '../chatgpt/driver.js'],
+    ['stream', '../persistence/types.js'],
+    ['stream', 'playwright'],
+    ['stream', 'node:sqlite'],
     ['browser', '../api/errors.js'],
     ['browser', '../persistence/types.js'],
     ['browser', '../chatgpt/driver.js'],
@@ -25,6 +31,8 @@ describe('architecture import rules', () => {
 
   it.each([
     ['context', './planner.js'],
+    ['stream', './stable-prefix.js'],
+    ['stream', '../context/types.js'],
     ['browser', './types.js'],
     ['chatgpt', '../browser/types.js'],
     ['api', '../conversations/conversation-engine.js'],
