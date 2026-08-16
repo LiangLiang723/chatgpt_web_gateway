@@ -1,4 +1,4 @@
-name: Phase 5 Verify
+name: Phase 5 Apply Writeback
 
 on:
   push:
@@ -6,12 +6,13 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,4 +20,12 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - run: corepack pnpm verify
+      - run: node scripts/.phase5-writeback-docs.mjs
+      - run: corepack pnpm exec prettier --write docs/architecture.md docs/testing.md docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md
+      - name: Commit final Phase 5 writeback
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture.md docs/testing.md docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md
+          git commit -m "📝 回写 Phase 5 Streaming 实现状态"
+          git push
