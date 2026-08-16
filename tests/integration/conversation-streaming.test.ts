@@ -81,6 +81,7 @@ function seedStoredConversation(db: PersistenceContext, conversationKey = 'strea
         role: 'user',
         content: [{ type: 'text', text: 'old user' }],
         createdAt: 100,
+        updatedAt: 100,
         sequence: 0,
       },
       {
@@ -89,6 +90,7 @@ function seedStoredConversation(db: PersistenceContext, conversationKey = 'strea
         role: 'assistant',
         content: [{ type: 'text', text: 'old assistant' }],
         createdAt: 150,
+        updatedAt: 150,
         sequence: 1,
       },
     ],
