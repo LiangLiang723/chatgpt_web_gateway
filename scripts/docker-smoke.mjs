@@ -435,6 +435,7 @@ async function main() {
 }
 
 function cleanupDataPath() {
+  const owner = `${process.getuid()}:${process.getgid()}`;
   const cleanup = spawnSync(
     'docker',
     [
@@ -448,7 +449,7 @@ function cleanupDataPath() {
       dataPath + ':/cleanup',
       env.IMAGE_NAME,
       '-lc',
-      'find /cleanup -mindepth 1 -delete',
+      `find /cleanup -mindepth 1 -delete && chown ${owner} /cleanup`,
     ],
     { cwd: process.cwd(), env, encoding: 'utf8' },
   );
