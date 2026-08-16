@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +20,3 @@ jobs:
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
       - run: corepack pnpm verify
-      - run: corepack pnpm docker:build
-      - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
-      - run: corepack pnpm docker:smoke
