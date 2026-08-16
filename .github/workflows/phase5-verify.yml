@@ -6,7 +6,7 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -19,6 +19,32 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
+      - name: Patch streaming abort boundary once
+        run: |
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            const path = "src/conversations/conversation-engine.ts";
+            let source = readFileSync(path, "utf8");
+            const importOld = "import { streamAssistantText } from \\"../stream/text-stream.js\\";";
+            const importNew = "import { TextStreamAbortedError } from \\"../stream/errors.js\\";\\nimport { streamAssistantText } from \\"../stream/text-stream.js\\";";
+            if (!source.includes(importOld)) throw new Error("stream import changed unexpectedly");
+            source = source.replace(importOld, importNew);
+            const startedOld = "    await options.streamOptions.sink({ type: \\"started\\", startedAt });\\n\\n    const initial = startCheckpoint({";
+            const startedNew = "    await options.streamOptions.sink({ type: \\"started\\", startedAt });\\n    if (options.streamOptions.signal.aborted) throw new TextStreamAbortedError();\\n\\n    const initial = startCheckpoint({";
+            if (!source.includes(startedOld)) throw new Error("stream started boundary changed unexpectedly");
+            source = source.replace(startedOld, startedNew);
+            const startTextOld = "    turn = await driver.startText(session.page, { prompt });";
+            const startTextNew = "    turn = await driver.startText(session.page, {\\n      prompt,\\n      signal: options.streamOptions.signal,\\n    });";
+            if (!source.includes(startTextOld)) throw new Error("startText call changed unexpectedly");
+            source = source.replace(startTextOld, startTextNew);
+            writeFileSync(path, source);
+          '
+          corepack pnpm exec prettier --write src/conversations/conversation-engine.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/conversations/conversation-engine.ts
+          git commit -m "🐛 阻止 Streaming 断开后继续提交网页 Turn"
+          git push
       - run: corepack pnpm verify
       - run: corepack pnpm docker:build
       - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
