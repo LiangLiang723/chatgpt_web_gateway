@@ -1,4 +1,4 @@
-name: Phase 5 Apply Docker Smoke Cleanup
+name: Phase 5 Verify
 
 on:
   push:
@@ -6,13 +6,12 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
-    if: github.actor != 'github-actions[bot]'
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,12 +19,7 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - run: node scripts/.phase5-patch-smoke.mjs
-      - run: corepack pnpm exec prettier --write scripts/docker-smoke.mjs
-      - name: Commit cleanup fix
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/docker-smoke.mjs
-          git commit -m "🐛 恢复 Docker smoke 临时目录宿主 ownership"
-          git push
+      - run: corepack pnpm verify
+      - run: corepack pnpm docker:build
+      - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
+      - run: corepack pnpm docker:smoke
