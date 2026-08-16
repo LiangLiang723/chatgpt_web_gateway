@@ -6,7 +6,7 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -19,6 +19,23 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
+      - name: Patch Docker smoke cleanup once
+        run: |
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            const path = "scripts/docker-smoke.mjs";
+            const source = readFileSync(path, "utf8");
+            const oldText = `try {\n  await main();\n} finally {\n  rmSync(dataPath, { recursive: true, force: true });\n}\n`;
+            const newText = `function cleanupDataPath() {\n  const cleanup = spawnSync(\n    "docker",\n    [\n      "run",\n      "--rm",\n      "--user",\n      "0:0",\n      "--entrypoint",\n      "sh",\n      "-v",\n      \\`${dataPath}:/cleanup\\`,\n      env.IMAGE_NAME,\n      "-lc",\n      "find /cleanup -mindepth 1 -delete",\n    ],\n    { cwd: process.cwd(), env, encoding: "utf8" },\n  );\n  if (cleanup.status !== 0) {\n    throw new Error(\n      \\`Failed to clean Docker smoke bind mount: ${cleanup.stderr || cleanup.stdout || \\"unknown error\\"}\\`,\n    );\n  }\n  rmSync(dataPath, { recursive: true, force: true });\n}\n\ntry {\n  await main();\n} finally {\n  cleanupDataPath();\n}\n`;
+            if (!source.includes(oldText)) throw new Error("Docker smoke cleanup block changed unexpectedly");
+            writeFileSync(path, source.replace(oldText, newText));
+          '
+          corepack pnpm exec prettier --write scripts/docker-smoke.mjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/docker-smoke.mjs
+          git commit -m "🐛 修复 Docker smoke 跨 UID 临时目录清理"
+          git push
       - run: corepack pnpm verify
       - run: corepack pnpm docker:build
       - run: docker image inspect chatgpt-web-gateway:phase1 --format '{{.Id}}'
