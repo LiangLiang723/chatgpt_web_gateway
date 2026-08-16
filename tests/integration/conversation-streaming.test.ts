@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { NormalizedRequest } from '../../src/api/normalized.js';
 import type {
   ChatGptStreamingTextDriver,
-  ChatGptTextRequest,
   ChatGptTextResult,
   ChatGptTextTurn,
 } from '../../src/chatgpt/driver.js';
@@ -111,7 +110,7 @@ class FakeStreamingDriver implements ChatGptStreamingTextDriver {
     return 'restored';
   }
 
-  async startText(_page: Page, _request: ChatGptTextRequest): Promise<ChatGptTextTurn> {
+  async startText(): Promise<ChatGptTextTurn> {
     this.onStart?.();
     let index = 0;
     return {
@@ -187,16 +186,23 @@ describe('Conversation true Streaming', () => {
             'clean',
           );
         }
-        events.push(event.type === 'text.delta' ? { type: event.type, delta: event.delta } : { type: event.type });
+        events.push(
+          event.type === 'text.delta'
+            ? { type: event.type, delta: event.delta }
+            : { type: event.type },
+        );
       },
     });
 
     expect(result.text).toBe('Hello!');
     expect(events[0]).toEqual({ type: 'started' });
     expect(events.at(-1)).toEqual({ type: 'completed' });
-    expect(events.filter((event) => event.type === 'text.delta').map((event) => event.delta).join('')).toBe(
-      'Hello!',
-    );
+    expect(
+      events
+        .filter((event) => event.type === 'text.delta')
+        .map((event) => event.delta)
+        .join(''),
+    ).toBe('Hello!');
     expect(queue.keys).toEqual(['stream-thread']);
     expect(registry.completed).toEqual(['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']);
 
