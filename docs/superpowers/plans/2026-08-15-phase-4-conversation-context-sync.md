@@ -1288,7 +1288,7 @@ corepack pnpm verify
 
 Expected: PASS.
 
-- [!] **Step 6: Run explicit real E2E using the already authenticated isolated profile**
+- [x] **Step 6: Run explicit real E2E using the already authenticated isolated profile**
 
 Use the environment appropriate to the actual DevSpace/NAS path, preserving the existing proxy requirement where direct network is unavailable:
 
@@ -1310,7 +1310,7 @@ git add tests/e2e scripts/test-chatgpt-e2e.ts tests/unit
  git commit -m "🧪 增加 Phase 4 Conversation 真实 E2E"
 ```
 
-2026-08-15 execution evidence: the E2E safety gate remains explicit; both real commands reject execution without `E2E_CHATGPT=1`, and the gate/profile unit suite passes 2 files / 5 tests including isolated Profile and credential-bearing proxy rejection. The Phase 4 harness now verifies full-history APPEND via live centralized user-turn selectors (marker B present, original token A absent), restart with a single-user incremental RESTORE, and divergence REBUILD while preserving local key/UUID and requiring a new ChatGPT URL. `corepack pnpm verify` passed 43 files / 271 tests before external access. The combined real command using `/tmp/cwg-phase3-e2e-data/e2e-browser-profile` and proxy `http://192.168.3.163:7890` stopped in the Phase 3 regression with `Expected authenticated, got auth_required`; standalone Phase 4 then independently reached Gateway turn 1 and returned HTTP 503 `auth_required`. The isolated Profile login has expired, so APPEND/RESTORE/REBUILD real DOM behavior could not be exercised. Per spec, Task 12 remains blocked and Phase 4 must not be marked complete until manual re-authentication followed by rerunning the explicit real command succeeds.
+2026-08-16 final execution evidence: the E2E safety gate remains explicit and the Phase 4 harness still verifies full-history APPEND via live centralized user-turn selectors, restart single-user incremental RESTORE, and divergence REBUILD with stable local key/UUID plus a new ChatGPT URL. Re-authentication of the expired old isolated Profile repeatedly entered a challenge loop, so the old Profile was preserved and a new clean isolated Profile was created. maintenance Google Chrome Stable successfully logged into that clean Profile, and `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`. The first combined real E2E then exposed a current DOM regression: the new Assistant text was already final while global `stop-button` could remain visible, causing `chatgpt_generation_timeout`. Real DOM sampling showed the target Assistant turn's `copy-turn-action-button` appears only after the turn completion UI is mounted; two red→green Driver tests now require the target-turn completion marker rather than global Stop disappearance. After the fix, `corepack pnpm verify` passed 43 files / 274 tests and the combined real command succeeded with Phase 3 `driverChallenge=true` / `gatewayChallenge=true` and Phase 4 `append=true` / `restore=true` / `rebuild=true`. Task 12 is complete and the former authentication blocker is cleared.
 
 ---
 
@@ -1377,7 +1377,7 @@ Expected: PASS.
 
 Use the explicit command from Task 12. If only prose changed, do not create unnecessary external ChatGPT turns.
 
-2026-08-16 blocking-state finalization evidence: public/state/architecture/testing/roadmap/README prose was updated to distinguish "Phase 4 implementation complete" from "real ChatGPT four-mode E2E not accepted". A fresh `corepack pnpm verify` passed 43 test files / 272 tests plus format/lint/typecheck/build/governance. A fresh `linux/amd64` build reproduced image `sha256:d31206e5d39b5493d11563fc034fb30c0f9f5909d0454162cdc2c3d645f867a1`, and `corepack pnpm docker:smoke` passed. No Browser/Conversation product code changed after the blocked real E2E run, so Step 5 correctly avoids generating redundant external ChatGPT turns; the recorded `auth_required` blocker remains the current external fact.
+2026-08-16 final-state evidence: the former blocking-state writeback was superseded after successful re-authentication and real E2E. Current public/state/architecture/testing/roadmap/README prose marks Phase 4 complete and ready for Phase 5 design. A fresh post-fix `corepack pnpm verify` passed 43 test files / 274 tests plus format/lint/typecheck/build/governance. Browser/Conversation behavior did change after the old blocked run—the Completion Observer now keys off the target Assistant turn completion marker—so Step 5 was correctly re-exercised through the combined real E2E, which passed Phase 3 regression plus Phase 4 APPEND/RESTORE/REBUILD. A fresh final `linux/amd64` build produced `sha256:a7a9dd99cb3c7f48d2cf13d829cc83d6d577778806a1605011ab257fbca8fd71`; `corepack pnpm docker:smoke` passed all migration 001+002, checkpoint, idle-timeout, HTTP/SQLite/restart, normal/maintenance Profile, sandbox/seccomp and RFB boundaries.
 
 - [x] **Step 6: Run Git/repository hygiene checks**
 

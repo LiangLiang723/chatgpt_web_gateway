@@ -26,7 +26,7 @@
 
 ## Current Phase 4 Implementation（当前 Phase 4 实现）
 
-Phase 4 批准的代码实现范围已完成；以下描述当前已经通过 deterministic tests 与 Docker smoke 的实际行为。真实 ChatGPT APPEND / RESTORE / REBUILD E2E 仍因隔离 Profile `auth_required` 未通过，因此“已实现”不等于“当前外部网页已真实验收”:
+Phase 4 批准范围已完成代码、deterministic、Docker 与真实 ChatGPT Web E2E 验收；以下描述当前实际支持行为：
 
 - `GET /health`：返回 Gateway HTTP 进程级健康状态，不代表 ChatGPT 已登录。
 - `GET /v1/models`：认证后只返回 `chatgpt-web`。
@@ -42,7 +42,7 @@ Phase 4 批准的代码实现范围已完成；以下描述当前已经通过 de
 - `conversation_restore_failed` 映射为 HTTP `502`；`auth_required` 使用 HTTP `503`，不会与 Gateway Bearer API Key 的 HTTP `401` 混淆。
 - Chat Completions 不伪造 token usage；Responses 当前返回 `usage: null`。
 
-当前最终 deterministic `verify` 基线为 43 个测试文件 / 272 个测试；fresh Docker smoke 已验证 migration 001+002、checkpoint columns、Page idle 配置与原有安全运行边界。显式 Phase 4 real E2E harness 已包含 live user-turn APPEND、restart RESTORE 与 divergence REBUILD，但 standalone turn 1 当前返回 `503 auth_required`；因此**Phase 4 代码可描述为已实现，但真实网页四态仍未验收，阶段不能关闭**。下面的 V1 矩阵仍表示最终批准目标。
+当前 deterministic `verify` 基线为 43 个测试文件 / 274 个测试；fresh Docker smoke 验证 migration 001+002、checkpoint columns、Page idle 配置与原有安全运行边界。显式 combined real E2E 已通过 Phase 3 regression，以及 live user-turn APPEND、restart RESTORE 与 divergence REBUILD；因此 **Phase 4 已关闭并准备进入 Phase 5 Streaming 设计**。下面的 V1 矩阵仍表示最终批准目标。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 

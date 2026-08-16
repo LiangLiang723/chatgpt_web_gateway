@@ -62,9 +62,9 @@ corepack pnpm test:e2e:chatgpt:phase4
 
 2026-08-15 Phase 3 已实际运行真实命令并通过最终验收。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用，显式 `CHATGPT_PROXY_SERVER` 恢复网络；Xvfb + full Playwright Chromium 可进入 ChatGPT 网页。隔离 Profile 通过 maintenance Google Chrome Stable 人工登录后，真实 `inspect:chatgpt` 得到 `auth=authenticated`、`composer=unique`；完整 `test:e2e:chatgpt` 随后同时得到 `driverChallenge=true` 与 `gatewayChallenge=true`。
 
-Phase 4 提供 standalone `test:e2e:chatgpt:phase4`，而主 `test:e2e:chatgpt` 现在先跑 Phase 3 regression 再跑完整 Phase 4。Phase 4 harness 真实走 Gateway HTTP，验证 full-history APPEND 后 live ChatGPT user turn 只含新 marker、不含第一轮 token；随后 close/recreate runtime，以 single-user incremental 请求验证 RESTORE；最后提交修改后的 full history 强制 REBUILD，并要求 local key/UUID 不变而 ChatGPT URL 改变。Harness 会把显式隔离源 Profile 复制到临时 Profile 并排除 Chromium `Singleton*` marker，避免测试污染/锁死人工登录基准 Profile；复制行为有确定性单测。2026-08-15 实际运行 combined E2E 时 Phase 3 auth probe 返回 `auth_required`；standalone Phase 4 又独立在 turn 1 返回 HTTP 503 `auth_required`。因此当前外部 blocker 明确是隔离 Profile 认证失效，Phase 4 real E2E 仍未通过。
+Phase 4 提供 standalone `test:e2e:chatgpt:phase4`，而主 `test:e2e:chatgpt` 先跑 Phase 3 regression 再跑完整 Phase 4。Phase 4 harness 真实走 Gateway HTTP，验证 full-history APPEND 后 live ChatGPT user turn 只含新 marker、不含第一轮 token；随后 close/recreate runtime，以 single-user incremental 请求验证 RESTORE；最后提交修改后的 full history 强制 REBUILD，并要求 local key/UUID 不变而 ChatGPT URL 改变。Harness 会把显式隔离源 Profile 复制到临时 Profile 并排除 Chromium `Singleton*` marker，避免测试污染/锁死人工登录基准 Profile；复制行为有确定性单测。2026-08-16 新的干净隔离 Profile 通过 maintenance Google Chrome Stable 登录后，`inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`；combined E2E 最终真实返回 Phase 3 `driverChallenge=true` / `gatewayChallenge=true` 与 Phase 4 `append=true` / `restore=true` / `rebuild=true`，Phase 4 real E2E 验收完成。
 
-隔离 E2E Profile 可通过 maintenance overlay 人工登录：设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 后，maintenance Google Chrome Stable 使用该测试 Profile；normal headless runtime 仍固定使用 `${DATA_DIR}/browser-profile/`。真实调试证明 Chrome for Testing 在 `auth.openai.com` Turnstile 会反复 challenge，而固定 Google Chrome Stable 能通过人工验证；maintenance 因此不使用产品 Playwright 浏览器。
+隔离 E2E Profile 可通过 maintenance overlay 人工登录：设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 后，maintenance Google Chrome Stable 使用该测试 Profile；normal headless runtime 仍固定使用 `${DATA_DIR}/browser-profile/`。真实调试证明 Chrome for Testing 在 `auth.openai.com` Turnstile 会反复 challenge，而固定 Google Chrome Stable 能通过人工验证；maintenance 因此不使用产品 Playwright 浏览器。若一个**已失效**的隔离 Profile 在重新认证时再次陷入 challenge loop，不要把“曾经用 Stable Chrome 成功”理解为该旧 Profile 必然可恢复：保留旧 Profile，不继续重复验证，创建一个新的干净隔离 Profile，用 Stable Chrome 登录后先跑 `inspect:chatgpt`，确认 `auth=authenticated` 再运行 real E2E。
 
 目标场景：
 
@@ -117,7 +117,7 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - 当前 Ubuntu x11vnc `0.9.16` 必须使用 `-threads`；真实故障复现表明默认单线程模式会持续高 CPU 且不发送 RFB banner。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
-- `schema_migrations` 包含且只包含一次 `001_initial` 当前基线。
+- `schema_migrations` 包含且只包含当前两条 migration：`001_initial` 与 `002_add_conversation_sync_checkpoint`，checksum 与顺序均正确。
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 - 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
 - maintenance overlay 存在且只存在一个 headed Google Chrome Stable owner；产品 BrowserManager 不并发占用同一 Profile。
@@ -141,7 +141,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、response encoder 与 E2E safety gate。Phase 4 deterministic coverage 已包含 checkpoint migration、full/incremental Planner、same-key FIFO / cross-key parallel、Page affinity/idle+LRU、Driver restore、Conversation Engine crash-convergence、runtime restart、无 key持久化与跨 Chat Completions/Responses HTTP 连续性。当前最终 deterministic 基线为 43 个测试文件 / 272 个测试；使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、response encoder 与 E2E safety gate。Phase 4 deterministic coverage 已包含 checkpoint migration、full/incremental Planner、same-key FIFO / cross-key parallel、Page affinity/idle+LRU、Driver restore、Conversation Engine crash-convergence、runtime restart、无 key 持久化、跨 Chat Completions/Responses HTTP 连续性，以及“全局 Stop control 滞留但目标 Assistant turn 已完成”的 Completion 回归。当前 deterministic 基线为 43 个测试文件 / 274 个测试；使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -155,4 +155,4 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 有历史真实通过证据：authenticated selector inspection、Fresh Driver challenge 与 Gateway HTTP challenge 均在独立测试 Profile 上执行成功。Phase 4 当前代码、deterministic 与 Docker smoke 已完成，但 real E2E 仍停在隔离 Profile `auth_required`，尚未触达真实 APPEND/RESTORE/REBUILD DOM 断言。因此可以声明 Phase 4 **实现完成、真实网页验收未完成**，但不能关闭 Phase 4，也不能外推到 Streaming、附件、Tools 或图片能力。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 与 Phase 4 都有真实通过证据：authenticated selector inspection、Fresh Driver challenge、Gateway HTTP challenge、APPEND live DOM、restart RESTORE 与 divergence REBUILD 均已在隔离测试 Profile 上执行成功。2026-08-16 的验收还实际捕获并修复了 Completion DOM 回归：答案文本已经稳定时全局 `stop-button` 仍可能滞留，因此 Driver 改为等待**目标 Assistant turn 自身**的 `copy-turn-action-button` completion marker，再结合稳定文本采样。Phase 4 可以正式关闭，但这不能外推到 Streaming、附件、Tools 或图片能力；这些后续能力仍必须各自做 deterministic + real E2E。

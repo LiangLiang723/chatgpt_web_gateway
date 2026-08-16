@@ -38,13 +38,15 @@
 
 ## Phase 4：Conversation + Context Sync
 
-状态：**代码实现 + deterministic/Docker 验收完成，真实 ChatGPT E2E 被隔离 Profile `auth_required` 阻塞**。
+状态：**完成**。
 
-交付：Conversation Key、same-key FIFO、跨会话并行、full-history / single-user incremental、`FRESH | APPEND | RESTORE | REBUILD`、Page idle + LRU 回收、安全 URL 恢复、crash-safe SQLite `clean | in_flight` sync checkpoint 与 NULL-key 独立持久化。当前这些交付已完成并通过最终 43 个测试文件 / 272 个测试及 fresh Docker smoke。
+交付：Conversation Key、same-key FIFO、跨会话并行、full-history / single-user incremental、`FRESH | APPEND | RESTORE | REBUILD`、Page idle + LRU 回收、安全 URL 恢复、crash-safe SQLite `clean | in_flight` sync checkpoint 与 NULL-key 独立持久化。当前这些交付已完成并通过 43 个测试文件 / 274 个测试及 fresh Docker smoke。
 
-验收：deterministic tests 已证明完整历史与 incremental APPEND 不重复灌入已确认历史、未知 post-checkpoint failure 保持 `in_flight` 并在下一轮 REBUILD、进程重启可 RESTORE、跨协议共享同一 Conversation。最终 real harness 也已实现 APPEND live DOM、restart RESTORE 与 divergence REBUILD，但真实运行在认证探测/首轮请求即返回 `auth_required`。重新人工认证隔离 Profile 并使 real E2E 通过前，不关闭 Phase 4、不进入 Phase 5。
+验收：deterministic tests 已证明完整历史与 incremental APPEND 不重复灌入已确认历史、未知 post-checkpoint failure 保持 `in_flight` 并在下一轮 REBUILD、进程重启可 RESTORE、跨协议共享同一 Conversation。2026-08-16 combined real E2E 在新的干净隔离 Profile 上真实通过 Phase 3 regression，以及 APPEND live DOM、restart RESTORE 与 divergence REBUILD；验收期间还修复了全局 Stop control 滞留导致的 Completion 假超时。Phase 4 已关闭，下一步进入 Phase 5 Streaming 设计。
 
 ## Phase 5：真 Streaming
+
+状态：**下一阶段，待设计规格批准**。
 
 交付：Assistant Snapshot、200ms polling、Stable Prefix、Completion Detector（完成检测）、两套 SSE Encoder、Client abort 停止生成。
 
