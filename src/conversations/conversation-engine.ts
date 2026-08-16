@@ -1,8 +1,18 @@
 import { randomUUID as defaultRandomUuid } from 'node:crypto';
 
-import type { NormalizedExecutionHandler, TextExecutionResult } from '../api/execution.js';
+import type {
+  ConversationExecutionEngine,
+  NormalizedExecutionHandler,
+  StreamingExecutionOptions,
+  TextExecutionResult,
+} from '../api/execution.js';
 import type { NormalizedRequest } from '../api/normalized.js';
-import type { ChatGptTextDriver, ChatGptTextResult } from '../chatgpt/driver.js';
+import type {
+  ChatGptStreamingTextDriver,
+  ChatGptTextDriver,
+  ChatGptTextResult,
+  ChatGptTextTurn,
+} from '../chatgpt/driver.js';
 import { ChatGptDriverError } from '../chatgpt/errors.js';
 import { canonicalizeInstructions, canonicalizeText } from '../context/canonicalize.js';
 import { planContextSync } from '../context/planner.js';
@@ -14,12 +24,17 @@ import type {
 } from '../context/types.js';
 import type { ConversationStore } from '../persistence/conversation-store.js';
 import type { ConversationAggregate, ConversationRecord } from '../persistence/types.js';
+import { streamAssistantText } from '../stream/text-stream.js';
+import type { StreamClock } from '../stream/types.js';
 
 import { buildFinalConversationAggregate } from './aggregate-builder.js';
 import type { ConversationPageRegistry, ConversationPageSession } from './page-registry.js';
 import { buildAppendPrompt, buildContextPrompt } from './prompts.js';
 import type { ConversationQueue } from './conversation-queue.js';
-import { toCanonicalConversationRequest } from './request-context.js';
+import {
+  toCanonicalConversationRequest,
+  toCanonicalStreamingConversationRequest,
+} from './request-context.js';
 
 export interface CreateConversationEngineOptions {
   pageRegistry: ConversationPageRegistry;
@@ -28,6 +43,10 @@ export interface CreateConversationEngineOptions {
   conversationStore: ConversationStore;
   now?: () => number;
   randomUuid?: () => string;
+  streamClock?: StreamClock;
+  streamPollIntervalMs?: number;
+  streamStableSamples?: number;
+  streamTimeoutMs?: number;
 }
 
 function canonicalStoredMessage(
@@ -151,6 +170,87 @@ async function preparePage(options: {
   return 'context';
 }
 
+function buildPrompt(options: {
+  promptMode: 'context' | 'append';
+  canonicalRequest: CanonicalConversationRequest;
+  plan: ContextSyncPlan;
+  stored?: CanonicalStoredConversation;
+}): string {
+  return options.promptMode === 'append'
+    ? buildAppendPrompt(options.plan.currentUser)
+    : buildContextPrompt({
+        instructions: options.canonicalRequest.instructions,
+        history: contextHistory({
+          canonicalRequest: options.canonicalRequest,
+          plan: options.plan,
+          ...(options.stored === undefined ? {} : { stored: options.stored }),
+        }),
+        currentUser: options.plan.currentUser,
+      });
+}
+
+function startCheckpoint(options: {
+  engine: CreateConversationEngineOptions;
+  existing?: ConversationAggregate;
+  conversationId: string;
+  conversationKey?: string;
+  request: NormalizedRequest;
+  startedAt: number;
+}): ConversationAggregate {
+  if (options.existing !== undefined) {
+    options.engine.conversationStore.markSyncInFlight(options.conversationId, options.startedAt);
+    return options.existing;
+  }
+
+  const initial = createInFlightConversation({
+    conversationId: options.conversationId,
+    ...(options.conversationKey === undefined
+      ? {}
+      : { conversationKey: options.conversationKey }),
+    request: options.request,
+    startedAt: options.startedAt,
+  });
+  options.engine.conversationStore.save(initial);
+  return initial;
+}
+
+function buildFinalResult(options: {
+  engine: CreateConversationEngineOptions;
+  existing?: ConversationAggregate;
+  initial: ConversationAggregate;
+  request: NormalizedRequest;
+  canonicalRequest: CanonicalConversationRequest;
+  plan: ContextSyncPlan;
+  stored?: CanonicalStoredConversation;
+  assistantText: string;
+  conversationUrl: string;
+  completedAt: number;
+}): TextExecutionResult {
+  const finalAggregate = buildFinalConversationAggregate({
+    ...(options.existing === undefined ? {} : { stored: options.existing }),
+    conversation: finalConversationRecord({
+      existing: options.existing,
+      initial: options.initial,
+      request: options.request,
+    }),
+    authoritativeMessages: authoritativeMessages({
+      canonicalRequest: options.canonicalRequest,
+      plan: options.plan,
+      ...(options.stored === undefined ? {} : { stored: options.stored }),
+    }),
+    assistantText: options.assistantText,
+    conversationUrl: options.conversationUrl,
+    completedAt: options.completedAt,
+  });
+  options.engine.conversationStore.save(finalAggregate);
+  return {
+    type: 'text',
+    text: options.assistantText,
+    conversationUrl: options.conversationUrl,
+    completedAt: options.completedAt,
+  };
+}
+
 async function executeConversation(options: {
   engine: CreateConversationEngineOptions;
   request: NormalizedRequest;
@@ -181,73 +281,169 @@ async function executeConversation(options: {
       plan,
       conversationUrl: existing?.conversation.chatgptConversationUrl,
     });
-
     const startedAt = options.now();
-    let initial: ConversationAggregate;
-    if (existing === undefined) {
-      initial = createInFlightConversation({
-        conversationId,
-        ...(options.conversationKey === undefined
-          ? {}
-          : { conversationKey: options.conversationKey }),
-        request: options.request,
-        startedAt,
-      });
-      options.engine.conversationStore.save(initial);
-    } else {
-      initial = existing;
-      options.engine.conversationStore.markSyncInFlight(conversationId, startedAt);
-    }
-
-    const prompt =
-      promptMode === 'append'
-        ? buildAppendPrompt(plan.currentUser)
-        : buildContextPrompt({
-            instructions: options.canonicalRequest.instructions,
-            history: contextHistory({
-              canonicalRequest: options.canonicalRequest,
-              plan,
-              ...(stored === undefined ? {} : { stored }),
-            }),
-            currentUser: plan.currentUser,
-          });
+    const initial = startCheckpoint({
+      engine: options.engine,
+      existing,
+      conversationId,
+      conversationKey: options.conversationKey,
+      request: options.request,
+      startedAt,
+    });
+    const prompt = buildPrompt({
+      promptMode,
+      canonicalRequest: options.canonicalRequest,
+      plan,
+      stored,
+    });
     const result: ChatGptTextResult = await options.engine.driver.sendText(session.page, {
       prompt,
     });
     const completedAt = options.now();
-    const finalAggregate = buildFinalConversationAggregate({
-      ...(existing === undefined ? {} : { stored: existing }),
-      conversation: finalConversationRecord({ existing, initial, request: options.request }),
-      authoritativeMessages: authoritativeMessages({
-        canonicalRequest: options.canonicalRequest,
-        plan,
-        ...(stored === undefined ? {} : { stored }),
-      }),
+    const finalResult = buildFinalResult({
+      engine: options.engine,
+      existing,
+      initial,
+      request: options.request,
+      canonicalRequest: options.canonicalRequest,
+      plan,
+      stored,
       assistantText: result.text,
       conversationUrl: result.conversationUrl,
       completedAt,
     });
-    options.engine.conversationStore.save(finalAggregate);
     await session.complete();
     completed = true;
-
-    return {
-      type: 'text',
-      text: result.text,
-      conversationUrl: result.conversationUrl,
-      completedAt,
-    };
+    return finalResult;
   } finally {
     if (!completed) await session.fail();
   }
 }
 
-export function createConversationEngine(
-  options: CreateConversationEngineOptions,
-): NormalizedExecutionHandler {
-  const now = options.now ?? Date.now;
-  const randomUuid = options.randomUuid ?? defaultRandomUuid;
+function requireStreamingDriver(driver: ChatGptTextDriver): ChatGptStreamingTextDriver {
+  if (!('startText' in driver) || typeof driver.startText !== 'function') {
+    throw new ChatGptDriverError({
+      code: 'browser_unavailable',
+      message: 'ChatGPT streaming driver is unavailable',
+    });
+  }
+  return driver as ChatGptStreamingTextDriver;
+}
 
+function isStreamAborted(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'stream_aborted'
+  );
+}
+
+async function streamConversation(options: {
+  engine: CreateConversationEngineOptions;
+  request: NormalizedRequest;
+  canonicalRequest: CanonicalConversationRequest;
+  streamOptions: StreamingExecutionOptions;
+  conversationKey?: string;
+  existing?: ConversationAggregate;
+  now: () => number;
+  randomUuid: () => string;
+}): Promise<TextExecutionResult> {
+  const existing = options.existing;
+  const conversationId = existing?.conversation.id ?? options.randomUuid();
+  const stored = existing === undefined ? undefined : canonicalStoredConversation(existing);
+  const plan = planContextSync({
+    ...(stored === undefined ? {} : { stored }),
+    request: options.canonicalRequest,
+    hasAffinityPage:
+      existing === undefined ? false : options.engine.pageRegistry.hasAffinity(conversationId),
+  });
+  const session = await options.engine.pageRegistry.acquire(
+    options.conversationKey === undefined ? undefined : conversationId,
+  );
+  const driver = requireStreamingDriver(options.engine.driver);
+  let completed = false;
+  let turn: ChatGptTextTurn | undefined;
+
+  try {
+    const promptMode = await preparePage({
+      driver,
+      session,
+      plan,
+      conversationUrl: existing?.conversation.chatgptConversationUrl,
+    });
+    const startedAt = options.now();
+    await options.streamOptions.sink({ type: 'started', startedAt });
+
+    const initial = startCheckpoint({
+      engine: options.engine,
+      existing,
+      conversationId,
+      conversationKey: options.conversationKey,
+      request: options.request,
+      startedAt,
+    });
+    const prompt = buildPrompt({
+      promptMode,
+      canonicalRequest: options.canonicalRequest,
+      plan,
+      stored,
+    });
+    turn = await driver.startText(session.page, { prompt });
+    const assistantText = await streamAssistantText({
+      observe: turn.observe,
+      onDelta: async (delta) => {
+        await options.streamOptions.sink({ type: 'text.delta', delta });
+      },
+      signal: options.streamOptions.signal,
+      ...(options.engine.streamClock === undefined ? {} : { clock: options.engine.streamClock }),
+      ...(options.engine.streamPollIntervalMs === undefined
+        ? {}
+        : { pollIntervalMs: options.engine.streamPollIntervalMs }),
+      ...(options.engine.streamStableSamples === undefined
+        ? {}
+        : { stableSamples: options.engine.streamStableSamples }),
+      ...(options.engine.streamTimeoutMs === undefined
+        ? {}
+        : { timeoutMs: options.engine.streamTimeoutMs }),
+    });
+    const conversationUrl = await turn.conversationUrl();
+    const completedAt = options.now();
+    const finalResult = buildFinalResult({
+      engine: options.engine,
+      existing,
+      initial,
+      request: options.request,
+      canonicalRequest: options.canonicalRequest,
+      plan,
+      stored,
+      assistantText,
+      conversationUrl,
+      completedAt,
+    });
+    await session.complete();
+    completed = true;
+    await options.streamOptions.sink({ type: 'completed', result: finalResult });
+    return finalResult;
+  } catch (error) {
+    if (turn !== undefined && isStreamAborted(error)) {
+      try {
+        await turn.stop();
+      } catch {
+        // The transport is already gone. Keep the checkpoint in_flight and preserve the original abort.
+      }
+    }
+    throw error;
+  } finally {
+    if (!completed) await session.fail();
+  }
+}
+
+function executeHandler(
+  options: CreateConversationEngineOptions,
+  now: () => number,
+  randomUuid: () => string,
+): NormalizedExecutionHandler {
   return async (request) => {
     const conversationKey = request.conversationKey;
     if (conversationKey === undefined) {
@@ -275,4 +471,51 @@ export function createConversationEngine(
       });
     });
   };
+}
+
+export function createConversationExecutionEngine(
+  options: CreateConversationEngineOptions,
+): ConversationExecutionEngine {
+  const now = options.now ?? Date.now;
+  const randomUuid = options.randomUuid ?? defaultRandomUuid;
+  const execute = executeHandler(options, now, randomUuid);
+
+  return {
+    execute,
+    stream: async (request, streamOptions) => {
+      const conversationKey = request.conversationKey;
+      if (conversationKey === undefined) {
+        const canonicalRequest = toCanonicalStreamingConversationRequest(request);
+        return streamConversation({
+          engine: options,
+          request,
+          canonicalRequest,
+          streamOptions,
+          now,
+          randomUuid,
+        });
+      }
+
+      return options.queue.run(conversationKey, async () => {
+        const existing = options.conversationStore.loadByKey(conversationKey);
+        const canonicalRequest = toCanonicalStreamingConversationRequest(request);
+        return streamConversation({
+          engine: options,
+          request,
+          canonicalRequest,
+          streamOptions,
+          conversationKey,
+          ...(existing === undefined ? {} : { existing }),
+          now,
+          randomUuid,
+        });
+      });
+    },
+  };
+}
+
+export function createConversationEngine(
+  options: CreateConversationEngineOptions,
+): NormalizedExecutionHandler {
+  return createConversationExecutionEngine(options).execute;
 }
