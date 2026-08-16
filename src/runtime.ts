@@ -2,7 +2,11 @@ import { join } from 'node:path';
 
 import type { FastifyInstance } from 'fastify';
 
-import { browserMaintenanceModeExecution } from './api/execution.js';
+import {
+  browserMaintenanceModeExecution,
+  browserMaintenanceModeStreamingExecution,
+  type ConversationExecutionEngine,
+} from './api/execution.js';
 import { buildServer } from './api/server.js';
 import {
   createBrowserManager as defaultCreateBrowserManager,
@@ -11,7 +15,7 @@ import {
 import type { BrowserManager } from './browser/types.js';
 import { createChatGptDriver, type ChatGptTextDriver } from './chatgpt/driver.js';
 import type { AppConfig } from './config/index.js';
-import { createConversationEngine } from './conversations/conversation-engine.js';
+import { createConversationExecutionEngine } from './conversations/conversation-engine.js';
 import {
   createConversationPageRegistry as defaultCreateConversationPageRegistry,
   type ConversationPageRegistry,
@@ -94,10 +98,13 @@ export async function createGatewayRuntime(
     throw error;
   }
 
-  const execute =
+  const execution: ConversationExecutionEngine =
     browser === undefined || pageRegistry === undefined || conversationQueue === undefined
-      ? browserMaintenanceModeExecution
-      : createConversationEngine({
+      ? {
+          execute: browserMaintenanceModeExecution,
+          stream: browserMaintenanceModeStreamingExecution,
+        }
+      : createConversationExecutionEngine({
           pageRegistry,
           queue: conversationQueue,
           driver: options.driver ?? createChatGptDriver(),
@@ -106,7 +113,12 @@ export async function createGatewayRuntime(
 
   let app: FastifyInstance;
   try {
-    app = buildServer({ config: options.config, execute, logger: options.logger ?? false });
+    app = buildServer({
+      config: options.config,
+      execute: execution.execute,
+      stream: execution.stream,
+      logger: options.logger ?? false,
+    });
   } catch (error) {
     try {
       await closeExecutionResources();
