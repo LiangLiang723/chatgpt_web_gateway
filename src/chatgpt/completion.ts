@@ -9,7 +9,7 @@ export interface AssistantCompletionObservation {
   text: string;
 }
 
-export interface CompletionClock extends StreamClock {}
+export type CompletionClock = StreamClock;
 
 export interface WaitForAssistantCompletionOptions {
   observe(): Promise<AssistantCompletionObservation>;
