@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript 6、Node 24、Fastify 5、Playwright 1.62.1、Vitest 4、Node `http.ServerResponse` SSE、SQLite `node:sqlite`。
 
+**Execution status (2026-08-16):** Tasks 1–11 的设计激活、产品实现、TDD、deterministic integration、真实 TCP E2E harness 与 combined harness 接入均已完成；Task 12 的 fresh deterministic 与 Docker build/smoke 已通过。当前仅 authenticated `inspect:chatgpt`、Phase 5 real E2E 和 combined Phase 3/4/5 real E2E 因本会话无法访问隔离已登录 Browser Profile / LAN proxy 而阻塞，因此 Phase 5 保持开放。
+
 ## Global Constraints
 
 - 只实现 Phase 5 纯文本 Streaming；附件、Tools、Structured Output、image execution 继续拒绝。
@@ -35,13 +37,13 @@
 - Consumes: 已批准 Phase 5 spec。
 - Produces: `ACTIVE_PLAN=docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md`，`STATUS=phase-5-implementation`。
 
-- [ ] **Step 1: 将 spec header 改为批准状态**
+- [x] **Step 1: 将 spec header 改为批准状态**
 
 ```markdown
 **Status:** Approved; implementation in progress
 ```
 
-- [ ] **Step 2: 激活 PROJECT_STATE**
+- [x] **Step 2: 激活 PROJECT_STATE**
 
 ```text
 PHASE=phase-5
@@ -52,7 +54,7 @@ NEXT_TASK=implement-phase-5-stream-core
 
 正文同步写明 Streaming 尚未完成，只是实施已启动。
 
-- [ ] **Step 3: 运行仓库治理检查**
+- [x] **Step 3: 运行仓库治理检查**
 
 Run:
 
@@ -63,7 +65,7 @@ node scripts/check-docs.mjs
 
 Expected: PASS。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md docs/PROJECT_STATE.md docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md
@@ -113,7 +115,7 @@ export function flushStablePrefix(state: StablePrefixState, finalText: string): 
 export async function waitForStreamingCompletion(options: WaitForStreamingCompletionOptions): Promise<string>;
 ```
 
-- [ ] **Step 1: RED — normalization + Unicode LCP tests**
+- [x] **Step 1: RED — normalization + Unicode LCP tests**
 
 Tests must assert:
 
@@ -131,11 +133,11 @@ corepack pnpm vitest run tests/unit/stream-normalize.test.ts tests/unit/stable-p
 
 Expected: FAIL because modules/functions do not exist.
 
-- [ ] **Step 2: GREEN — implement normalization and code-point-safe LCP**
+- [x] **Step 2: GREEN — implement normalization and code-point-safe LCP**
 
 `normalizeAssistantText()` only normalizes CRLF/CR to LF. LCP iterates `Array.from(value)` code points and joins the common prefix.
 
-- [ ] **Step 3: RED — Stable Prefix state tests**
+- [x] **Step 3: RED — Stable Prefix state tests**
 
 Cover:
 
@@ -149,23 +151,23 @@ final flush => emit remaining tail exactly once
 
 Run expected FAIL.
 
-- [ ] **Step 4: GREEN — Stable Prefix state**
+- [x] **Step 4: GREEN — Stable Prefix state**
 
 State stores only `emitted`, bounded `samples`, `stableSamples`. Every observation verifies current/stable text starts with `emitted`; `flushStablePrefix` verifies final starts with `emitted`.
 
-- [ ] **Step 5: RED — Completion tests with fake clock**
+- [x] **Step 5: RED — Completion tests with fake clock**
 
 Cover marker absent, marker present but changing text, marker + 3 stable samples + final re-read, no-turn timeout, existing-turn timeout, target disappears after appearing.
 
-- [ ] **Step 6: GREEN — Completion detector**
+- [x] **Step 6: GREEN — Completion detector**
 
 Default `pollIntervalMs=200`, `stableSamples=3`, `timeoutMs=120000`; do not inspect Stop control.
 
-- [ ] **Step 7: RED/GREEN — text streaming loop**
+- [x] **Step 7: RED/GREEN — text streaming loop**
 
 A scripted snapshot sequence must emit only stable non-empty deltas and flush final tail so `concat(delta) === finalText`.
 
-- [ ] **Step 8: Verify + Commit**
+- [x] **Step 8: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/stream-normalize.test.ts tests/unit/stable-prefix.test.ts tests/unit/stream-completion.test.ts tests/unit/text-stream.test.ts
@@ -204,23 +206,23 @@ export interface ChatGptTextDriver {
 }
 ```
 
-- [ ] **Step 1: RED — `startText()` ownership test**
+- [x] **Step 1: RED — `startText()` ownership test**
 
 Assert baseline captured before fill/click and returned handle observes exactly `assistantTurns.nth(baseline)`.
 
-- [ ] **Step 2: GREEN — extract target turn handle**
+- [x] **Step 2: GREEN — extract target turn handle**
 
 `startText` captures baseline, fills, clicks, then returns closure-bound handle. `observe` returns missing snapshot before target exists and validates completion marker cardinality.
 
-- [ ] **Step 3: RED — safe final URL and non-stream reuse**
+- [x] **Step 3: RED — safe final URL and non-stream reuse**
 
 Test `conversationUrl()` validates safe ChatGPT URL and `sendText()` delegates through `startText()` + shared completion logic rather than reimplementing ownership.
 
-- [ ] **Step 4: GREEN — make existing `sendText()` use handle**
+- [x] **Step 4: GREEN — make existing `sendText()` use handle**
 
 Preserve all Phase 3/4 success/error behavior.
 
-- [ ] **Step 5: RED — Stop semantics**
+- [x] **Step 5: RED — Stop semantics**
 
 Cover:
 
@@ -231,11 +233,11 @@ ambiguous Stop => selector_ambiguous
 no target yet but Stop unique => click allowed
 ```
 
-- [ ] **Step 6: GREEN — `turn.stop()`**
+- [x] **Step 6: GREEN — `turn.stop()`**
 
 Use strict Selector Registry semantics and bounded polling until target completion/stopped state. Do not persist partial text.
 
-- [ ] **Step 7: Verify + Commit**
+- [x] **Step 7: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/chatgpt-driver.test.ts tests/unit/chatgpt-completion.test.ts
@@ -273,15 +275,15 @@ export interface ConversationExecutionEngine {
 }
 ```
 
-- [ ] **Step 1: RED — Phase 5 capability tests**
+- [x] **Step 1: RED — Phase 5 capability tests**
 
 `stream=true` pure text must now validate; attachments/tools/structured/image remain `unsupported_phase5_request`.
 
-- [ ] **Step 2: GREEN — update capability boundary without changing Context Planner**
+- [x] **Step 2: GREEN — update capability boundary without changing Context Planner**
 
 Keep full/incremental canonicalization identical for stream and non-stream.
 
-- [ ] **Step 3: RED — successful streaming Conversation test**
+- [x] **Step 3: RED — successful streaming Conversation test**
 
 Fake driver snapshots must prove ordering:
 
@@ -300,27 +302,27 @@ completed sink
 
 Assert final SQLite Assistant equals concatenated deltas.
 
-- [ ] **Step 4: GREEN — refactor shared prepare/finalize helpers**
+- [x] **Step 4: GREEN — refactor shared prepare/finalize helpers**
 
 Do not copy the entire Phase 4 state machine. Keep `execute` behavior unchanged; add `stream` using the same load/plan/page/prompt/final aggregate helpers.
 
-- [ ] **Step 5: RED — abort before completion**
+- [x] **Step 5: RED — abort before completion**
 
 After at least one delta, abort signal. Assert `turn.stop()` once, no partial Assistant saved, checkpoint remains `in_flight`, session fails, queue does not release until stop cleanup resolves.
 
-- [ ] **Step 6: GREEN — cancellation cleanup**
+- [x] **Step 6: GREEN — cancellation cleanup**
 
 If completion not established, best-effort Stop and fail session. Do not convert `in_flight` to clean.
 
-- [ ] **Step 7: RED/GREEN — abort after completion**
+- [x] **Step 7: RED/GREEN — abort after completion**
 
 Simulate sink transport close after completion established/final tail. Engine must continue safe URL + clean SQLite save and return final result without Stop.
 
-- [ ] **Step 8: RED/GREEN — final persistence failure**
+- [x] **Step 8: RED/GREEN — final persistence failure**
 
 If `ConversationStore.save(clean)` fails, completed event must not be delivered and checkpoint remains `in_flight`.
 
-- [ ] **Step 9: Verify + Commit**
+- [x] **Step 9: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/phase4-request-context.test.ts tests/integration/conversation-engine.test.ts
@@ -351,27 +353,27 @@ export interface SseWriter {
 export function createSseWriter(response: ServerResponse, signal: AbortSignal): SseWriter;
 ```
 
-- [ ] **Step 1: RED — frame serialization tests**
+- [x] **Step 1: RED — frame serialization tests**
 
 Assert `data: ...\n\n` and `event: name\ndata: ...\n\n`, UTF-8 content preserved.
 
-- [ ] **Step 2: GREEN — minimal serializer/writer**
+- [x] **Step 2: GREEN — minimal serializer/writer**
 
 Use `ServerResponse.write()` and do not buffer application events.
 
-- [ ] **Step 3: RED — backpressure test**
+- [x] **Step 3: RED — backpressure test**
 
 Fake writable returns `false`; promise must wait for `drain`, but reject/stop waiting if abort/close occurs first.
 
-- [ ] **Step 4: GREEN — drain-aware write**
+- [x] **Step 4: GREEN — drain-aware write**
 
 One in-flight write only; no `setInterval` or unbounded queue.
 
-- [ ] **Step 5: RED/GREEN — close semantics**
+- [x] **Step 5: RED/GREEN — close semantics**
 
 `close` before `writableFinished` triggers abort at route/controller boundary; normal `end()` close does not become client abort; `end()` idempotent.
 
-- [ ] **Step 6: Verify + Commit**
+- [x] **Step 6: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/sse.test.ts
@@ -392,7 +394,7 @@ git commit -m "✨ 增加 SSE 反压写入边界"
 - Consumes: `TextStreamEvent`。
 - Produces an encoder object with stable `chatcmpl_<uuid>`, `created`, `model='chatgpt-web'` and method that maps each internal event to SSE data frames.
 
-- [ ] **Step 1: RED — chunk lifecycle test**
+- [x] **Step 1: RED — chunk lifecycle test**
 
 Expected sequence:
 
@@ -405,15 +407,15 @@ finish_reason=stop chunk
 
 All chunks use same id/created/model; no usage.
 
-- [ ] **Step 2: GREEN — implement encoder**
+- [x] **Step 2: GREEN — implement encoder**
 
 `started` emits role/content-empty chunk once; `text.delta` emits content; `completed` emits finish chunk then `[DONE]`.
 
-- [ ] **Step 3: RED/GREEN — post-start error**
+- [x] **Step 3: RED/GREEN — post-start error**
 
 Encode `{error:{message,type,param:null,code}}` as `data:` and close without finish chunk or `[DONE]`.
 
-- [ ] **Step 4: Verify + Commit**
+- [x] **Step 4: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/response-encoders.test.ts
@@ -432,7 +434,7 @@ git commit -m "✨ 增加 Chat Completions SSE 编码"
 **Interfaces:**
 - Stable response/message IDs, `output_index=0`, `content_index=0`, monotonically increasing `sequence_number`.
 
-- [ ] **Step 1: RED — typed lifecycle test**
+- [x] **Step 1: RED — typed lifecycle test**
 
 Assert exact order:
 
@@ -448,15 +450,15 @@ response.output_item.done
 response.completed
 ```
 
-- [ ] **Step 2: GREEN — implement minimal currently-supported Response object**
+- [x] **Step 2: GREEN — implement minimal currently-supported Response object**
 
 Final done/full text fields all equal `result.text`; `usage=null`.
 
-- [ ] **Step 3: RED/GREEN — error event**
+- [x] **Step 3: RED/GREEN — error event**
 
 After started, error maps to `event: error` with stable code/message/param and next sequence number; no `response.completed`.
 
-- [ ] **Step 4: Verify + Commit**
+- [x] **Step 4: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/unit/response-encoders.test.ts
@@ -483,35 +485,35 @@ git commit -m "✨ 增加 Responses SSE 编码"
 - For `normalized.output.stream=false`, use existing JSON path.
 - For `stream=true`, create AbortController; the first `started` event calls `reply.hijack()` + SSE headers and delegates event encoding.
 
-- [ ] **Step 1: RED — stream route uses streaming backend**
+- [x] **Step 1: RED — stream route uses streaming backend**
 
 Chat Completions and Responses `stream=true` must not call non-stream execute handler.
 
-- [ ] **Step 2: GREEN — route branch after Normalizer**
+- [x] **Step 2: GREEN — route branch after Normalizer**
 
 Do not duplicate capability/Context logic in route.
 
-- [ ] **Step 3: RED — pre-start error remains normal HTTP JSON**
+- [x] **Step 3: RED — pre-start error remains normal HTTP JSON**
 
 Maintenance/auth/capability failure before `started` must preserve mapped non-200 status and not hijack response.
 
-- [ ] **Step 4: GREEN — defer hijack until `started`**
+- [x] **Step 4: GREEN — defer hijack until `started`**
 
 Fastify owns errors until then. After hijack, route owns `reply.raw` lifecycle.
 
-- [ ] **Step 5: RED/GREEN — post-start error framing**
+- [x] **Step 5: RED/GREEN — post-start error framing**
 
 After headers are sent, stable execution error is encoded in protocol stream, success terminator omitted, response ended.
 
-- [ ] **Step 6: RED/GREEN — client close AbortSignal**
+- [x] **Step 6: RED/GREEN — client close AbortSignal**
 
 Premature raw close/write error aborts controller. Normal `writableFinished` close does not.
 
-- [ ] **Step 7: RED/GREEN — runtime injection and maintenance backend**
+- [x] **Step 7: RED/GREEN — runtime injection and maintenance backend**
 
 Headless runtime injects `{execute, stream}` from Conversation Engine. Maintenance mode streaming throws `browser_maintenance_mode` before start.
 
-- [ ] **Step 8: Verify + Commit**
+- [x] **Step 8: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/integration/post-routes.test.ts tests/integration/conversation-system.test.ts
@@ -532,31 +534,31 @@ git commit -m "✨ 接入 Gateway Streaming SSE 路由"
 **Interfaces:**
 - Uses real temporary SQLite, fake Driver/Pages, real Fastify where appropriate.
 
-- [ ] **Step 1: RED/GREEN — full-history APPEND stream**
+- [x] **Step 1: RED/GREEN — full-history APPEND stream**
 
 Second keyed stream sends only new current user prompt; final SQLite history contains prior assistant + new assistant once.
 
-- [ ] **Step 2: RED/GREEN — incremental RESTORE stream**
+- [x] **Step 2: RED/GREEN — incremental RESTORE stream**
 
 Runtime recreation with same DB uses saved ChatGPT URL and streams next user turn.
 
-- [ ] **Step 3: RED/GREEN — divergent full history REBUILD stream**
+- [x] **Step 3: RED/GREEN — divergent full history REBUILD stream**
 
 Preserve local key/UUID, use fresh web conversation, final clean aggregate represents authoritative rewritten history.
 
-- [ ] **Step 4: RED/GREEN — same-key stream holds FIFO**
+- [x] **Step 4: RED/GREEN — same-key stream holds FIFO**
 
 Second request cannot enter driver after first delta; only after first completion or abort cleanup.
 
-- [ ] **Step 5: RED/GREEN — different-key parallel stream**
+- [x] **Step 5: RED/GREEN — different-key parallel stream**
 
 Both driver operations can overlap when page capacity allows.
 
-- [ ] **Step 6: RED/GREEN — divergence and persistence failure convergence**
+- [x] **Step 6: RED/GREEN — divergence and persistence failure convergence**
 
 Both leave `in_flight`, discard page binding, and next keyed request plans REBUILD.
 
-- [ ] **Step 7: Verify + Commit**
+- [x] **Step 7: Verify + Commit**
 
 ```bash
 corepack pnpm vitest run tests/integration/conversation-engine.test.ts tests/integration/conversation-context-sync.test.ts tests/integration/conversation-system.test.ts
@@ -576,15 +578,15 @@ git commit -m "🧪 覆盖 Streaming 会话一致性与并发"
 **Interfaces:**
 - `src/stream/` forbidden imports: `playwright`, `api/`, `browser/`, `chatgpt/`, `persistence/`, `node:sqlite`.
 
-- [ ] **Step 1: RED — synthetic architecture violations**
+- [x] **Step 1: RED — synthetic architecture violations**
 
 Add fixture/source cases proving regular import, dynamic import, `require`, side-effect import cannot bypass `stream/` boundaries.
 
-- [ ] **Step 2: GREEN — extend checker**
+- [x] **Step 2: GREEN — extend checker**
 
 Reuse existing import parser/rule pattern; do not create a second checker implementation.
 
-- [ ] **Step 3: Run Phase 5 deterministic suite**
+- [x] **Step 3: Run Phase 5 deterministic suite**
 
 ```bash
 corepack pnpm verify
@@ -592,11 +594,11 @@ corepack pnpm verify
 
 Expected: all format/lint/typecheck/tests/build/governance pass.
 
-- [ ] **Step 4: Update deterministic test baseline in docs**
+- [x] **Step 4: Update deterministic test baseline in docs**
 
 Record the fresh file/test counts from the actual Vitest output; do not guess.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/check-architecture.mjs tests docs/testing.md
@@ -619,11 +621,11 @@ git commit -m "👷 强化 Streaming 架构与确定性验证"
 - Uses existing isolated Profile clone and explicit `E2E_CHATGPT=1` safety gate.
 - Starts real Fastify listener on `127.0.0.1:0`; reads actual response body incrementally.
 
-- [ ] **Step 1: RED/GREEN — E2E harness safety/unit boundary**
+- [x] **Step 1: RED/GREEN — E2E harness safety/unit boundary**
 
 Missing `E2E_CHATGPT` / profile must fail fast exactly like existing Phase 3/4 harness; no credential automation.
 
-- [ ] **Step 2: Implement long Chat Completions streaming challenge**
+- [x] **Step 2: Implement long Chat Completions streaming challenge**
 
 Use a prompt requiring a long deterministic marker-rich response. On first meaningful content delta, inspect the runtime target Assistant turn and assert completion marker is still absent.
 
@@ -636,19 +638,19 @@ finish chunk once
 [DONE] once
 ```
 
-- [ ] **Step 3: Implement Markdown/code streaming challenge**
+- [x] **Step 3: Implement Markdown/code streaming challenge**
 
 Require heading/list/fenced code and assert exact final delta concatenation equals DOM/SQLite text without duplicate fences/tail loss.
 
-- [ ] **Step 4: Implement Responses streaming challenge**
+- [x] **Step 4: Implement Responses streaming challenge**
 
 Assert typed event order, stable IDs, monotonic sequence number, multiple `response.output_text.delta`, all done/completed full text equals SQLite Assistant.
 
-- [ ] **Step 5: Implement real client abort challenge**
+- [x] **Step 5: Implement real client abort challenge**
 
 Start long stream, wait one meaningful delta, abort connection. Assert target generation stops/enters terminal state within bounded period, DB remains `in_flight`, affinity is not clean-success retained, and next same-key authoritative request REBUILDs successfully.
 
-- [ ] **Step 6: Extend combined harness**
+- [x] **Step 6: Extend combined harness**
 
 Combined order:
 
@@ -658,7 +660,7 @@ Phase 3 regression
 → Phase 5 streaming
 ```
 
-- [ ] **Step 7: Deterministic verification + Commit**
+- [x] **Step 7: Deterministic verification + Commit**
 
 ```bash
 corepack pnpm verify
@@ -681,7 +683,7 @@ git commit -m "🧪 增加 Phase 5 真 Streaming 真实 E2E"
 **Interfaces:**
 - Closes Phase 5 only after deterministic, Docker and authenticated real E2E all have fresh evidence.
 
-- [ ] **Step 1: Fresh deterministic final verification**
+- [x] **Step 1: Fresh deterministic final verification**
 
 ```bash
 corepack pnpm verify
@@ -689,7 +691,7 @@ corepack pnpm verify
 
 Record exact fresh test counts.
 
-- [ ] **Step 2: Fresh Docker validation**
+- [x] **Step 2: Fresh Docker validation**
 
 ```bash
 corepack pnpm docker:build
@@ -698,7 +700,7 @@ corepack pnpm docker:smoke
 
 Record final image digest and smoke result. Migrations must remain only `001_initial` + `002_add_conversation_sync_checkpoint`.
 
-- [ ] **Step 3: Authenticated DOM inspection**
+- [!] **Step 3: Authenticated DOM inspection**
 
 ```bash
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
@@ -708,7 +710,7 @@ corepack pnpm inspect:chatgpt
 
 Expected: current Profile authenticated and required selectors unique/valid.
 
-- [ ] **Step 4: Standalone Phase 5 real E2E**
+- [!] **Step 4: Standalone Phase 5 real E2E**
 
 ```bash
 E2E_CHATGPT=1 \
@@ -719,7 +721,7 @@ corepack pnpm test:e2e:chatgpt:phase5
 
 Expected: long live stream, Markdown/code, Responses, abort/rebuild all PASS.
 
-- [ ] **Step 5: Combined real E2E regression**
+- [!] **Step 5: Combined real E2E regression**
 
 ```bash
 E2E_CHATGPT=1 \
@@ -730,7 +732,7 @@ corepack pnpm test:e2e:chatgpt
 
 Expected: Phase 3 + Phase 4 + Phase 5 all PASS.
 
-- [ ] **Step 6: Final docs writeback**
+- [x] **Step 6: Final docs writeback**
 
 Only after Steps 1–5 actually pass:
 
@@ -765,14 +767,14 @@ git diff
 git diff --staged
 ```
 
-- [ ] **Step 8: Final documentation commit**
+- [x] **Step 8: Final documentation commit**
 
 ```bash
 git add docs
 git commit -m "📝 完成 Phase 5 真 Streaming 验收回写"
 ```
 
-- [ ] **Step 9: Push feature branch**
+- [x] **Step 9: Push feature branch**
 
 ```bash
 git push -u origin phase-5-streaming

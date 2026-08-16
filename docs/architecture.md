@@ -145,7 +145,7 @@ Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将�
 
 Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。
 
-Phase 4 Conversation Engine 接受非流式纯文本多轮请求，要求最终消息为非空 `user`。FRESH/REBUILD 使用版本化 JSON-serialized Context Envelope；APPEND/RESTORE 使用只含 `current_user` 的 Append Envelope，不重复灌入已确认历史。same-key 请求通过 Promise-tail FIFO 串行，出队后才重读 SQLite；different-key 可并行。system/developer 仍是 ChatGPT Web 上的 prompt 近似映射，不声称网页具有 OpenAI 原生 privilege channel。Streaming、附件、Tools、Structured Output 与 image execution 仍属于后续 Phase，并以稳定 `unsupported_phase4_request` 明确拒绝。
+Phase 5 Conversation Engine 继续复用 Phase 4 的 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 与 SQLite `clean | in_flight` checkpoint，并提供 protocol-neutral `{ execute, stream }` 两条纯文本执行入口。`stream=true` 不改变 Context Sync：FRESH/REBUILD 仍发送完整 Context Envelope，APPEND/RESTORE 仍只发送 `current_user`。附件、Tools、Structured Output 与 image execution 仍由 `unsupported_phase5_request` 明确拒绝。Streaming 整个生命周期（包含 abort cleanup）都在 same-key Queue 内；不同 key 仍可并行。
 
 浏览器/Driver 原始异常不会直接成为公共 API；未知 Page/Playwright runtime/navigation failure 映射为稳定 `browser_unavailable`。`src/chatgpt/inspect.ts` 只检查已经拥有的 Page，不创建 BrowserManager；显式 CLI 才负责独立 E2E Profile 的 Browser 生命周期。
 
@@ -155,29 +155,31 @@ Phase 4 于 2026-08-16 完成真实 authenticated ChatGPT Web E2E：新的干净
 
 ## Streaming（流式输出）
 
-V1 采用约 200ms DOM polling（网页轮询）：
+Phase 5 已实现纯文本真 Streaming 的代码路径：
 
 ```text
-Assistant DOM
-   ↓
-Snapshot
-   ↓
-Normalize
-   ↓
-Stable Prefix
-   ↓
-Delta
-   ↓
-Internal Stream Event
+Target Assistant DOM Turn
+   ↓ observe() ~200ms
+AssistantSnapshot
+   ↓ CRLF/CR normalize
+3-sample Stable Prefix
+   ↓ non-empty Delta
+Protocol-neutral TextStreamEvent
    ├── Chat Completions SSE Encoder
    └── Responses SSE Encoder
 ```
 
-不能用 `currentText.slice(previousText.length)` 作为唯一增量算法，因为 Markdown（标记语言）和 React（前端框架）重排可能让 DOM 回写。
+`src/stream/` 是纯逻辑层，不依赖 Playwright、`api/`、`browser/`、`chatgpt/`、`persistence/` 或 `node:sqlite`。Assistant ownership 仍由发送前 `assistantTurns.count()` 的 baseline 决定；Driver 的 `ChatGptTextTurn` 只观察固定 target turn，并提供 `observe()`、严格唯一 Stop 的 `stop()` 和安全 `conversationUrl()`。
 
-完成判断综合：新 Assistant Turn（回复节点）、生成停止状态、文本稳定、Thinking/Searching/Generating 状态和图片/附件生成状态；确认完成后 flush（刷新）最后尾部。
+Stable Prefix 只提交最近 3 个 snapshot 的 longest common prefix；已经发送的 prefix 永不撤回。若后续 DOM 不再以 committed prefix 开头，进入稳定 `chatgpt_stream_diverged`，不发送 correction/backspace。Completion 以 target turn 自身的 `copy-turn-action-button` marker + 连续稳定 final text + final reread 为终态，不把可能滞留的全局 Stop control 当成功必要条件。
 
-客户端主动断开流式连接时，V1 停止 ChatGPT 当前生成，避免网页历史和客户端历史分叉。
+Conversation Engine 在首个 protocol-neutral `started` 后、第一次可能写网页 turn 前持久化 `in_flight`。若客户端在首帧后立即断开，Engine 会在 checkpoint 前检查 AbortSignal；若断开发生在 checkpoint 后但 Send 前，Driver 在 baseline/composer/fill/send 异步边界继续检查同一个 signal，保证不继续点击 Send。生成中 abort 会 best-effort Stop、不保存 partial Assistant、保持 `in_flight` 并 discard 当前 Page；下一 keyed request 通过 REBUILD 收敛。
+
+成功流只有在 final Assistant text、安全 Conversation URL 和完整 aggregate 已经原子保存为 clean 后才发送成功 terminal。final save 失败不发送 `[DONE]` / `response.completed`；clean commit 后才发生的 terminal transport close 不回滚已经确定完成的网页 turn。
+
+HTTP 层第一次收到 internal `started` 才通过 Fastify `reply.hijack()` 接管 raw SSE。SSE writer 尊重 Node writable backpressure；pre-start error 保持普通 OpenAI-style 非 200 JSON，post-start error 使用协议内 error framing 且不伪造成功终止。
+
+Chat Completions 与 Responses 使用独立 Encoder，但共享同一 internal stream event。Phase 5 real E2E harness 已使用真实 TCP listener 增量读取响应；本次实现后尚未在已登录隔离 Profile 上运行 authenticated Phase 5 E2E，因此当前真实 ChatGPT DOM 的时间行为仍以 `PROJECT_STATE.md` 的 blocker 为准。
 
 ## Tool Calling（工具调用）
 

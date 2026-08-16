@@ -1,7 +1,7 @@
 # Phase 5 True Streaming Design
 
 **Date:** 2026-08-16
-**Status:** Draft complete; awaiting user review and approval
+**Status:** Approved; implementation complete; authenticated real E2E acceptance blocked
 **Scope:** Phase 5
 
 ## 1. Goal（目标）

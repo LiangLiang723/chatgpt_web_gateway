@@ -56,6 +56,11 @@ E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt:phase4
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:phase5
 ```
 
 `CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。
@@ -141,7 +146,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 2 的确定性测试覆盖 migration checksum、防半迁移、Repository、同步事务、aggregate 原子替换以及 close/reopen 恢复；Phase 3 覆盖 Browser/PagePool、Selector/Auth、Fresh Driver/completion、response encoder 与 E2E safety gate。Phase 4 deterministic coverage 已包含 checkpoint migration、full/incremental Planner、same-key FIFO / cross-key parallel、Page affinity/idle+LRU、Driver restore、Conversation Engine crash-convergence、runtime restart、无 key 持久化、跨 Chat Completions/Responses HTTP 连续性，以及“全局 Stop control 滞留但目标 Assistant turn 已完成”的 Completion 回归。当前 deterministic 基线为 43 个测试文件 / 274 个测试；使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 5 deterministic coverage 已新增 Snapshot normalization、Unicode-safe Stable Prefix、completion/divergence、Assistant turn handle/Stop/pre-Send abort、SSE backpressure、Chat Completions / Responses encoders、真实本地 TCP route streaming、FRESH/APPEND/RESTORE/REBUILD、same-key FIFO / different-key parallel、final-save failure、生成中 abort 与首帧后取消。最终 branch-head 只读 CI 已实际通过完整 `verify`；测试数量不在本文手工固定，以 fresh Vitest 输出为准。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -155,4 +160,9 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。当前 Phase 3 与 Phase 4 都有真实通过证据：authenticated selector inspection、Fresh Driver challenge、Gateway HTTP challenge、APPEND live DOM、restart RESTORE 与 divergence REBUILD 均已在隔离测试 Profile 上执行成功。2026-08-16 的验收还实际捕获并修复了 Completion DOM 回归：答案文本已经稳定时全局 `stop-button` 仍可能滞留，因此 Driver 改为等待**目标 Assistant turn 自身**的 `copy-turn-action-button` completion marker，再结合稳定文本采样。Phase 4 可以正式关闭，但这不能外推到 Streaming、附件、Tools 或图片能力；这些后续能力仍必须各自做 deterministic + real E2E。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 与 Phase 4 已有 authenticated real E2E 历史通过证据。Phase 5 real harness 已实现真实 TCP listener 增量读取，包含：长回复在 target completion marker 之前收到 meaningful delta、Markdown/code 最终文本一致性、Responses typed SSE、client abort 后 `in_flight` 与 same-key REBUILD。本次 Phase 5 实现后由于当前工具环境无法访问隔离已登录 Browser Profile / LAN proxy，**没有实际运行** `test:e2e:chatgpt:phase5` 或包含 Phase 5 的 combined real E2E；因此不能把 deterministic/Docker 成功外推为当前 ChatGPT DOM 真 Streaming 已验收。
+
+
+### Phase 5 Docker 验收事实
+
+Phase 5 最终 branch-head 只读 CI 已实际完成 fresh `linux/amd64` Docker build 与完整 `docker:smoke`。Smoke 的产品断言覆盖 normal/maintenance single owner、SQLite migrations/restart、PUID/PGID、Chrome sandbox/seccomp 与 noVNC RFB；验收期间还修复了 hosted runner 的临时 bind mount cleanup：容器会按测试 PUID/PGID 改变挂载目录 ownership，cleanup container 现在先清空内容并把挂载根 ownership 恢复给宿主进程，再由宿主删除临时目录。该修复只作用于 smoke 清理，不改变产品容器运行身份。
