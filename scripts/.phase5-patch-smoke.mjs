@@ -13,7 +13,7 @@ const startNew = `function cleanupDataPath() {
 if (!source.includes(startOld)) throw new Error('cleanupDataPath start changed unexpectedly');
 source = source.replace(startOld, startNew);
 
-const commandOld = `      "find /cleanup -mindepth 1 -delete",
+const commandOld = `      'find /cleanup -mindepth 1 -delete',
 `;
 const commandNew = `      \`find /cleanup -mindepth 1 -delete && chown ${'${owner}'} /cleanup\`,
 `;
