@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 
+import { TextStreamAbortedError } from '../stream/errors.js';
 import type { AssistantSnapshot } from '../stream/types.js';
 import { probeAuth } from './auth.js';
 import {
@@ -18,6 +19,7 @@ export type ChatGptTextTarget =
 
 export interface ChatGptTextRequest {
   prompt: string;
+  signal?: AbortSignal;
   /** @deprecated Navigation is performed by openFresh/openConversation; retained until legacy executor removal. */
   target?: ChatGptTextTarget;
 }
@@ -97,12 +99,21 @@ export function createChatGptDriver(
   };
 
   const startText = async (page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn> => {
+    const throwIfAborted = () => {
+      if (request.signal?.aborted) throw new TextStreamAbortedError();
+    };
+
     try {
+      throwIfAborted();
       const assistantTurns = await inspectCollectionSelector(page, chatGptSelectors.assistantTurns);
+      throwIfAborted();
       const baseline = assistantTurns.count;
       const composer = await resolveUniqueSelector(page, chatGptSelectors.composer);
+      throwIfAborted();
       await composer.locator.fill(request.prompt);
+      throwIfAborted();
       const sendButton = await resolveUniqueSelector(page, chatGptSelectors.sendButton);
+      throwIfAborted();
       await sendButton.locator.click();
 
       const observe = async (): Promise<AssistantSnapshot> => {
@@ -183,6 +194,7 @@ export function createChatGptDriver(
         conversationUrl: async () => readConversationUrl(page),
       };
     } catch (error) {
+      if (error instanceof TextStreamAbortedError) throw error;
       throw asChatGptDriverError(error);
     }
   };
@@ -240,6 +252,7 @@ export function createChatGptDriver(
         });
         return { text, conversationUrl: await turn.conversationUrl() };
       } catch (error) {
+        if (error instanceof TextStreamAbortedError) throw error;
         throw asChatGptDriverError(error);
       }
     },
