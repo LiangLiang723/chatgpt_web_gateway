@@ -21,24 +21,41 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile
       - name: Patch streaming abort boundary once
         run: |
-          node --input-type=module -e '
-            import { readFileSync, writeFileSync } from "node:fs";
-            const path = "src/conversations/conversation-engine.ts";
-            let source = readFileSync(path, "utf8");
-            const importOld = "import { streamAssistantText } from \\"../stream/text-stream.js\\";";
-            const importNew = "import { TextStreamAbortedError } from \\"../stream/errors.js\\";\\nimport { streamAssistantText } from \\"../stream/text-stream.js\\";";
-            if (!source.includes(importOld)) throw new Error("stream import changed unexpectedly");
-            source = source.replace(importOld, importNew);
-            const startedOld = "    await options.streamOptions.sink({ type: \\"started\\", startedAt });\\n\\n    const initial = startCheckpoint({";
-            const startedNew = "    await options.streamOptions.sink({ type: \\"started\\", startedAt });\\n    if (options.streamOptions.signal.aborted) throw new TextStreamAbortedError();\\n\\n    const initial = startCheckpoint({";
-            if (!source.includes(startedOld)) throw new Error("stream started boundary changed unexpectedly");
-            source = source.replace(startedOld, startedNew);
-            const startTextOld = "    turn = await driver.startText(session.page, { prompt });";
-            const startTextNew = "    turn = await driver.startText(session.page, {\\n      prompt,\\n      signal: options.streamOptions.signal,\\n    });";
-            if (!source.includes(startTextOld)) throw new Error("startText call changed unexpectedly");
-            source = source.replace(startTextOld, startTextNew);
-            writeFileSync(path, source);
-          '
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/conversations/conversation-engine.ts")
+          source = path.read_text()
+
+          replacements = [
+              (
+                  "import { streamAssistantText } from '../stream/text-stream.js';",
+                  "import { TextStreamAbortedError } from '../stream/errors.js';\n"
+                  "import { streamAssistantText } from '../stream/text-stream.js';",
+              ),
+              (
+                  "    await options.streamOptions.sink({ type: 'started', startedAt });\n\n"
+                  "    const initial = startCheckpoint({",
+                  "    await options.streamOptions.sink({ type: 'started', startedAt });\n"
+                  "    if (options.streamOptions.signal.aborted) throw new TextStreamAbortedError();\n\n"
+                  "    const initial = startCheckpoint({",
+              ),
+              (
+                  "    turn = await driver.startText(session.page, { prompt });",
+                  "    turn = await driver.startText(session.page, {\n"
+                  "      prompt,\n"
+                  "      signal: options.streamOptions.signal,\n"
+                  "    });",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in source:
+                  raise SystemExit(f"Expected snippet not found: {old!r}")
+              source = source.replace(old, new, 1)
+
+          path.write_text(source)
+          PY
           corepack pnpm exec prettier --write src/conversations/conversation-engine.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
