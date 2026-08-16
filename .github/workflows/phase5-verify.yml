@@ -6,7 +6,7 @@ on:
       - phase-5-streaming
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -19,4 +19,20 @@ jobs:
           node-version: '24'
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
+      - name: Format Phase 5 files once
+        run: |
+          corepack pnpm exec prettier --write \
+            scripts/architecture-rules.mjs \
+            src/api/streaming-response.ts \
+            src/conversations/conversation-engine.ts \
+            src/conversations/errors.ts \
+            tests/e2e/chatgpt-phase5.e2e.ts \
+            tests/unit/stream-encoders.test.ts
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add scripts/architecture-rules.mjs src/api/streaming-response.ts src/conversations/conversation-engine.ts src/conversations/errors.ts tests/e2e/chatgpt-phase5.e2e.ts tests/unit/stream-encoders.test.ts
+            git commit -m "📝 格式化 Phase 5 Streaming 改动"
+            git push
+          fi
       - run: corepack pnpm verify
