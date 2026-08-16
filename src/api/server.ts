@@ -9,7 +9,12 @@ import {
   gatewayErrorFromExecution,
   toOpenAIErrorBody,
 } from './errors.js';
-import { backendNotImplementedExecution, type NormalizedExecutionHandler } from './execution.js';
+import {
+  backendNotImplementedExecution,
+  backendNotImplementedStreamingExecution,
+  type NormalizedExecutionHandler,
+  type NormalizedStreamingExecutionHandler,
+} from './execution.js';
 import { registerChatCompletionsRoute } from './routes/chat-completions.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerModelsRoute } from './routes/models.js';
@@ -18,6 +23,7 @@ import { registerResponsesRoute } from './routes/responses.js';
 export interface BuildServerOptions {
   config: AppConfig;
   execute?: NormalizedExecutionHandler;
+  stream?: NormalizedStreamingExecutionHandler;
   logger?: boolean;
 }
 
@@ -59,11 +65,12 @@ export function buildServer(options: BuildServerOptions) {
   });
 
   const execute = options.execute ?? backendNotImplementedExecution;
+  const stream = options.stream ?? backendNotImplementedStreamingExecution;
 
   registerHealthRoute(app);
   registerModelsRoute(app);
-  registerChatCompletionsRoute(app, execute);
-  registerResponsesRoute(app, execute);
+  registerChatCompletionsRoute(app, execute, stream);
+  registerResponsesRoute(app, execute, stream);
 
   return app;
 }
