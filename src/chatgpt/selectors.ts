@@ -1,3 +1,5 @@
+import type { Locator } from 'playwright';
+
 import type { SelectorDefinition } from './selector-registry.js';
 
 export const composerSelector: SelectorDefinition<'unique'> = {
@@ -67,6 +69,15 @@ export const userTurnsSelector: SelectorDefinition<'collection'> = {
   ],
 };
 
+export const assistantTurnCompletionSelector = {
+  name: 'assistantTurnCompletion',
+  candidateName: 'copy-turn-action-button',
+  locate: (assistantTurn: Locator): Locator =>
+    assistantTurn.locator(
+      'xpath=ancestor::section[@data-turn="assistant"][1]//*[@data-testid="copy-turn-action-button"]',
+    ),
+} as const;
+
 export const stopControlSelector: SelectorDefinition<'unique'> = {
   name: 'stopControl',
   cardinality: 'unique',
@@ -99,6 +110,7 @@ export const chatGptSelectors = {
   loginIndicator: loginIndicatorSelector,
   assistantTurns: assistantTurnsSelector,
   userTurns: userTurnsSelector,
+  assistantTurnCompletion: assistantTurnCompletionSelector,
   stopControl: stopControlSelector,
   thinkingIndicators: thinkingIndicatorsSelector,
 } as const;

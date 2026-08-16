@@ -122,22 +122,30 @@ export function createChatGptDriver(options: CreateChatGptDriverOptions = {}): C
             if (count <= baseline) return { exists: false, generating: false, text: '' };
 
             const turn = assistantTurns.locator.nth(baseline);
-            const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
-            if (stopControl.status === 'ambiguous') {
+            const completionMarker = chatGptSelectors.assistantTurnCompletion.locate(turn);
+            const completionMarkerCount = await completionMarker.count();
+            if (completionMarkerCount > 1) {
               throw new ChatGptDriverError({
                 code: 'selector_ambiguous',
-                message: 'ChatGPT stop control is ambiguous',
-                selectorName: chatGptSelectors.stopControl.name,
-                candidateName: stopControl.candidateName,
+                message: 'ChatGPT Assistant turn completion marker is ambiguous',
+                selectorName: chatGptSelectors.assistantTurnCompletion.name,
+                candidateName: chatGptSelectors.assistantTurnCompletion.candidateName,
               });
             }
-            const thinking = await inspectCollectionSelector(
-              page,
-              chatGptSelectors.thinkingIndicators,
-            );
+            if (completionMarkerCount === 0) {
+              const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
+              if (stopControl.status === 'ambiguous') {
+                throw new ChatGptDriverError({
+                  code: 'selector_ambiguous',
+                  message: 'ChatGPT stop control is ambiguous',
+                  selectorName: chatGptSelectors.stopControl.name,
+                  candidateName: stopControl.candidateName,
+                });
+              }
+            }
             return {
               exists: true,
-              generating: stopControl.status === 'unique' || thinking.count > 0,
+              generating: completionMarkerCount === 0,
               text: await turn.innerText(),
             };
           },

@@ -43,7 +43,14 @@ function readinessDriver(options: {
   return { page, events, driver };
 }
 
-function successfulSendHarness(currentUrl = 'https://chatgpt.com/c/test-conversation') {
+function successfulSendHarness(
+  currentUrl = 'https://chatgpt.com/c/test-conversation',
+  options: {
+    completionMarkerCount?: number;
+    stopControlStatus?: 'missing' | 'unique';
+    expectedGenerating?: boolean;
+  } = {},
+) {
   const { page, events } = fakePage(currentUrl);
   const composer = {
     fill: vi.fn(async (text: string) => events.push(`fill:${text}`)),
@@ -51,8 +58,12 @@ function successfulSendHarness(currentUrl = 'https://chatgpt.com/c/test-conversa
   const send = {
     click: vi.fn(async () => events.push('click:send')),
   } as unknown as Locator;
+  const assistantTurnCompletion = {
+    count: vi.fn(async () => options.completionMarkerCount ?? 1),
+  } as unknown as Locator;
   const assistantTurn = {
     innerText: vi.fn(async () => 'final answer'),
+    locator: vi.fn(() => assistantTurnCompletion),
   } as unknown as Locator;
   const assistantTurns = {
     count: vi.fn(async () => 4),
@@ -84,7 +95,15 @@ function successfulSendHarness(currentUrl = 'https://chatgpt.com/c/test-conversa
         locator: { count: async () => 0 } as unknown as Locator,
       };
     },
-    inspectUnique: async () => ({ status: 'missing', count: 0 }),
+    inspectUnique: async () =>
+      options.stopControlStatus === 'unique'
+        ? {
+            status: 'unique',
+            candidateName: 'stop-test',
+            count: 1,
+            locator: { count: async () => 1 } as unknown as Locator,
+          }
+        : { status: 'missing', count: 0 },
     resolveUnique: async (_page, definition) => {
       if (definition.name === 'composer') {
         return { locator: composer, candidateName: 'composer-test' };
@@ -94,10 +113,14 @@ function successfulSendHarness(currentUrl = 'https://chatgpt.com/c/test-conversa
       }
       throw new Error(`Unexpected selector ${definition.name}`);
     },
-    waitForAssistantCompletion: async (options) => {
+    waitForAssistantCompletion: async (completionOptions) => {
       events.push('completion');
-      const observation = await options.observe();
-      expect(observation).toEqual({ exists: true, generating: false, text: 'final answer' });
+      const observation = await completionOptions.observe();
+      expect(observation).toEqual({
+        exists: true,
+        generating: options.expectedGenerating ?? false,
+        text: 'final answer',
+      });
       return 'final answer';
     },
   });
@@ -241,6 +264,29 @@ describe('ChatGptDriver sendText', () => {
 
     expect(page.goto).not.toHaveBeenCalled();
     expect(events).toEqual(['baseline', 'fill:hello', 'click:send', 'completion', 'turn:3']);
+  });
+
+  it('treats the target Assistant turn completion marker as final even when a stale global stop control remains', async () => {
+    const { page, driver } = successfulSendHarness('https://chatgpt.com/c/test-conversation', {
+      completionMarkerCount: 1,
+      stopControlStatus: 'unique',
+    });
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
+      text: 'final answer',
+    });
+  });
+
+  it('keeps observing until the target Assistant turn exposes its completion marker', async () => {
+    const { page, driver } = successfulSendHarness('https://chatgpt.com/c/test-conversation', {
+      completionMarkerCount: 0,
+      stopControlStatus: 'missing',
+      expectedGenerating: true,
+    });
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
+      text: 'final answer',
+    });
   });
 
   it('rejects an unsafe final URL instead of returning it for persistence', async () => {
