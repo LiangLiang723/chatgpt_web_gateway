@@ -25,7 +25,7 @@
 - 两套 POST 都经过 TypeBox/Ajv → 统一 Normalizer → Conversation Engine；route 不直接实现浏览器逻辑。
 - 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint；无 key 时仍为独立 FRESH `conversation_key = NULL`。
 - Phase 5 `stream=true` 与 non-stream 使用相同的 target Assistant turn ownership 和 completion 语义，不改变 Context Sync 规则。
-- Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix；已经输出的 prefix 不撤回。若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
+- Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 16 个 Unicode code points 作为 bounded commit tail；completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
 - Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage。
 - Responses 使用 typed SSE：`response.created`、`response.in_progress`、item/content added、`response.output_text.delta`、done events、`response.completed`；IDs 稳定，`sequence_number` 单调，`usage=null`。
 - 首个 internal `started` 之前的错误仍返回普通 OpenAI-style 非 200 JSON；SSE 已开始后的错误使用协议流内 error，并且不发送成功 terminal。
@@ -34,7 +34,7 @@
 - `UI_MODE=novnc` 的 Streaming 请求和 non-stream 一样在 SSE 开始前返回 `503 browser_maintenance_mode`。
 - 附件、Tools、非默认 Tool Choice、Structured Output execution 和 image output 在 Phase 5 仍返回 `501 unsupported_phase5_request`。
 
-**验收边界：** 上述行为已有 deterministic integration、真实本地 TCP SSE 测试、fresh Docker build/smoke 证据；Phase 5 authenticated ChatGPT Web Streaming E2E harness 已实现，但本次实现后尚未在隔离已登录 Profile 上真实运行。因此这里描述的是当前代码/API 行为，不能据此声称“当前 ChatGPT DOM 真 Streaming 已完成真实网页验收”。
+**验收边界：** 上述纯文本 Streaming 行为已于 2026-08-17 完成 authenticated ChatGPT Web 真实验收：fresh `inspect:chatgpt` 为 authenticated，standalone Phase 5 real E2E 与 combined Phase 3/4/5 real E2E 均通过。该结论只覆盖当前纯文本范围，不能外推附件、Tools、Structured Output 或 image execution。
 
 ## Authentication and Conversation Extension（认证与会话扩展）
 
@@ -50,7 +50,7 @@
 | `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发 |
 | 字符串 / text part `content` | ✅ | ✅ |
 | `stream=false` | ✅ | ✅ 非流式纯文本 |
-| `stream=true` | ✅ | ✅ 代码已实现 DOM Streaming；真实 authenticated Phase 5 E2E 待运行 |
+| `stream=true` | ✅ | ✅ 纯文本 DOM Streaming 已实现并通过 authenticated Phase 5 standalone + combined real E2E |
 | `image_url` URL/Base64 | ✅ | ❌ Phase 6 |
 | file / `file_id` / Base64 file | ✅ | ❌ Phase 6 |
 | `tools` / tool messages | ✅ | ❌ Phase 7 |

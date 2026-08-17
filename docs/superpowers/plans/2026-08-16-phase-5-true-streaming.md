@@ -700,7 +700,7 @@ corepack pnpm docker:smoke
 
 Record final image digest and smoke result. Migrations must remain only `001_initial` + `002_add_conversation_sync_checkpoint`.
 
-- [!] **Step 3: Authenticated DOM inspection**
+- [x] **Step 3: Authenticated DOM inspection**
 
 ```bash
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
@@ -710,7 +710,7 @@ corepack pnpm inspect:chatgpt
 
 Expected: current Profile authenticated and required selectors unique/valid.
 
-- [!] **Step 4: Standalone Phase 5 real E2E**
+- [x] **Step 4: Standalone Phase 5 real E2E**
 
 ```bash
 E2E_CHATGPT=1 \
@@ -721,7 +721,7 @@ corepack pnpm test:e2e:chatgpt:phase5
 
 Expected: long live stream, Markdown/code, Responses, abort/rebuild all PASS.
 
-- [!] **Step 5: Combined real E2E regression**
+- [x] **Step 5: Combined real E2E regression**
 
 ```bash
 E2E_CHATGPT=1 \
@@ -731,6 +731,8 @@ corepack pnpm test:e2e:chatgpt
 ```
 
 Expected: Phase 3 + Phase 4 + Phase 5 all PASS.
+
+2026-08-17 final execution evidence: `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`; standalone `test:e2e:chatgpt:phase5` returned `chatCompletions=true`, `markdown=true`, `responses=true`, `abort=true`; combined `test:e2e:chatgpt` returned Phase 3 auth/driver/gateway challenge, Phase 4 APPEND/RESTORE/REBUILD and all Phase 5 scenarios as PASS. The authenticated runs exposed and TDD-fixed provisional `/c/WEB:*` ownership, Assistant placeholders without `.markdown`, renderer tail rewrites requiring a 16-code-point commit holdback, and the explicit conversation-history rate-limit notification modal. Final fresh deterministic evidence is 55 test files / 332 tests; final fresh `linux/amd64` Docker digest is `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` with full smoke PASS.
 
 - [x] **Step 6: Final docs writeback**
 
@@ -754,7 +756,7 @@ Update current implementation facts:
 
 If any real external boundary is blocked, mark `[!]`, keep Phase 5 open, and record the exact blocker instead of claiming completion.
 
-- [ ] **Step 7: Repository governance and diff review**
+- [x] **Step 7: Repository governance and diff review**
 
 ```bash
 node scripts/check-project-memory.mjs

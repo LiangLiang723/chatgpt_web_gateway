@@ -46,13 +46,11 @@
 
 ## Phase 5：真 Streaming
 
-状态：**实现、确定性验证与 fresh Docker smoke 已完成；authenticated real ChatGPT Streaming E2E 待执行，Phase 5 尚未关闭**。规格见 [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)，活动计划见 [`docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md`](superpowers/plans/2026-08-16-phase-5-true-streaming.md)。
+状态：**完成**。规格见 [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)；Phase 5 活动计划已完成，Project State 已推进到 Phase 6 设计。
 
-交付代码已包含：目标 Assistant Turn Snapshot、约 200ms DOM polling、3-sample Stable Prefix、target-turn Completion Detector、Chat Completions / Responses 两套 SSE Encoder、raw SSE backpressure、same-key 全生命周期 FIFO、Client abort → pre-Send cancellation / best-effort Stop，以及 SQLite `in_flight` / clean 一致性。Phase 4 的 APPEND / RESTORE / REBUILD 已有 Streaming 集成覆盖。
+交付代码包含：目标 Assistant Turn Snapshot、约 200ms DOM polling、3-sample Stable Prefix + 16 Unicode code points commit-tail holdback、target-turn Completion Detector、Chat Completions / Responses 两套 SSE Encoder、raw SSE backpressure、same-key 全生命周期 FIFO、Client abort → pre-Send cancellation / best-effort Stop，以及 SQLite `in_flight` / clean 一致性。真实验收期间还固化了 `/c/WEB:*` provisional route、无正文 Assistant placeholder、唯一 `.markdown` authoritative content 与明确 conversation-history rate-limit 通知 overlay 的 Driver 边界；writing-block/editor 仍不属于 Phase 5。
 
-当前验收：最终 branch-head 只读 CI 已通过 `corepack pnpm verify`、fresh `linux/amd64` Docker build 和完整 Docker smoke。真实 Phase 5 harness 也已实现为真实 TCP listener 增量读取，覆盖长回复、Markdown/code、Responses typed SSE 和 abort→REBUILD；但本次工具环境没有可访问的隔离已登录 ChatGPT Browser Profile / LAN 代理执行边界，因此没有实际运行 Phase 5 authenticated real E2E。不能用 Phase 3/4 的真实通过或 deterministic/Docker 结果外推“当前 ChatGPT DOM 真 Streaming 已验收”。
-
-验收关闭条件仍是：真实长回复在 target Assistant completion marker 出现前已经收到 meaningful delta，最终 delta 拼接与 live DOM / SQLite 一致，并真实通过 Markdown/code、Responses 和 abort/REBUILD 场景。
+验收：2026-08-17 fresh `corepack pnpm verify` 通过 55 test files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。隔离已登录 Profile 上 `inspect:chatgpt` 返回 authenticated；standalone Phase 5 real E2E 真实通过长 Chat Completions、Markdown/code、Responses typed SSE 与 abort→Stop→`in_flight`→REBUILD，随后 combined Phase 3/4/5 real E2E 全绿。Phase 5 已正式关闭，下一步是 Phase 6 图片和文件输入设计。
 
 ## Phase 6：图片和文件输入
 

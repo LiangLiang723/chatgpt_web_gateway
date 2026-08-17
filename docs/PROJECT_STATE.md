@@ -8,24 +8,24 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-5
-STATUS=phase-5-real-e2e-blocked
+PHASE=phase-5-complete
+STATUS=ready-for-phase-6-design
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md
-NEXT_TASK=run-phase-5-real-streaming-e2e
-UPDATED_AT=2026-08-16
+ACTIVE_PLAN=none
+NEXT_TASK=write-phase-6-attachments-spec
+UPDATED_AT=2026-08-17
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 5 — True Streaming 实现阶段；Phase 4 Conversation + Context Sync 已正式完成。
-- **当前状态：** `phase-5-real-e2e-blocked`。Phase 5 产品代码、确定性验证、fresh `linux/amd64` Docker build 与完整 Docker smoke 已通过；阶段尚未关闭，因为当前工具环境无法访问项目原隔离且已登录的 ChatGPT Browser Profile / LAN proxy 来执行 authenticated real Streaming E2E。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。用户已批准该设计。
-- **Active Plan：** [`docs/superpowers/plans/2026-08-16-phase-5-true-streaming.md`](superpowers/plans/2026-08-16-phase-5-true-streaming.md)。实现与 deterministic/Docker 任务已完成；authenticated Phase 5 / combined real E2E 保持阻塞，不能提前标记完成。
-- **下一个可执行任务：** 在能够访问隔离登录 Profile 与需要的 `CHATGPT_PROXY_SERVER` 的 DevSpace 环境运行 `inspect:chatgpt`、`test:e2e:chatgpt:phase5` 和 combined `test:e2e:chatgpt`；只有它们实际通过后才能关闭 Phase 5 并进入 Phase 6 设计。
-- **最新确定性/Docker 证据：** 2026-08-16 branch-head GitHub Actions 只读 check-run 成功，执行了 `corepack pnpm verify`、fresh `corepack pnpm docker:build`、image inspect 和 `corepack pnpm docker:smoke`。Docker smoke 的 normal/maintenance、SQLite、Profile single-owner、non-root/PUID/PGID、seccomp/RFB/restart 等断言均成功。
-- **真实网页证据边界：** Phase 3/4 authenticated real E2E 仍有历史通过证据；Phase 5 real harness 已实现但本次没有实际运行。不得从 Phase 3/4 或 deterministic/Docker 结果外推当前 ChatGPT DOM Streaming 已通过。
+- **当前阶段：** Phase 5 — True Streaming 已正式完成；下一阶段是 Phase 6 图片和文件输入设计。
+- **当前状态：** `ready-for-phase-6-design`。Phase 5 的 deterministic、Docker、authenticated DOM inspection、standalone real Streaming E2E 与 combined Phase 3/4/5 real E2E 已全部取得本次 fresh 证据。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。该设计已实现并完成真实验收。
+- **Active Plan：** `none`。Phase 5 实现计划已完成，不再作为活动计划。
+- **下一个可执行任务：** 编写 Phase 6 图片和文件输入设计规格；在规格批准前不进入附件实现。
+- **最新确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；migration 仍仅 `001_initial` + `002_add_conversation_sync_checkpoint`。
+- **真实网页证据：** 2026-08-17 复用项目隔离已登录 Profile 与 `CHATGPT_PROXY_SERVER` 后，`inspect:chatgpt` 实际得到 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 返回 Chat Completions / Markdown / Responses / abort 全部 `true`；随后 combined `test:e2e:chatgpt` 返回 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 四项 Streaming 场景全部通过。
 
 ## Implemented Now（当前已实现）
 
@@ -48,8 +48,8 @@ UPDATED_AT=2026-08-16
 
 ### Phase 5 True Streaming 代码
 
-- ✅ `src/stream/` 纯逻辑层：CRLF/CR normalization、Unicode code-point-safe longest common prefix、3-sample Stable Prefix、target disappearance / committed-prefix rewrite divergence、约 200ms 默认 polling、120s completion timeout。
-- ✅ ChatGPT Driver `ChatGptTextTurn`：`observe()` / `stop()` / safe `conversationUrl()`；non-stream `sendText()` 与 stream 复用 target-turn ownership / completion semantics。
+- ✅ `src/stream/` 纯逻辑层：CRLF/CR normalization、Unicode code-point-safe longest common prefix、3-sample Stable Prefix、默认 16 Unicode code points commit-tail holdback、target disappearance / committed-prefix rewrite divergence、约 200ms 默认 polling、120s completion timeout；最终 completion 精确 flush 被保留尾部。
+- ✅ ChatGPT Driver `ChatGptTextTurn`：`observe()` / `stop()` / safe `conversationUrl()`；non-stream `sendText()` 与 stream 复用 target-turn ownership / completion semantics。真实验收进一步固化 `/c/WEB:*` provisional route 拒绝、无 `.markdown` placeholder 忽略、owned turn 唯一 `.markdown` 正文读取，以及明确 `modal-conversation-history-rate-limit` 的唯一 `Got it` 通知确认；不处理 CAPTCHA/MFA/其它 modal。
 - ✅ `ChatGptTextRequest.signal` 在 baseline/composer/fill/send 等异步边界前传播取消；首个 SSE `started` 后若已断开，Engine 在 checkpoint 前退出，不产生网页 turn。
 - ✅ Conversation Engine 提供 protocol-neutral `{ execute, stream }`；Streaming 继续共享 Phase 4 Planner、Page Registry、same-key Queue、checkpoint 和 final aggregate builder。
 - ✅ Streaming 成功顺序为 stable deltas → final clean SQLite save → Page success → protocol success terminal；final clean save 失败不会发送成功终止。
@@ -58,8 +58,8 @@ UPDATED_AT=2026-08-16
 - ✅ Responses SSE：`response.created` / `in_progress` / item+content added / `output_text.delta` / done / `response.completed`，稳定 IDs 和单调 `sequence_number`，`usage=null`。
 - ✅ Fastify Streaming transport：首个 internal `started` 才 `reply.hijack()`，raw SSE writer 支持 Node backpressure；pre-start error 保持普通 HTTP JSON，post-start error 使用流内错误且不写成功 terminal。
 - ✅ Streaming 集成覆盖 FRESH、full-history APPEND、RESTORE、history-divergence REBUILD、same-key FIFO、different-key parallel、final-save failure、生成中 abort 和 pre-Send abort。
-- ✅ Phase 5 real E2E harness 已实现真实 TCP listener 增量读取，包含长回复“completion marker 前收到 meaningful delta”、Markdown/code、Responses typed SSE、abort → `in_flight` → same-key REBUILD。
-- ❌ **Phase 5 authenticated real ChatGPT Streaming E2E 尚未在本次实现后实际运行，因此“当前 ChatGPT DOM 真 Streaming 已验收”仍未成立。**
+- ✅ Phase 5 real E2E harness 使用真实 TCP listener 增量读取，已真实证明长回复首个 meaningful delta 早于 target completion marker、Chat Completions terminal/单 `[DONE]`、Markdown/代码块 multiline、Responses typed lifecycle/稳定 IDs/严格 sequence、`delta concat == live authoritative DOM == SQLite`，以及 client abort 后真实 Stop、`in_flight`、Page affinity discard 与 same-key REBUILD。
+- ✅ **Phase 5 authenticated real ChatGPT Streaming E2E 已于 2026-08-17 standalone 与 combined 两条命令真实通过，Phase 5 正式关闭。**
 
 ### 后续未实现能力
 
@@ -83,23 +83,21 @@ UPDATED_AT=2026-08-16
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-16：Phase 5 True Streaming 产品链实现完成：Stable Prefix、target turn handle/completion、Conversation streaming lifecycle、双 SSE Encoder、backpressure、abort/Stop、FRESH/APPEND/RESTORE/REBUILD Streaming 集成和真实 E2E harness 全部落地。TDD 过程中实际捕获并修复 late terminal transport close、首帧后 pre-Send abort、stream architecture purity 等边界。
-- 2026-08-16：最终 branch-head 只读 CI 通过 deterministic `corepack pnpm verify`、fresh `linux/amd64` Docker build 与完整 Docker smoke。Docker smoke 验收期间还修复 hosted runner 上 PUID/PGID bind mount 临时目录清理：功能断言已通过但宿主因 sticky-bit/ownership 无法删除根目录，最终通过 root cleanup container 清空内容并把挂载根 ownership 恢复给宿主后解决。
-- 2026-08-16：本次 Phase 5 authenticated real E2E 没有执行。原因不是产品测试失败，而是当前会话后半段 DevSpace 执行连接器不可用，GitHub hosted runner 又没有项目隔离登录 Browser Profile 和 LAN proxy；因此阶段保留 `phase-5-real-e2e-blocked`。
+- 2026-08-17：Phase 5 authenticated real Streaming 验收在真实 DevSpace 完成。真实 DOM 暴露并通过 TDD 修复了 Fresh `/c/WEB:*` provisional route、APPEND 临时 Assistant placeholder、Markdown renderer 短尾回排、writing-block 多正文边界，以及 conversation-history rate-limit 通知 overlay；未扩展附件/Tool/Structured Output/image execution。
+- 2026-08-17：fresh `corepack pnpm verify` 通过 55 files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。authenticated `inspect:chatgpt`、standalone Phase 5 real E2E、combined Phase 3/4/5 real E2E 随后全部通过，Phase 5 正式关闭。
+- 2026-08-16：Phase 5 True Streaming 产品链实现完成：Stable Prefix、target turn handle/completion、Conversation streaming lifecycle、双 SSE Encoder、backpressure、abort/Stop、FRESH/APPEND/RESTORE/REBUILD Streaming 集成和真实 E2E harness 全部落地。
 - 2026-08-16：Phase 4 真实验收完成；combined real E2E 通过 Phase 3 regression、APPEND live DOM、restart RESTORE 与 divergence REBUILD，并修复全局 Stop control 滞留导致的 Completion 假超时。
 
 ## Next Steps（下一步）
 
-1. 恢复可访问项目隔离登录 Profile 的 DevSpace 执行环境。
-2. 运行 `CHATGPT_PROFILE_DIR=... CHATGPT_PROXY_SERVER=... corepack pnpm inspect:chatgpt`，确认 `auth=authenticated` 和当前 selector contract。
-3. 运行 `E2E_CHATGPT=1 ... corepack pnpm test:e2e:chatgpt:phase5`，真实通过长回复、Markdown/code、Responses、abort/REBUILD。
-4. 运行 combined `E2E_CHATGPT=1 ... corepack pnpm test:e2e:chatgpt`，确认 Phase 3/4/5 regression 同时通过。
-5. 只有上述真实 E2E 全绿后，才把 `PHASE=phase-5-complete` / `ACTIVE_PLAN=none`，并进入 Phase 6 附件设计。
+1. 编写 Phase 6 图片和文件输入设计规格。
+2. 继续遵守设计先行：规格批准后再编写 Phase 6 实施计划与代码。
+3. Phase 6 继续使用独立 E2E Profile，并为 `/v1/files`、URL/Base64 图片、代表性文档上传补 deterministic + authenticated real E2E。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
 
-- **当前 blocker：** 本次会话无法访问已登录的隔离 ChatGPT Browser Profile / LAN proxy 执行环境，所以 Phase 5 real authenticated E2E 未运行。
-- ChatGPT DOM、Cloudflare 和认证流程属于外部变化面；当前 deterministic/Docker success 不能证明 selector、登录态或真实 Streaming 时间行为。
-- Stable Prefix 选择“不撤回”语义：如果 ChatGPT DOM 重写穿过已发 prefix，请求会失败并保持 `in_flight`，下一 keyed request REBUILD；这是有意的一致性取舍。
+- Phase 5 当前没有未解除的验收 blocker；下一工作是 Phase 6 设计。
+- ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
+- Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。
 - Tool Calling、附件和图片能力仍必须各自经过后续 deterministic + real E2E，不能从 Phase 5 基础设施外推。

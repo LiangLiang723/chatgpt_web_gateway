@@ -146,7 +146,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 5 deterministic coverage 已新增 Snapshot normalization、Unicode-safe Stable Prefix、completion/divergence、Assistant turn handle/Stop/pre-Send abort、SSE backpressure、Chat Completions / Responses encoders、真实本地 TCP route streaming、FRESH/APPEND/RESTORE/REBUILD、same-key FIFO / different-key parallel、final-save failure、生成中 abort 与首帧后取消。最终 branch-head 只读 CI 已实际通过完整 `verify`；测试数量不在本文手工固定，以 fresh Vitest 输出为准。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 5 deterministic coverage 已新增 Snapshot normalization、Unicode-safe Stable Prefix、16-code-point commit-tail holdback、completion/divergence、provisional `/c/WEB:*` / Assistant placeholder ownership、conversation-history rate-limit 通知 modal、Assistant turn handle/Stop/pre-Send abort、SSE backpressure、Chat Completions / Responses encoders、真实本地 TCP route streaming、FRESH/APPEND/RESTORE/REBUILD、same-key FIFO / different-key parallel、final-save failure、生成中 abort 与首帧后取消。2026-08-17 fresh DevSpace `corepack pnpm verify` 实际通过 55 个 test files / 332 tests；使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -160,9 +160,8 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3 与 Phase 4 已有 authenticated real E2E 历史通过证据。Phase 5 real harness 已实现真实 TCP listener 增量读取，包含：长回复在 target completion marker 之前收到 meaningful delta、Markdown/code 最终文本一致性、Responses typed SSE、client abort 后 `in_flight` 与 same-key REBUILD。本次 Phase 5 实现后由于当前工具环境无法访问隔离已登录 Browser Profile / LAN proxy，**没有实际运行** `test:e2e:chatgpt:phase5` 或包含 Phase 5 的 combined real E2E；因此不能把 deterministic/Docker 成功外推为当前 ChatGPT DOM 真 Streaming 已验收。
-
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3/4/5 现在都有 authenticated real E2E 通过证据。2026-08-17 `inspect:chatgpt` 在隔离登录 Profile 上实际返回 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 真实返回 `chatCompletions=true`、`markdown=true`、`responses=true`、`abort=true`。Harness 通过真实 TCP listener 证明长回复首个 meaningful delta 早于 target completion marker，Chat Completions 只有一个 stop terminal 与一个 `[DONE]`，Markdown/code multiline 不重复/不丢尾，Responses typed lifecycle/IDs/`sequence_number` 正确，并要求最终 `delta concat == authoritative live DOM == SQLite`。abort 场景在 meaningful delta 后真实断开 socket，要求 Driver Stop 成功、SQLite 保持 `in_flight`、Page affinity 被丢弃，下一 same-key authoritative request 通过 REBUILD 收敛且 ChatGPT Conversation URL 改变。随后 combined `test:e2e:chatgpt` 再次真实通过 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD 和 Phase 5 全部四项。
 
 ### Phase 5 Docker 验收事实
 
-Phase 5 最终 branch-head 只读 CI 已实际完成 fresh `linux/amd64` Docker build 与完整 `docker:smoke`。Smoke 的产品断言覆盖 normal/maintenance single owner、SQLite migrations/restart、PUID/PGID、Chrome sandbox/seccomp 与 noVNC RFB；验收期间还修复了 hosted runner 的临时 bind mount cleanup：容器会按测试 PUID/PGID 改变挂载目录 ownership，cleanup container 现在先清空内容并把挂载根 ownership 恢复给宿主进程，再由宿主删除临时目录。该修复只作用于 smoke 清理，不改变产品容器运行身份。
+2026-08-17 最终产品代码 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 实际通过，最终镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`。Smoke 的产品断言覆盖 normal/maintenance single owner、SQLite migrations/restart、PUID/PGID、Chrome sandbox/seccomp 与 noVNC RFB；migration 仍仅 `001_initial` 与 `002_add_conversation_sync_checkpoint`。此前 hosted runner 的临时 bind mount cleanup 修复仍只作用于 smoke 清理，不改变产品容器运行身份。
