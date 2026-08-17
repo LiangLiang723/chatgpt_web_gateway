@@ -3,15 +3,33 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createChatGptDriver } from '../../src/chatgpt/driver.js';
 
-function harness(options: { completed?: boolean; unsafeUrl?: boolean } = {}) {
+function harness(
+  options: {
+    completed?: boolean;
+    unsafeUrl?: boolean;
+    initialUrl?: string;
+    rateLimitModal?: 'missing' | 'visible' | 'ambiguous';
+  } = {},
+) {
   const events: string[] = [];
   let stopped = false;
+  let currentUrl =
+    options.initialUrl ??
+    (options.unsafeUrl ? 'https://chatgpt.com/' : 'https://chatgpt.com/c/stream-thread?model=auto');
+  let assistantText = 'streaming answer';
+  let assistantContentCount = 1;
   const completionMarker = {
     count: vi.fn(async () => (options.completed || stopped ? 1 : 0)),
   } as unknown as Locator;
+  const assistantContent = {
+    count: vi.fn(async () => assistantContentCount),
+    innerText: vi.fn(async () => assistantText),
+  } as unknown as Locator;
   const assistantTurn = {
-    innerText: vi.fn(async () => 'streaming answer'),
-    locator: vi.fn(() => completionMarker),
+    innerText: vi.fn(async () => assistantText),
+    locator: vi.fn((selector: string) =>
+      selector === '.markdown' ? assistantContent : completionMarker,
+    ),
   } as unknown as Locator;
   const assistantTurns = {
     count: vi.fn(async () => 3),
@@ -26,6 +44,14 @@ function harness(options: { completed?: boolean; unsafeUrl?: boolean } = {}) {
   const send = {
     click: vi.fn(async () => events.push('click:send')),
   } as unknown as Locator;
+  const rateLimitAcknowledge = {
+    count: vi.fn(async () => 1),
+    click: vi.fn(async () => events.push('click:rate-limit-got-it')),
+  } as unknown as Locator;
+  const rateLimitModal = {
+    isVisible: vi.fn(async () => true),
+    getByRole: vi.fn(() => rateLimitAcknowledge),
+  } as unknown as Locator;
   const stop = {
     click: vi.fn(async () => {
       events.push('click:stop');
@@ -33,9 +59,7 @@ function harness(options: { completed?: boolean; unsafeUrl?: boolean } = {}) {
     }),
   } as unknown as Locator;
   const page = {
-    url: vi.fn(() =>
-      options.unsafeUrl ? 'https://chatgpt.com/' : 'https://chatgpt.com/c/stream-thread?model=auto',
-    ),
+    url: vi.fn(() => currentUrl),
   } as unknown as Page;
 
   const driver = createChatGptDriver({
@@ -50,6 +74,24 @@ function harness(options: { completed?: boolean; unsafeUrl?: boolean } = {}) {
       };
     },
     inspectUnique: async (_page, definition) => {
+      if (definition.name === 'conversationHistoryRateLimitModal') {
+        if (options.rateLimitModal === 'visible') {
+          return {
+            status: 'unique',
+            candidateName: 'conversation-history-rate-limit-modal-testid',
+            count: 1,
+            locator: rateLimitModal,
+          };
+        }
+        if (options.rateLimitModal === 'ambiguous') {
+          return {
+            status: 'ambiguous',
+            candidateName: 'conversation-history-rate-limit-modal-testid',
+            count: 2,
+          };
+        }
+        return { status: 'missing', count: 0 };
+      }
       if (definition.name !== 'stopControl') return { status: 'missing', count: 0 };
       return stopped
         ? { status: 'missing', count: 0 }
@@ -68,7 +110,21 @@ function harness(options: { completed?: boolean; unsafeUrl?: boolean } = {}) {
     stopTimeoutMs: 10,
   });
 
-  return { page, driver, events, stop };
+  return {
+    page,
+    driver,
+    events,
+    stop,
+    setUrl(value: string) {
+      currentUrl = value;
+    },
+    setAssistantText(value: string) {
+      assistantText = value;
+    },
+    setAssistantContentCount(value: number) {
+      assistantContentCount = value;
+    },
+  };
 }
 
 describe('ChatGptTextTurn', () => {
@@ -83,6 +139,70 @@ describe('ChatGptTextTurn', () => {
     });
 
     expect(events).toEqual(['baseline', 'fill:hello', 'click:send', 'turn:2']);
+  });
+
+  it('acknowledges the known conversation-history rate-limit modal before clicking Send', async () => {
+    const { page, driver, events } = harness({ rateLimitModal: 'visible' });
+
+    await driver.startText(page, { prompt: 'hello' });
+
+    expect(events).toEqual(['baseline', 'fill:hello', 'click:rate-limit-got-it', 'click:send']);
+  });
+
+  it('ignores a new Assistant placeholder until the owned turn exposes text content', async () => {
+    const { page, driver, setAssistantText, setAssistantContentCount } = harness();
+    const turn = await driver.startText(page, { prompt: 'hello' });
+
+    setAssistantText('temporary');
+    setAssistantContentCount(0);
+    await expect(turn.observe()).resolves.toEqual({
+      exists: false,
+      text: '',
+      completionMarkerPresent: false,
+    });
+
+    setAssistantText('stable answer');
+    setAssistantContentCount(1);
+    await expect(turn.observe()).resolves.toEqual({
+      exists: true,
+      text: 'stable answer',
+      completionMarkerPresent: false,
+    });
+  });
+
+  it('rejects multiple Assistant text content nodes instead of truncating structured UI to one node', async () => {
+    const { page, driver, setAssistantContentCount } = harness();
+    const turn = await driver.startText(page, { prompt: 'hello' });
+
+    setAssistantContentCount(2);
+    await expect(turn.observe()).rejects.toMatchObject({
+      code: 'selector_ambiguous',
+      selectorName: 'assistantTextContent',
+      candidateName: 'assistant-markdown-content',
+    });
+  });
+
+  it('ignores provisional Fresh Assistant content until ChatGPT establishes a stable Conversation URL', async () => {
+    const { page, driver, setUrl, setAssistantText } = harness({
+      initialUrl: 'https://chatgpt.com/',
+    });
+    const turn = await driver.startText(page, { prompt: 'hello' });
+
+    setUrl('https://chatgpt.com/c/WEB:temporary-bootstrap');
+    setAssistantText('temporary');
+    await expect(turn.observe()).resolves.toEqual({
+      exists: false,
+      text: '',
+      completionMarkerPresent: false,
+    });
+
+    setUrl('https://chatgpt.com/c/stable-thread');
+    setAssistantText('stable answer');
+    await expect(turn.observe()).resolves.toEqual({
+      exists: true,
+      text: 'stable answer',
+      completionMarkerPresent: false,
+    });
   });
 
   it('returns only a safe ChatGPT Conversation URL', async () => {

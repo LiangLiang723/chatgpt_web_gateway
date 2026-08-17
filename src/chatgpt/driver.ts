@@ -87,6 +87,45 @@ export function createChatGptDriver(
     }
   };
 
+  const dismissConversationHistoryRateLimitModal = async (page: Page): Promise<void> => {
+    const modal = await inspectUniqueSelector(
+      page,
+      chatGptSelectors.conversationHistoryRateLimitModal,
+    );
+    if (modal.status === 'missing') return;
+    if (modal.status === 'ambiguous') {
+      throw new ChatGptDriverError({
+        code: 'selector_ambiguous',
+        message: 'ChatGPT conversation-history rate-limit modal is ambiguous',
+        selectorName: chatGptSelectors.conversationHistoryRateLimitModal.name,
+        candidateName: modal.candidateName,
+      });
+    }
+    if (!(await modal.locator.isVisible())) return;
+
+    const acknowledge = chatGptSelectors.conversationHistoryRateLimitAcknowledge.locate(
+      modal.locator,
+    );
+    const acknowledgeCount = await acknowledge.count();
+    if (acknowledgeCount === 0) {
+      throw new ChatGptDriverError({
+        code: 'selector_missing',
+        message: 'ChatGPT conversation-history rate-limit acknowledgement is missing',
+        selectorName: chatGptSelectors.conversationHistoryRateLimitAcknowledge.name,
+        candidateName: chatGptSelectors.conversationHistoryRateLimitAcknowledge.candidateName,
+      });
+    }
+    if (acknowledgeCount > 1) {
+      throw new ChatGptDriverError({
+        code: 'selector_ambiguous',
+        message: 'ChatGPT conversation-history rate-limit acknowledgement is ambiguous',
+        selectorName: chatGptSelectors.conversationHistoryRateLimitAcknowledge.name,
+        candidateName: chatGptSelectors.conversationHistoryRateLimitAcknowledge.candidateName,
+      });
+    }
+    await acknowledge.click();
+  };
+
   const readConversationUrl = (page: Page): string => {
     const conversationUrl = parseSafeChatGptConversationUrl(page.url());
     if (!conversationUrl) {
@@ -105,6 +144,8 @@ export function createChatGptDriver(
 
     try {
       throwIfAborted();
+      let waitingForStableConversationRoute =
+        parseSafeChatGptConversationUrl(page.url()) === undefined;
       const assistantTurns = await inspectCollectionSelector(page, chatGptSelectors.assistantTurns);
       throwIfAborted();
       const baseline = assistantTurns.count;
@@ -112,17 +153,40 @@ export function createChatGptDriver(
       throwIfAborted();
       await composer.locator.fill(request.prompt);
       throwIfAborted();
+      await dismissConversationHistoryRateLimitModal(page);
+      throwIfAborted();
       const sendButton = await resolveUniqueSelector(page, chatGptSelectors.sendButton);
       throwIfAborted();
       await sendButton.locator.click();
 
       const observe = async (): Promise<AssistantSnapshot> => {
+        if (waitingForStableConversationRoute) {
+          if (!parseSafeChatGptConversationUrl(page.url())) {
+            return { exists: false, text: '', completionMarkerPresent: false };
+          }
+          waitingForStableConversationRoute = false;
+        }
+
         const count = await assistantTurns.locator.count();
         if (count <= baseline) {
           return { exists: false, text: '', completionMarkerPresent: false };
         }
 
         const turn = assistantTurns.locator.nth(baseline);
+        const textContent = chatGptSelectors.assistantTextContent.locate(turn);
+        const textContentCount = await textContent.count();
+        if (textContentCount === 0) {
+          return { exists: false, text: '', completionMarkerPresent: false };
+        }
+        if (textContentCount > 1) {
+          throw new ChatGptDriverError({
+            code: 'selector_ambiguous',
+            message: 'ChatGPT Assistant text content is ambiguous',
+            selectorName: chatGptSelectors.assistantTextContent.name,
+            candidateName: chatGptSelectors.assistantTextContent.candidateName,
+          });
+        }
+
         const completionMarker = chatGptSelectors.assistantTurnCompletion.locate(turn);
         const completionMarkerCount = await completionMarker.count();
         if (completionMarkerCount > 1) {
@@ -136,7 +200,7 @@ export function createChatGptDriver(
 
         return {
           exists: true,
-          text: await turn.innerText(),
+          text: await textContent.innerText(),
           completionMarkerPresent: completionMarkerCount === 1,
         };
       };

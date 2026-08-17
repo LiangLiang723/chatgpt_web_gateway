@@ -4,6 +4,7 @@ export interface StablePrefixState {
   emitted: string;
   samples: string[];
   stableSamples: number;
+  holdbackCodePoints: number;
 }
 
 export function longestCommonPrefix(values: readonly string[]): string {
@@ -25,13 +26,17 @@ export function longestCommonPrefix(values: readonly string[]): string {
 }
 
 export function createStablePrefixState(
-  options: { stableSamples?: number } = {},
+  options: { stableSamples?: number; holdbackCodePoints?: number } = {},
 ): StablePrefixState {
   const stableSamples = options.stableSamples ?? 3;
+  const holdbackCodePoints = options.holdbackCodePoints ?? 0;
   if (!Number.isInteger(stableSamples) || stableSamples < 1) {
     throw new RangeError('stableSamples must be a positive integer');
   }
-  return { emitted: '', samples: [], stableSamples };
+  if (!Number.isInteger(holdbackCodePoints) || holdbackCodePoints < 0) {
+    throw new RangeError('holdbackCodePoints must be a non-negative integer');
+  }
+  return { emitted: '', samples: [], stableSamples, holdbackCodePoints };
 }
 
 function assertStillContainsEmitted(emitted: string, text: string): void {
@@ -50,11 +55,16 @@ export function observeStablePrefix(
 
   const stable = longestCommonPrefix(samples);
   assertStillContainsEmitted(state.emitted, stable);
-  const delta = stable.slice(state.emitted.length);
+  const stableCodePoints = Array.from(stable);
+  const committable = stableCodePoints
+    .slice(0, Math.max(0, stableCodePoints.length - state.holdbackCodePoints))
+    .join('');
+  const emitted = committable.startsWith(state.emitted) ? committable : state.emitted;
+  const delta = emitted.slice(state.emitted.length);
   return {
     state: {
       ...state,
-      emitted: stable,
+      emitted,
       samples,
     },
     delta,

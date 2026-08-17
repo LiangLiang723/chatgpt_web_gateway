@@ -8,7 +8,12 @@ export function parseSafeChatGptConversationUrl(
 ): SafeChatGptConversationUrl | undefined {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com' || url.pathname === '/') {
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'chatgpt.com' ||
+      url.pathname === '/' ||
+      url.pathname.startsWith('/c/WEB:')
+    ) {
       return undefined;
     }
     return {

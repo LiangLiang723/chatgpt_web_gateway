@@ -18,6 +18,7 @@ describe('parseSafeChatGptConversationUrl', () => {
     'http://chatgpt.com/c/abc',
     'https://example.com/c/abc',
     'https://chatgpt.com/',
+    'https://chatgpt.com/c/WEB:temporary-bootstrap',
     'not-a-url',
   ])('rejects unsafe or non-Conversation URL %s', (value) => {
     expect(parseSafeChatGptConversationUrl(value)).toBeUndefined();

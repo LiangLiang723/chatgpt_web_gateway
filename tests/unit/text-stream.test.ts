@@ -39,12 +39,42 @@ describe('streamAssistantText', () => {
       },
       clock: scriptedClock(),
       pollIntervalMs: 10,
+      holdbackCodePoints: 0,
       timeoutMs: 200,
     });
 
     expect(finalText).toBe('Hello!');
     expect(deltas.every((delta) => delta.length > 0)).toBe(true);
     expect(deltas.join('')).toBe('Hello!');
+    expect(deltas.length).toBeGreaterThan(1);
+  });
+
+  it('keeps a bounded stable tail uncommitted so short renderer tail rewrites can settle', async () => {
+    const deltas: string[] = [];
+    const growing = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const final = growing.slice(0, -3);
+
+    const finalText = await streamAssistantText({
+      observe: observations([
+        { exists: true, text: growing, completionMarkerPresent: false },
+        { exists: true, text: growing, completionMarkerPresent: false },
+        { exists: true, text: growing, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+      ]),
+      onDelta: async (delta) => {
+        deltas.push(delta);
+      },
+      clock: scriptedClock(),
+      pollIntervalMs: 10,
+      timeoutMs: 200,
+    });
+
+    expect(finalText).toBe(final);
+    expect(deltas.join('')).toBe(final);
     expect(deltas.length).toBeGreaterThan(1);
   });
 
@@ -64,6 +94,7 @@ describe('streamAssistantText', () => {
         },
         clock: scriptedClock(),
         pollIntervalMs: 10,
+        holdbackCodePoints: 0,
         timeoutMs: 100,
       }),
     ).rejects.toMatchObject({ code: 'chatgpt_stream_diverged' });

@@ -69,6 +69,12 @@ export const userTurnsSelector: SelectorDefinition<'collection'> = {
   ],
 };
 
+export const assistantTextContentSelector = {
+  name: 'assistantTextContent',
+  candidateName: 'assistant-markdown-content',
+  locate: (assistantTurn: Locator): Locator => assistantTurn.locator('.markdown'),
+} as const;
+
 export const assistantTurnCompletionSelector = {
   name: 'assistantTurnCompletion',
   candidateName: 'copy-turn-action-button',
@@ -76,6 +82,23 @@ export const assistantTurnCompletionSelector = {
     assistantTurn.locator(
       'xpath=ancestor::section[@data-turn="assistant"][1]//*[@data-testid="copy-turn-action-button"]',
     ),
+} as const;
+
+export const conversationHistoryRateLimitModalSelector: SelectorDefinition<'unique'> = {
+  name: 'conversationHistoryRateLimitModal',
+  cardinality: 'unique',
+  candidates: [
+    {
+      name: 'conversation-history-rate-limit-modal-testid',
+      locate: (page) => page.locator('[data-testid="modal-conversation-history-rate-limit"]'),
+    },
+  ],
+};
+
+export const conversationHistoryRateLimitAcknowledgeSelector = {
+  name: 'conversationHistoryRateLimitAcknowledge',
+  candidateName: 'got-it-button-role',
+  locate: (modal: Locator): Locator => modal.getByRole('button', { name: 'Got it', exact: true }),
 } as const;
 
 export const stopControlSelector: SelectorDefinition<'unique'> = {
@@ -110,7 +133,10 @@ export const chatGptSelectors = {
   loginIndicator: loginIndicatorSelector,
   assistantTurns: assistantTurnsSelector,
   userTurns: userTurnsSelector,
+  assistantTextContent: assistantTextContentSelector,
   assistantTurnCompletion: assistantTurnCompletionSelector,
+  conversationHistoryRateLimitModal: conversationHistoryRateLimitModalSelector,
+  conversationHistoryRateLimitAcknowledge: conversationHistoryRateLimitAcknowledgeSelector,
   stopControl: stopControlSelector,
   thinkingIndicators: thinkingIndicatorsSelector,
 } as const;

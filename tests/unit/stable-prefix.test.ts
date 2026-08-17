@@ -55,6 +55,19 @@ describe('Stable Prefix state', () => {
     expect(rewritten.state.emitted).toBe('Hel');
   });
 
+  it('holds back whole Unicode code points without splitting a surrogate pair', () => {
+    let state = createStablePrefixState({ stableSamples: 1, holdbackCodePoints: 1 });
+
+    const observed = observeStablePrefix(state, 'A😀');
+    state = observed.state;
+    expect(observed.delta).toBe('A');
+    expect(state.emitted).toBe('A');
+
+    const flushed = flushStablePrefix(state, 'A😀');
+    expect(flushed.delta).toBe('😀');
+    expect(flushed.state.emitted).toBe('A😀');
+  });
+
   it('fails when the DOM rewrites a prefix already emitted to the client', () => {
     let state = createStablePrefixState({ stableSamples: 3 });
     for (const text of ['Hello', 'Hello ', 'Hello w']) {

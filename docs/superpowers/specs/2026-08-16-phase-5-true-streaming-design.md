@@ -1,8 +1,10 @@
 # Phase 5 True Streaming Design
 
 **Date:** 2026-08-16
-**Status:** Approved; implementation complete; authenticated real E2E acceptance blocked
+**Status:** Completed; implementation and authenticated real E2E accepted
 **Scope:** Phase 5
+
+2026-08-17 final acceptance evidence: fresh DevSpace `corepack pnpm verify` passed 55 test files / 332 tests; fresh `linux/amd64` Docker build produced `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` and full `docker:smoke` passed; authenticated `inspect:chatgpt`, standalone Phase 5 real E2E, and combined Phase 3/4/5 real E2E all passed. Phase 5 is closed; attachments, Tools, Structured Output and image execution remain later phases.
 
 ## 1. Goal（目标）
 
@@ -294,6 +296,10 @@ click Send
 
 整个 Streaming 生命周期只允许读取这个 target turn。
 
+2026-08-17 authenticated real E2E 发现，Fresh/REBUILD 首次发送后 ChatGPT 会先进入 provisional `/c/WEB:<uuid>` bootstrap route，并在该阶段短暂暴露一个 Assistant collection 节点；随后切换到正式 `/c/<uuid>` route 时，同一 collection index 的内容会被替换为真正回答。这个 provisional 节点**不是 authoritative Assistant target**，不得进入 Stable Prefix 或向客户端输出。对于从无安全 Conversation URL 的 Fresh 页面开始的 `startText()`，`observe()` 必须在正式可恢复 Conversation URL 建立前继续返回 missing snapshot；一旦正式 URL 建立，仍按发送前 baseline index 锁定该请求的 target turn。APPEND/RESTORE 已从正式 Conversation URL 开始，不受该 route gate 影响。
+
+同一轮 authenticated APPEND real E2E 还确认：即使 URL 已经是正式 `/c/<uuid>`，ChatGPT 仍可能先在新 Assistant index 挂载一个约 8 code points 的临时 placeholder；该节点没有正文 `.markdown` content，随后会被卸载，再由真正回答重新占用该 target index。Phase 5 纯文本 authoritative snapshot 因此必须同时满足：**owned Assistant turn index 存在，且该 turn 内唯一 `.markdown` 正文节点存在**。只有 placeholder、正文节点 count=0 时 `observe()` 继续返回 missing；正文节点 count>1 视为 selector ambiguity。输出文本读取该正文节点的 `innerText()`，completion marker 仍从 owned Assistant turn 的 ancestor action 区判断。
+
 禁止：
 
 - 每轮 polling 读取“页面最后一个 Assistant”。
@@ -350,12 +356,15 @@ export interface ChatGptTextDriver {
 capture Assistant baseline
 → resolve unique composer
 → fill prompt
+→ acknowledge exact known conversation-history rate-limit notification if uniquely visible
 → resolve unique send button
 → click Send
 → return handle bound to baseline index
 ```
 
 它不等待完整回答。
+
+2026-08-17 authenticated real E2E 在重复多轮验收后观察到 ChatGPT 会挂载 `data-testid="modal-conversation-history-rate-limit"` 通知层，唯一按钮为 `Got it`。隔离 Profile 实验确认：第一轮请求正常完成后该通知出现；点击 `Got it` 只关闭 overlay，同一正式 Conversation URL 上第二轮请求仍可立即正常完成，说明它不是 CAPTCHA/MFA/人机验证，也不是服务端拒绝本次 Send。Driver 因此只允许在 **该精确 testid 唯一、可见，且其内部 `Got it` 按钮唯一** 时确认通知，然后再执行普通 Send；不匹配其它 modal，不 force-click，不自动处理任何登录、MFA 或 challenge UI。modal 或按钮 ambiguity 继续返回稳定 selector error。
 
 ### 9.2 `observe()`
 
@@ -378,6 +387,7 @@ Selector ambiguity 继续返回稳定 Driver error。
 - `https:`
 - hostname 严格 `chatgpt.com`
 - non-root Conversation pathname
+- provisional `/c/WEB:*` bootstrap pathname 必须拒绝；它不是可恢复的 authoritative Conversation identity
 
 不允许把任意当前 URL 原样持久化。
 
@@ -508,11 +518,14 @@ snapshot 2: "hello"
 默认：
 
 ```text
-poll interval   = 200ms
-stable samples  = 3
+poll interval        = 200ms
+stable samples       = 3
+commit tail holdback = 16 Unicode code points
 ```
 
 保留最近最多 3 个**已存在 target turn**的 normalized text snapshot。
+
+2026-08-17 authenticated real E2E 进一步证明，正式 `/c/<uuid>` route 上的 Markdown renderer 也会在生成期间短距离回排当前尾部：已经连续稳定多轮的可见文本仍可能在后续 snapshot 从 `N` 缩短 1–3 code points，LCP 保持为新的完整文本长度。由于已经写入 SSE 的字节不能撤回，3-sample window 之外还需要一个**bounded commit tail holdback**：普通生成 snapshot 的 Stable Prefix 最后 16 个 Unicode code points 只保留在内存，不提前承诺给客户端；Completion Detector 最终确认后再精确 flush。这个 guard 不 trim、不改写、不丢弃字符，只延迟极短尾部的提交；如果 rewrite 穿过已经 committed 的 guard 之外前缀，仍然必须 `chatgpt_stream_diverged`。
 
 例如：
 
@@ -550,6 +563,7 @@ LCP 必须按 Unicode code point 安全推进，不能在 surrogate pair 中间�
 interface StablePrefixState {
   emitted: string;
   samples: string[];
+  holdbackCodePoints: number;
 }
 ```
 
@@ -561,10 +575,12 @@ normalize current
 → push bounded sample
 → stable = LCP(samples)
 → verify stable startsWith(emitted)
-→ delta = stable.slice(emitted.length)
-→ if delta != '' emit delta
-→ emitted = stable
+→ committable = stable 去掉最后 holdbackCodePoints 个 code points
+→ 如果 committable 比 emitted 更长，则只 emit committable.slice(emitted.length)
+→ 如果 committable 因尾部回排而暂时比 emitted 更短，但 stable 仍 startsWith(emitted)，保持 emitted 不变
 ```
+
+Completion Detector 最终确认后的 `flushStablePrefix()` 不应用 holdback，直接把 authoritative final text 中尚未发送的完整尾部一次性发出。
 
 ### 13.5 No Retraction
 

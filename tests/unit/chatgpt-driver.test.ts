@@ -49,9 +49,10 @@ function successfulSendHarness(
     completionMarkerCount?: number;
     stopControlStatus?: 'missing' | 'unique';
     expectedGenerating?: boolean;
+    finalUrlAfterCompletion?: string;
   } = {},
 ) {
-  const { page, events } = fakePage(currentUrl);
+  const { page, events, setUrl } = fakePage(currentUrl);
   const composer = {
     fill: vi.fn(async (text: string) => events.push(`fill:${text}`)),
   } as unknown as Locator;
@@ -61,9 +62,15 @@ function successfulSendHarness(
   const assistantTurnCompletion = {
     count: vi.fn(async () => options.completionMarkerCount ?? 1),
   } as unknown as Locator;
+  const assistantTextContent = {
+    count: vi.fn(async () => 1),
+    innerText: vi.fn(async () => 'final answer'),
+  } as unknown as Locator;
   const assistantTurn = {
     innerText: vi.fn(async () => 'final answer'),
-    locator: vi.fn(() => assistantTurnCompletion),
+    locator: vi.fn((selector: string) =>
+      selector === '.markdown' ? assistantTextContent : assistantTurnCompletion,
+    ),
   } as unknown as Locator;
   const assistantTurns = {
     count: vi.fn(async () => 4),
@@ -95,8 +102,8 @@ function successfulSendHarness(
         locator: { count: async () => 0 } as unknown as Locator,
       };
     },
-    inspectUnique: async () =>
-      options.stopControlStatus === 'unique'
+    inspectUnique: async (_page, definition) =>
+      definition.name === 'stopControl' && options.stopControlStatus === 'unique'
         ? {
             status: 'unique',
             candidateName: 'stop-test',
@@ -121,6 +128,7 @@ function successfulSendHarness(
         generating: options.expectedGenerating ?? false,
         text: 'final answer',
       });
+      if (options.finalUrlAfterCompletion) setUrl(options.finalUrlAfterCompletion);
       return 'final answer';
     },
   });
@@ -290,7 +298,9 @@ describe('ChatGptDriver sendText', () => {
   });
 
   it('rejects an unsafe final URL instead of returning it for persistence', async () => {
-    const { page, driver } = successfulSendHarness('https://chatgpt.com/');
+    const { page, driver } = successfulSendHarness('https://chatgpt.com/c/test-conversation', {
+      finalUrlAfterCompletion: 'https://chatgpt.com/',
+    });
 
     await expect(driver.sendText(page, { prompt: 'hello' })).rejects.toMatchObject({
       code: 'conversation_restore_failed',

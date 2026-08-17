@@ -14,11 +14,15 @@ export interface StreamAssistantTextOptions {
   clock?: StreamClock;
   pollIntervalMs?: number;
   stableSamples?: number;
+  holdbackCodePoints?: number;
   timeoutMs?: number;
 }
 
 export async function streamAssistantText(options: StreamAssistantTextOptions): Promise<string> {
-  let stableState = createStablePrefixState({ stableSamples: options.stableSamples ?? 3 });
+  let stableState = createStablePrefixState({
+    stableSamples: options.stableSamples ?? 3,
+    holdbackCodePoints: options.holdbackCodePoints ?? 16,
+  });
 
   const finalText = await waitForStreamingCompletion({
     observe: options.observe,
