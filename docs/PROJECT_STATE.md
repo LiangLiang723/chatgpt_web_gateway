@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-5-complete
-STATUS=ready-for-phase-6-design
+PHASE=phase-6-design-complete
+STATUS=ready-for-phase-6-plan
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-6-attachments-spec
+NEXT_TASK=write-phase-6-implementation-plan
 UPDATED_AT=2026-08-17
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 5 — True Streaming 已正式完成；下一阶段是 Phase 6 图片和文件输入设计。
-- **当前状态：** `ready-for-phase-6-design`。Phase 5 的 deterministic、Docker、authenticated DOM inspection、standalone real Streaming E2E 与 combined Phase 3/4/5 real E2E 已全部取得本次 fresh 证据。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)。该设计已实现并完成真实验收。
-- **Active Plan：** `none`。Phase 5 实现计划已完成，不再作为活动计划。
-- **下一个可执行任务：** 编写 Phase 6 图片和文件输入设计规格；在规格批准前不进入附件实现。
+- **当前阶段：** Phase 6 — 图片和文件输入设计已完成；代码实现尚未开始。
+- **当前状态：** `ready-for-phase-6-plan`。Phase 5 仍保持完整验收事实；Phase 6 已锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计已批准进入实施计划阶段，但尚未实现。
+- **Active Plan：** `none`。下一步先建立 Phase 6 implementation plan，再按 Task 进入 TDD 实现。
+- **下一个可执行任务：** 编写 Phase 6 图片和文件输入实施计划；计划建立前不把附件能力标为已实现。
 - **最新确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；migration 仍仅 `001_initial` + `002_add_conversation_sync_checkpoint`。
 - **真实网页证据：** 2026-08-17 复用项目隔离已登录 Profile 与 `CHATGPT_PROXY_SERVER` 后，`inspect:chatgpt` 实际得到 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 返回 Chat Completions / Markdown / Responses / abort 全部 `true`；随后 combined `test:e2e:chatgpt` 返回 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 四项 Streaming 场景全部通过。
 
@@ -83,6 +83,7 @@ UPDATED_AT=2026-08-17
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-17：Phase 6 图片和文件输入设计完成。规格锁定 `/v1/files` 生命周期、逻辑 File/物理 SHA-256 Blob 分离、URL/Data URL/Base64/`file_id` 统一解析、SSRF/文件名/大小安全边界、ordered multimodal Context fingerprint、FRESH/REBUILD 全有效附件重传与 APPEND/RESTORE 当前附件上传、Browser upload ownership/readiness、DELETE 历史引用保留语义，以及 image + PDF/TXT/DOCX/XLSX authenticated real E2E 门槛；实现尚未开始。
 - 2026-08-17：Phase 5 authenticated real Streaming 验收在真实 DevSpace 完成。真实 DOM 暴露并通过 TDD 修复了 Fresh `/c/WEB:*` provisional route、APPEND 临时 Assistant placeholder、Markdown renderer 短尾回排、writing-block 多正文边界，以及 conversation-history rate-limit 通知 overlay；未扩展附件/Tool/Structured Output/image execution。
 - 2026-08-17：fresh `corepack pnpm verify` 通过 55 files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。authenticated `inspect:chatgpt`、standalone Phase 5 real E2E、combined Phase 3/4/5 real E2E 随后全部通过，Phase 5 正式关闭。
 - 2026-08-16：Phase 5 True Streaming 产品链实现完成：Stable Prefix、target turn handle/completion、Conversation streaming lifecycle、双 SSE Encoder、backpressure、abort/Stop、FRESH/APPEND/RESTORE/REBUILD Streaming 集成和真实 E2E harness 全部落地。
@@ -90,13 +91,13 @@ UPDATED_AT=2026-08-17
 
 ## Next Steps（下一步）
 
-1. 编写 Phase 6 图片和文件输入设计规格。
-2. 继续遵守设计先行：规格批准后再编写 Phase 6 实施计划与代码。
-3. Phase 6 继续使用独立 E2E Profile，并为 `/v1/files`、URL/Base64 图片、代表性文档上传补 deterministic + authenticated real E2E。
+1. 根据 Phase 6 Governing Spec 编写详细 implementation plan，并把它设为 Active Plan。
+2. 按计划从 File/Blob migration + FileService 开始 TDD，不跳过 Files API、Attachment Resolver、multimodal Context 与 Browser upload readiness 的独立验证闭环。
+3. 实现完成后运行 fresh deterministic、Docker 与独立登录 Profile authenticated real Phase 6 E2E；只有 image + PDF/TXT/DOCX/XLSX 等真实上传通过后才关闭 Phase 6。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
 
-- Phase 5 当前没有未解除的验收 blocker；下一工作是 Phase 6 设计。
+- Phase 6 当前没有设计 blocker；下一工作是实施计划。具体 ChatGPT attachment input / preview / readiness Selector 仍必须在实施阶段先通过 authenticated `inspect:chatgpt` 实测，不能根据设计猜测。
 - ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
 - Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。

@@ -205,6 +205,8 @@ OpenAI tool_calls
 
 ## Attachments（附件）
 
+Phase 6 已完成设计、尚未实现；Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。批准的数据流是：
+
 ```text
 OpenAI content part / file_id
           ↓
@@ -212,18 +214,24 @@ Attachment Resolver
           ↓
 URL Download / Base64 Decode / File Lookup
           ↓
-Persistent File Store
+Persistent Logical File → content-addressed SHA-256 Blob
           ↓
-PreparedAttachment
+Canonical multimodal Conversation + Context Planner
+          ↓
+request-scoped PreparedAttachment staging
           ↓
 Playwright setInputFiles
           ↓
-等待 ChatGPT 附件预览和上传完成
+等待本请求 owned ChatGPT 附件预览和真实 upload readiness
           ↓
 发送 Prompt
 ```
 
-SQLite 保存元数据和引用，大文件字节保存在 `data/files/`。
+Phase 6 锁定逻辑 File 与物理 Blob 分离：公开 `/v1/files` 和 inline URL/Data URL/Base64 都最终解析成本地 File；相同 bytes 可以有不同逻辑 File identity，但共享一个 SHA-256 Blob。永久 Blob path 不包含用户 filename，raw URL/Base64 不进入 Attachment persistence。`chatgpt/` 只接收已经准备好的本地 staging path，不下载网络、不解码 Base64、不访问 SQLite。
+
+Context Sync 仍只有 `FRESH | APPEND | RESTORE | REBUILD`：APPEND/RESTORE 只上传当前新增 user turn 附件；FRESH/REBUILD 从本地 File 事实源重新上传当前有效 full context 所需附件。第一次 Browser upload side effect 前必须先持久化 `in_flight`；upload/readiness 的未知失败保持 `in_flight` 并 discard Page。stream/non-stream 在 Send 后继续共享 Phase 5 target Assistant / completion / Stable Prefix。
+
+SQLite 保存 File/Blob/Attachment 元数据和引用，大文件字节保存在 `data/files/`。具体 migration、Files DELETE retention、SSRF/资源限制与 authenticated real E2E 边界以 Phase 6 spec 为准；在实现和真实验收完成前，公开附件能力仍保持未实现。
 
 ## 图片生成
 

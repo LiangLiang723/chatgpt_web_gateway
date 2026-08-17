@@ -54,9 +54,13 @@
 
 ## Phase 6：图片和文件输入
 
+状态：**设计完成，待实施计划**。Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+
+设计已锁定：`/v1/files` 五接口生命周期、公开逻辑 File / SHA-256 物理 Blob 分离、URL/Data URL/Base64/`file_id` 统一 Attachment Resolver、SSRF/文件名/大小安全边界、ordered multimodal Context fingerprint、FRESH/REBUILD 与 APPEND/RESTORE 的附件上传选择、Browser upload ownership/readiness、DELETE 与历史 Conversation 引用的保留语义，以及 stream/non-stream 共用现有 Conversation/True Streaming 执行链。代码尚未实现。
+
 交付：`/v1/files` 生命周期、URL/Base64 图片、Base64 文件、`file_id`、SHA-256、ChatGPT upload readiness（上传就绪）检测。
 
-验收：图片理解和代表性文档上传 E2E 通过。
+验收：fresh deterministic + Docker 通过后，authenticated real E2E 必须实际证明图片理解、PDF/TXT/DOCX/XLSX 代表性文档、附件上下文 APPEND/RESTORE 与至少一条附件 Streaming；未跑真实网页不得关闭 Phase 6。
 
 ## Phase 7：Tool Calling
 

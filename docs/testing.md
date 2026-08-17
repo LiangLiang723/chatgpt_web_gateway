@@ -86,6 +86,8 @@ Phase 4 提供 standalone `test:e2e:chatgpt:phase4`，而主 `test:e2e:chatgpt` 
 11. ChatGPT 图片生成。
 12. Page 回收后重新打开原 Conversation URL。
 
+Phase 6 设计已锁定更具体的附件验收门槛，但实现命令尚不存在：先扩展 authenticated `inspect:chatgpt` 证明 attachment input / owned preview / upload readiness contract，再新增 standalone Phase 6 real E2E。最终至少真实证明图片理解、PDF/TXT/DOCX/XLSX 唯一 fixture token、`/v1/files` `file_id` 与 direct data/base64 输入、same-key 附件 APPEND/RESTORE，以及至少一条附件 `stream=true`；文件名/preview 出现本身不算内容上传成功。完整设计见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+
 ## DOM 诊断
 
 Phase 3 已提供 `corepack pnpm inspect:chatgpt`。当前至少报告 URL、Auth State（认证状态）、Composer、Send Button、Assistant Turn collection 和 Stop Control 的结构化状态；后续附件 Phase 再把 File Input 纳入诊断 contract。
