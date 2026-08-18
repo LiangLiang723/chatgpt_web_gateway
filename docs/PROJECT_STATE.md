@@ -8,22 +8,22 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-6-design-complete
-STATUS=ready-for-phase-6-plan
+PHASE=phase-6-implementation
+STATUS=implementing-phase-6
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=write-phase-6-implementation-plan
-UPDATED_AT=2026-08-17
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
+NEXT_TASK=implement-phase-6-task-1-file-blob-lifecycle
+UPDATED_AT=2026-08-18
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 6 — 图片和文件输入设计已完成；代码实现尚未开始。
-- **当前状态：** `ready-for-phase-6-plan`。Phase 5 仍保持完整验收事实；Phase 6 已锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计已批准进入实施计划阶段，但尚未实现。
-- **Active Plan：** `none`。下一步先建立 Phase 6 implementation plan，再按 Task 进入 TDD 实现。
-- **下一个可执行任务：** 编写 Phase 6 图片和文件输入实施计划；计划建立前不把附件能力标为已实现。
+- **当前阶段：** Phase 6 — 图片和文件输入已进入实现阶段；公开附件能力仍未完成验收。
+- **当前状态：** `implementing-phase-6`。Governing Spec 已批准，详细实施计划已建立；当前从 File/Blob migration + FileService 开始按 TDD 执行。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
+- **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
+- **下一个可执行任务：** Task 1 — File/Blob migration + FileService；代码能力完成并通过真实网页验收前，附件/API 兼容状态继续保持未实现。
 - **最新确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；migration 仍仅 `001_initial` + `002_add_conversation_sync_checkpoint`。
 - **真实网页证据：** 2026-08-17 复用项目隔离已登录 Profile 与 `CHATGPT_PROXY_SERVER` 后，`inspect:chatgpt` 实际得到 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 返回 Chat Completions / Markdown / Responses / abort 全部 `true`；随后 combined `test:e2e:chatgpt` 返回 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 四项 Streaming 场景全部通过。
 
@@ -91,13 +91,13 @@ UPDATED_AT=2026-08-17
 
 ## Next Steps（下一步）
 
-1. 根据 Phase 6 Governing Spec 编写详细 implementation plan，并把它设为 Active Plan。
-2. 按计划从 File/Blob migration + FileService 开始 TDD，不跳过 Files API、Attachment Resolver、multimodal Context 与 Browser upload readiness 的独立验证闭环。
+1. 执行 Active Plan Task 1：File/Blob migration + FileService，严格红测试 → 最小实现 → 绿测试。
+2. 继续按计划完成 Files API、Attachment Resolver、multimodal Context、authenticated DOM inspection/Driver upload 与 Conversation lifecycle。
 3. 实现完成后运行 fresh deterministic、Docker 与独立登录 Profile authenticated real Phase 6 E2E；只有 image + PDF/TXT/DOCX/XLSX 等真实上传通过后才关闭 Phase 6。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
 
-- Phase 6 当前没有设计 blocker；下一工作是实施计划。具体 ChatGPT attachment input / preview / readiness Selector 仍必须在实施阶段先通过 authenticated `inspect:chatgpt` 实测，不能根据设计猜测。
+- Phase 6 当前没有已知实现 blocker；具体 ChatGPT attachment input / preview / readiness Selector 仍必须在 Task 5 先通过 authenticated `inspect:chatgpt` 实测，不能根据设计猜测。
 - ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
 - Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。
