@@ -1,4 +1,5 @@
-import type { CanonicalInstructions, CanonicalTextMessage } from '../context/types.js';
+import { serializeCanonicalCurrentUser, serializeCanonicalMessage } from '../context/multimodal.js';
+import type { CanonicalInstructions, CanonicalMessage } from '../context/types.js';
 
 const CONTEXT_PRELUDE = [
   'You are processing an API conversation through ChatGPT Web Gateway.',
@@ -15,26 +16,35 @@ const APPEND_PRELUDE = [
 
 export function buildContextPrompt(input: {
   instructions: CanonicalInstructions;
-  history: CanonicalTextMessage[];
-  currentUser: CanonicalTextMessage;
+  history: CanonicalMessage[];
+  currentUser: CanonicalMessage;
+  uploadFilenameByReference?: ReadonlyMap<string, string>;
 }): string {
   return (
     CONTEXT_PRELUDE +
     JSON.stringify({
       version: 1,
       instructions: input.instructions,
-      history: input.history,
-      current_user: { text: input.currentUser.text },
+      history: input.history.map((message) =>
+        serializeCanonicalMessage(message, input.uploadFilenameByReference),
+      ),
+      current_user: serializeCanonicalCurrentUser(
+        input.currentUser,
+        input.uploadFilenameByReference,
+      ),
     })
   );
 }
 
-export function buildAppendPrompt(currentUser: CanonicalTextMessage): string {
+export function buildAppendPrompt(
+  currentUser: CanonicalMessage,
+  uploadFilenameByReference?: ReadonlyMap<string, string>,
+): string {
   return (
     APPEND_PRELUDE +
     JSON.stringify({
       version: 1,
-      current_user: { text: currentUser.text },
+      current_user: serializeCanonicalCurrentUser(currentUser, uploadFilenameByReference),
     })
   );
 }

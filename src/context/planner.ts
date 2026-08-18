@@ -1,13 +1,14 @@
 import { fingerprintCanonical } from './fingerprint.js';
+import { fingerprintCanonicalMessage } from './multimodal.js';
 import type {
   CanonicalConversationRequest,
+  CanonicalMessage,
   CanonicalStoredConversation,
-  CanonicalTextMessage,
   ContextSyncPlan,
   RebuildReason,
 } from './types.js';
 
-function currentUser(request: CanonicalConversationRequest): CanonicalTextMessage {
+function currentUser(request: CanonicalConversationRequest): CanonicalMessage {
   const message = request.messages.at(-1);
   if (!message || message.role !== 'user') {
     throw new Error('Canonical Conversation request must end with a user message');
@@ -15,7 +16,7 @@ function currentUser(request: CanonicalConversationRequest): CanonicalTextMessag
   return message;
 }
 
-function requestHistory(request: CanonicalConversationRequest): CanonicalTextMessage[] {
+function requestHistory(request: CanonicalConversationRequest): CanonicalMessage[] {
   return request.messages.slice(0, -1);
 }
 
@@ -23,15 +24,21 @@ function sameCanonical(left: unknown, right: unknown): boolean {
   return fingerprintCanonical(left) === fingerprintCanonical(right);
 }
 
-function hasPrefix(
-  messages: readonly CanonicalTextMessage[],
-  prefix: readonly CanonicalTextMessage[],
-): boolean {
-  if (prefix.length > messages.length) return false;
-  return prefix.every((message, index) => sameCanonical(message, messages[index]));
+function sameMessage(left: CanonicalMessage, right: CanonicalMessage): boolean {
+  return fingerprintCanonicalMessage(left) === fingerprintCanonicalMessage(right);
 }
 
-function confirmedPrefix(stored: CanonicalStoredConversation): CanonicalTextMessage[] {
+function hasPrefix(
+  messages: readonly CanonicalMessage[],
+  prefix: readonly CanonicalMessage[],
+): boolean {
+  if (prefix.length > messages.length) return false;
+  return prefix.every((message, index) =>
+    sameMessage(message, messages[index] as CanonicalMessage),
+  );
+}
+
+function confirmedPrefix(stored: CanonicalStoredConversation): CanonicalMessage[] {
   return stored.messages.slice(0, stored.sync.syncedMessageCount);
 }
 
@@ -45,7 +52,7 @@ function fresh(request: CanonicalConversationRequest): ContextSyncPlan {
 
 function rebuild(
   reason: RebuildReason,
-  storedHistory: CanonicalTextMessage[],
+  storedHistory: CanonicalMessage[],
   request: CanonicalConversationRequest,
 ): ContextSyncPlan {
   return {

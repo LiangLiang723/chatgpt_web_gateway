@@ -18,6 +18,7 @@ import { canonicalizeInstructions, canonicalizeText } from '../context/canonical
 import { planContextSync } from '../context/planner.js';
 import type {
   CanonicalConversationRequest,
+  CanonicalMessage,
   CanonicalStoredConversation,
   CanonicalTextMessage,
   ContextSyncPlan,
@@ -123,7 +124,7 @@ function contextHistory(options: {
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
-}): CanonicalTextMessage[] {
+}): CanonicalMessage[] {
   if (options.plan.mode === 'FRESH' || options.plan.mode === 'REBUILD') {
     return options.plan.history;
   }
@@ -137,13 +138,22 @@ function authoritativeMessages(options: {
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
-}): CanonicalTextMessage[] {
+}): CanonicalMessage[] {
   if (options.plan.mode === 'FRESH' || options.plan.mode === 'REBUILD') {
     return [...options.plan.history, options.plan.currentUser];
   }
   if (options.canonicalRequest.mode === 'full') return options.canonicalRequest.messages;
   const confirmed = options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
   return [...confirmed, options.plan.currentUser];
+}
+
+function textOnlyMessages(messages: readonly CanonicalMessage[]): CanonicalTextMessage[] {
+  return messages.map((message) => {
+    if (!('text' in message)) {
+      throw new Error('Attachment persistence is not wired into the Conversation Engine yet');
+    }
+    return message;
+  });
 }
 
 async function preparePage(options: {
@@ -232,11 +242,13 @@ function buildFinalResult(options: {
       initial: options.initial,
       request: options.request,
     }),
-    authoritativeMessages: authoritativeMessages({
-      canonicalRequest: options.canonicalRequest,
-      plan: options.plan,
-      ...(options.stored === undefined ? {} : { stored: options.stored }),
-    }),
+    authoritativeMessages: textOnlyMessages(
+      authoritativeMessages({
+        canonicalRequest: options.canonicalRequest,
+        plan: options.plan,
+        ...(options.stored === undefined ? {} : { stored: options.stored }),
+      }),
+    ),
     assistantText: options.assistantText,
     conversationUrl: options.conversationUrl,
     completedAt: options.completedAt,

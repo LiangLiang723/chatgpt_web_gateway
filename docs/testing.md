@@ -22,7 +22,7 @@
 - `ConversationStore` aggregate validation 与同步事务边界。
 - Phase 3 Page Pool capacity/reuse/close、BrowserManager lifecycle、Selector Registry unique/collection/fallback/missing/ambiguous。
 - Auth Probe authenticated/auth_required/unknown、Driver turn ownership、completion stable sampling/timeout，以及 Phase 4 `openFresh` / `openConversation` / `sendText` 分离与安全 Conversation identity 校验。
-- Phase 4 `incremental | full` 分类、`FRESH | APPEND | RESTORE | REBUILD` 纯 Planner、`clean | in_flight` checkpoint、Phase 4 request/prompt boundary、同 key FIFO、Conversation Page affinity/idle+LRU eviction、Conversation Engine 原子成功/未知失败收敛语义。
+- Phase 4/6 `incremental | full` 分类、`FRESH | APPEND | RESTORE | REBUILD` 纯 Planner、`clean | in_flight` checkpoint、ordered multimodal canonical content/fingerprint、四-mode attachment upload selection、Context Envelope 敏感字段排除、同 key FIFO、Conversation Page affinity/idle+LRU eviction、Conversation Engine 原子成功/未知失败收敛语义。
 - Chat Completions / Responses 非流式文本 Encoder 与 stable Browser/Driver/API error mapping。
 - Chat Completions / Responses SSE Encoder（流式编码器，Phase 5 目标）。
 

@@ -339,35 +339,35 @@ Commit: `🔒 增加附件解析与 SSRF 安全边界`
 - `toCanonicalConversationRequest(request, resolvedAttachmentById)` accepts resolved file semantics; text-only calls remain source-compatible through an empty map/default helper.
 - `selectUploadAttachmentIds(plan, canonicalRequest)` returns ordered local attachment IDs needed for the chosen plan without adding a fifth planner mode.
 
-- [ ] **Step 1: Write failing canonical equivalence/order tests**
+- [x] **Step 1: Write failing canonical equivalence/order tests**
 
 Test same bytes from URL/Data URL/public file become equal canonical attachment parts when kind/filename/MIME match; different filename or image/file kind changes fingerprint; text/attachment order is preserved; attachment-only final user is valid; empty user remains invalid.
 
 Run: `corepack pnpm vitest run tests/unit/multimodal-context.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 2: Implement canonical multimodal conversion**
+- [x] **Step 2: Implement canonical multimodal conversion**
 
 Replace text-only message assumptions with ordered `content` parts and add helpers to extract normalized text only where prompt serialization needs it. Keep `canonicalizeText` and instruction behavior unchanged.
 
 Run multimodal tests.
 Expected: PASS.
 
-- [ ] **Step 3: Add failing planner/upload-set regression tests**
+- [x] **Step 3: Add failing planner/upload-set regression tests**
 
 Assert existing pure-text Phase 4 cases produce the same FRESH/APPEND/RESTORE/REBUILD results. Add attachment cases: APPEND/RESTORE current user IDs only; FRESH/REBUILD all effective history/current IDs; full-history attachment divergence causes REBUILD.
 
 Run: `corepack pnpm vitest run tests/unit/context-planner.test.ts tests/unit/multimodal-context.test.ts`
 Expected: FAIL on upload-set/canonical attachment behavior.
 
-- [ ] **Step 4: Update planner/prompt serialization minimally**
+- [x] **Step 4: Update planner/prompt serialization minimally**
 
 Planner continues comparing canonical messages through existing fingerprint. Context prompt serializes ordered content and attachment metadata `{kind, filename, upload_filename}` supplied by Conversation layer, never hash/file ID/path. Append prompt serializes only current user content.
 
 Run planner/multimodal and existing Phase 4 request-context tests.
 Expected: PASS.
 
-- [ ] **Step 5: Run full text-only Context regression and commit**
+- [x] **Step 5: Run full text-only Context regression and commit**
 
 Run: `corepack pnpm vitest run tests/unit/context-*.test.ts tests/unit/phase4-request*.test.ts tests/integration/conversation-engine.test.ts tests/integration/conversation-streaming.test.ts`
 Expected: PASS.
