@@ -10,13 +10,26 @@
 | `GET /v1/models` | ✅ | ✅ |
 | `POST /v1/chat/completions` | ✅ | ✅ 纯文本 |
 | `POST /v1/responses` | ✅ | ✅ 纯文本 |
-| `POST /v1/files` | ✅ | ❌ Phase 6 |
-| `GET /v1/files` | ✅ | ❌ Phase 6 |
-| `GET /v1/files/:id` | ✅ | ❌ Phase 6 |
-| `GET /v1/files/:id/content` | ✅ | ❌ Phase 6 |
-| `DELETE /v1/files/:id` | ✅ | ❌ Phase 6 |
+| `POST /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
+| `GET /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
+| `GET /v1/files/:id` | ✅ | ✅ Phase 6 local Files lifecycle |
+| `GET /v1/files/:id/content` | ✅ | ✅ Phase 6 local Files lifecycle |
+| `DELETE /v1/files/:id` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `POST /v1/images/generations` | ✅ | ❌ Phase 8 |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ | ❌ |
+
+## Current Phase 6 Files Foundation（当前 Phase 6 Files 基础）
+
+当前代码已经实现本地 `/v1/files` 生命周期，但**尚未把这些 File 送入 ChatGPT Web**：
+
+- 五个 Files endpoint 均沿用现有 `/v1/*` Bearer authentication。
+- `POST /v1/files` 使用 `@fastify/multipart` stream API；恰好一个 file + 一个已批准 purpose，拒绝 `expires_after`、额外字段、非法 filename 和超过 32 MiB 的文件。
+- 公开 `file-<uuid-v4>` 与 SQLite internal UUID 分离；private inline attachment File 不进入公开 Files API。
+- 逻辑 File 与 content-addressed SHA-256 Blob 分离；相同字节可有多个公开 File ID，但只保存一份 Blob。
+- `GET /v1/files` 支持 `after`、`limit=1..10000`、`order=asc|desc`、`purpose`；只返回未删除 public File。
+- metadata/content 可跨 Gateway runtime restart 恢复；content 从 Blob 流式返回，不暴露 storage path。
+- `DELETE` 立即撤销公开访问，并在没有 lease / persisted Attachment 引用时 GC logical File；Blob 只有零 logical references 才删除。
+- Task 2 fresh deterministic `corepack pnpm verify` 已通过；ChatGPT upload/readiness、multimodal Context 与 authenticated attachment E2E 仍属于后续 Phase 6 Task，因此 Chat Completions / Responses attachment input 仍是 ❌。
 
 ## Current Phase 5 Implementation（当前 Phase 5 实现）
 
@@ -89,6 +102,10 @@ Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conver
 | `chatgpt_generation_timeout` | 504 | target turn 未在超时内完成 |
 | `chatgpt_stream_diverged` | 502 | DOM 重写穿过已承诺的 Stable Prefix |
 | `conversation_restore_failed` | 502 | 保存的 Conversation 无法恢复 |
+| `file_not_found` | 404 | public File 不存在、已删除或不可公开访问 |
+| `invalid_file_upload` | 400 | multipart / filename / purpose / file body 无效 |
+| `file_too_large` | 413 | `/v1/files` 超过 Gateway 32 MiB 单文件上限 |
+| `file_storage_error` | 500 | Gateway 本地 Blob/File 持久化失败 |
 | `unsupported_phase5_request` | 501 | 请求需要附件/Tools/Structured/Image 等后续能力 |
 | `invalid_conversation_request` | 400 | 当前 Conversation 请求形状无效 |
 
@@ -104,6 +121,6 @@ chatgpt-web
 
 不伪装具体 OpenAI API 模型。
 
-## Files / Images Generation（后续目标）
+## Files / Images Generation（Files 当前状态 / Images 后续目标）
 
-文件元数据/字节生命周期属于 Phase 6；ChatGPT 图片生成属于 Phase 8。V1 已批准范围不等于当前实现。
+Files 元数据/字节生命周期已经在 Phase 6 Task 1/2 实现；附件 source resolve 与 ChatGPT Web 上传仍未实现，因此 Files endpoint 可用不代表 `file_id` 已能作为模型输入。ChatGPT 图片生成仍属于 Phase 8。V1 已批准范围不等于当前实现。

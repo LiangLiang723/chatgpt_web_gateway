@@ -90,6 +90,56 @@ export class BackendNotImplementedError extends GatewayError {
 }
 
 const executionErrorMap = {
+  file_not_found: {
+    statusCode: 404,
+    type: 'invalid_request_error',
+    message: 'File resource was not found',
+  },
+  invalid_file_upload: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The file upload request is invalid',
+  },
+  file_too_large: {
+    statusCode: 413,
+    type: 'invalid_request_error',
+    message: 'The file exceeds the Gateway upload limit',
+  },
+  invalid_attachment: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The attachment input is invalid',
+  },
+  attachment_too_large: {
+    statusCode: 413,
+    type: 'invalid_request_error',
+    message: 'The attachment input exceeds the Gateway limit',
+  },
+  attachment_fetch_failed: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The remote attachment could not be fetched safely',
+  },
+  chatgpt_upload_failed: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT rejected or failed the attachment upload',
+  },
+  chatgpt_upload_timeout: {
+    statusCode: 504,
+    type: 'server_error',
+    message: 'ChatGPT attachment upload did not become ready before the timeout',
+  },
+  file_storage_error: {
+    statusCode: 500,
+    type: 'server_error',
+    message: 'Gateway file storage failed',
+  },
+  unsupported_phase6_request: {
+    statusCode: 501,
+    type: 'server_error',
+    message: 'This request requires a capability not implemented in Phase 6',
+  },
   auth_required: {
     statusCode: 503,
     type: 'server_error',
@@ -178,6 +228,32 @@ function executionCodeFromUnknown(error: unknown): StableExecutionErrorCode | un
 }
 
 export function gatewayErrorFromExecution(error: unknown): GatewayError | undefined {
+  const rawCode =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+  if (rawCode === 'FST_REQ_FILE_TOO_LARGE') {
+    return new GatewayError({
+      message: 'The file exceeds the Gateway upload limit',
+      statusCode: 413,
+      type: 'invalid_request_error',
+      code: 'file_too_large',
+    });
+  }
+  if (
+    rawCode === 'FST_PARTS_LIMIT' ||
+    rawCode === 'FST_FILES_LIMIT' ||
+    rawCode === 'FST_FIELDS_LIMIT' ||
+    rawCode === 'FST_INVALID_MULTIPART_CONTENT_TYPE'
+  ) {
+    return new GatewayError({
+      message: 'The file upload request is invalid',
+      statusCode: 400,
+      type: 'invalid_request_error',
+      code: 'invalid_file_upload',
+    });
+  }
+
   const code = executionCodeFromUnknown(error);
   if (!code) return undefined;
   const mapped = executionErrorMap[code];

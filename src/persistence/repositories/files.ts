@@ -53,6 +53,13 @@ function mapRow(row: FileProjectionRow | undefined): FileRecord | undefined {
   };
 }
 
+export interface ListPublicFilesOptions {
+  limit: number;
+  order: 'asc' | 'desc';
+  purpose?: string;
+  after?: FileRecord;
+}
+
 export class FileRepository {
   constructor(private readonly database: DatabaseSync) {}
 
@@ -102,6 +109,36 @@ export class FileRepository {
     ).map((row) => mapRow(row) as FileRecord);
   }
 
+  listPublic(options: ListPublicFilesOptions): FileRecord[] {
+    const conditions = ['f.public_id IS NOT NULL', 'f.deleted_at IS NULL'];
+    const parameters: Array<string | number> = [];
+
+    if (options.purpose !== undefined) {
+      conditions.push('f.purpose = ?');
+      parameters.push(options.purpose);
+    }
+    if (options.after !== undefined) {
+      const comparison = options.order === 'asc' ? '>' : '<';
+      conditions.push(
+        `(f.created_at ${comparison} ? OR (f.created_at = ? AND f.id ${comparison} ?))`,
+      );
+      parameters.push(options.after.createdAt, options.after.createdAt, options.after.id);
+    }
+
+    parameters.push(options.limit);
+    const direction = options.order === 'asc' ? 'ASC' : 'DESC';
+    return (
+      this.database
+        .prepare(
+          `${FILE_PROJECTION}
+           WHERE ${conditions.join(' AND ')}
+           ORDER BY f.created_at ${direction}, f.id ${direction}
+           LIMIT ?`,
+        )
+        .all(...parameters) as unknown as FileProjectionRow[]
+    ).map((row) => mapRow(row) as FileRecord);
+  }
+
   listTombstoned(): FileRecord[] {
     return (
       this.database
@@ -116,6 +153,20 @@ export class FileRepository {
       .prepare('SELECT COUNT(*) AS count FROM files WHERE blob_id = ?')
       .get(blobId) as { count: number | bigint } | undefined;
     return Number(row?.count ?? 0);
+  }
+
+  promotePrivate(id: string, publicId: string, purpose: string, updatedAt: number): void {
+    assertUuidV4(id, 'File id');
+    const result = this.database
+      .prepare(
+        `UPDATE files
+         SET public_id = ?, purpose = ?, updated_at = ?
+         WHERE id = ? AND public_id IS NULL AND deleted_at IS NULL`,
+      )
+      .run(publicId, purpose, updatedAt, id);
+    if (Number(result.changes) !== 1) {
+      throw new Error('File is not an active private logical File');
+    }
   }
 
   markDeleted(id: string, deletedAt: number): void {

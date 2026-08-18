@@ -1,6 +1,6 @@
 import { randomUUID as defaultRandomUuid } from 'node:crypto';
 import { createHash } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, createReadStream } from 'node:fs';
 import { copyFile, mkdir, open, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -25,6 +25,23 @@ export interface CreatePublicFileInput extends CreateStoredFileInput {
 export interface FileLease {
   readonly file: FileRecord;
   release(): Promise<void>;
+}
+
+export interface ListPublicFilesInput {
+  after?: string;
+  limit: number;
+  order: 'asc' | 'desc';
+  purpose?: FilePurpose;
+}
+
+export interface PublicFilePage {
+  files: FileRecord[];
+  hasMore: boolean;
+}
+
+export interface PublicFileContent {
+  file: FileRecord;
+  stream: ReturnType<typeof createReadStream>;
 }
 
 export interface FileServiceOptions {
@@ -66,8 +83,62 @@ export class FileService {
     return this.createLogicalFile({ ...input, public: false });
   }
 
+  promotePrivateFile(id: string, purpose: FilePurpose): FileRecord {
+    const publicId = `file-${this.randomUuid()}`;
+    const updatedAt = this.now();
+    this.options.files.promotePrivate(id, publicId, purpose, updatedAt);
+    const file = this.options.files.getById(id);
+    if (!file) {
+      throw new AttachmentPipelineError('file_storage_error', 'File metadata became unavailable');
+    }
+    return file;
+  }
+
+  async discardPrivateFile(id: string): Promise<void> {
+    const file = this.options.files.getById(id);
+    if (!file || file.publicId !== undefined) return;
+    const deleted = this.options.fileLifecycleStore.deleteLogicalFile(id);
+    if (deleted.deletedBlob) await rm(deleted.deletedBlob.storagePath, { force: true });
+  }
+
   getPublicFile(publicId: string): FileRecord | undefined {
     return this.options.files.getByPublicId(publicId);
+  }
+
+  listPublicFiles(input: ListPublicFilesInput): PublicFilePage | undefined {
+    const after =
+      input.after === undefined ? undefined : this.options.files.getByPublicId(input.after);
+    if (input.after !== undefined && after === undefined) return undefined;
+    const records = this.options.files.listPublic({
+      limit: input.limit + 1,
+      order: input.order,
+      ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
+      ...(after === undefined ? {} : { after }),
+    });
+    return {
+      files: records.slice(0, input.limit),
+      hasMore: records.length > input.limit,
+    };
+  }
+
+  async openPublicContent(publicId: string): Promise<PublicFileContent> {
+    const file = this.options.files.getByPublicId(publicId);
+    if (!file) throw new AttachmentPipelineError('file_not_found', 'File resource was not found');
+    try {
+      const metadata = await stat(file.storagePath);
+      if (!metadata.isFile() || metadata.size !== file.sizeBytes) {
+        throw new AttachmentPipelineError(
+          'file_storage_error',
+          'Stored File bytes are unavailable',
+        );
+      }
+      return { file, stream: createReadStream(file.storagePath) };
+    } catch (error) {
+      if (error instanceof AttachmentPipelineError) throw error;
+      throw new AttachmentPipelineError('file_storage_error', 'Stored File bytes are unavailable', {
+        cause: error,
+      });
+    }
   }
 
   acquirePublicFile(publicId: string): FileLease {

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import type { FastifyInstance } from 'fastify';
 
+import { FileService } from './attachments/file-service.js';
 import {
   browserMaintenanceModeExecution,
   browserMaintenanceModeStreamingExecution,
@@ -43,6 +44,7 @@ export interface CreateGatewayRuntimeOptions {
 export interface GatewayRuntime {
   readonly app: FastifyInstance;
   readonly persistence: PersistenceContext;
+  readonly fileService: FileService;
   readonly browser?: BrowserManager;
   readonly pageRegistry?: ConversationPageRegistry;
   close(): Promise<void>;
@@ -55,6 +57,19 @@ export async function createGatewayRuntime(
     databasePath: join(options.config.dataDir, 'gateway.db'),
     ...(options.migrationsDir === undefined ? {} : { migrationsDir: options.migrationsDir }),
   });
+  const fileService = new FileService({
+    dataDir: options.config.dataDir,
+    attachments: persistence.attachments,
+    files: persistence.files,
+    fileBlobs: persistence.fileBlobs,
+    fileLifecycleStore: persistence.fileLifecycleStore,
+  });
+  try {
+    await fileService.cleanup();
+  } catch (error) {
+    persistence.close();
+    throw error;
+  }
 
   let browser: BrowserManager | undefined;
   let pageRegistry: ConversationPageRegistry | undefined;
@@ -117,6 +132,7 @@ export async function createGatewayRuntime(
       config: options.config,
       execute: execution.execute,
       stream: execution.stream,
+      fileService,
       logger: options.logger ?? false,
     });
   } catch (error) {
@@ -132,6 +148,7 @@ export async function createGatewayRuntime(
   return {
     app,
     persistence,
+    fileService,
     ...(browser === undefined ? {} : { browser }),
     ...(pageRegistry === undefined ? {} : { pageRegistry }),
     async close() {

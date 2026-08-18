@@ -35,7 +35,7 @@
 - Phase 3：POST route → Normalizer → injected/fake execution result → Chat Completions / Responses Encoder，全程不访问真实 ChatGPT。
 - Phase 4：Gateway runtime headless → BrowserManager → Conversation Queue → Page Registry → Conversation Engine → fake ChatGPT Driver → SQLite ConversationStore；maintenance 模式不启动产品 BrowserManager/Queue/Registry。
 - Phase 4：同 key HTTP 请求 FIFO、不同 key 可并行；full-history 与 single-user incremental APPEND 都不重发已确认前缀；close/recreate runtime 后 RESTORE 使用持久化 Conversation URL；post-checkpoint unknown failure 保持 `in_flight` 并在下一轮 REBUILD。
-- 文件元数据 + 文件系统。
+- Phase 6 Task 1/2：真实临时 SQLite + 文件系统 → migration 003 → SHA-256 Blob dedup → `/v1/files` multipart streaming create/list/retrieve/content/delete → close/reopen runtime → exact content recovery；private File 不进入公开 list，DELETE 保持历史 Attachment 引用边界。
 - Client abort（客户端断开）→ stop generation。
 
 ## E2E（端到端）
@@ -124,7 +124,7 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - 当前 Ubuntu x11vnc `0.9.16` 必须使用 `-threads`；真实故障复现表明默认单线程模式会持续高 CPU 且不发送 RFB banner。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
-- `schema_migrations` 包含且只包含当前两条 migration：`001_initial` 与 `002_add_conversation_sync_checkpoint`，checksum 与顺序均正确。
+- `schema_migrations` 包含且只包含当前三条 migration：`001_initial`、`002_add_conversation_sync_checkpoint` 与 `003_add_file_blob_lifecycle`，checksum 与顺序均正确。Phase 6 Task 8 必须把 Docker smoke 的旧两 migration 断言同步到这一当前产品事实。
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 - 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
 - maintenance overlay 存在且只存在一个 headed Google Chrome Stable owner；产品 BrowserManager 不并发占用同一 Profile。

@@ -188,12 +188,14 @@ Commit: `🗃️ 增加 Phase 6 File Blob 生命周期`
 - Produces all five `/v1/files` endpoints.
 - `buildServer` accepts optional `fileService?: FileService`; production runtime always injects it.
 
-- [ ] **Step 1: Add exact multipart dependency**
+- [x] **Step 1: Add exact multipart dependency**
 
 Run: `corepack pnpm add @fastify/multipart@10.1.0`
 Expected: package and lockfile update only; no unrelated dependency upgrades.
 
-- [ ] **Step 2: Write failing API tests for auth/create/object shape**
+Execution note: DevSpace forbids shell commands from editing project files, so `package.json` / `pnpm-lock.yaml` were updated through workspace edits and then `corepack pnpm install --frozen-lockfile --ignore-scripts` verified the exact lock plus pnpm supply-chain policy.
+
+- [x] **Step 2: Write failing API tests for auth/create/object shape**
 
 Use Fastify `app.inject()` with multipart payload and assert one file + `purpose=user_data` returns status 200 and:
 
@@ -213,35 +215,35 @@ Missing/duplicate file, invalid purpose, unexpected `expires_after`, unsafe file
 Run: `corepack pnpm vitest run tests/unit/files-api.test.ts`
 Expected: FAIL because Files routes are absent.
 
-- [ ] **Step 3: Implement create route using multipart stream**
+- [x] **Step 3: Implement create route using multipart stream**
 
 Register `@fastify/multipart` with `files: 1`, constrained field/part counts, and `fileSize = MAX_FILE_BYTES + 1` so FileService remains authoritative. Iterate request parts, require exactly one `file` and one `purpose`, consume the file stream directly through `FileService.createPublicFile`, and reject extra parts/fields. Encode timestamps in Unix seconds.
 
 Run unit API tests.
 Expected: create tests PASS.
 
-- [ ] **Step 4: Add failing list/retrieve/content/delete tests**
+- [x] **Step 4: Add failing list/retrieve/content/delete tests**
 
 Cover `after`, `limit`, `order`, `purpose`, private/deleted/unknown 404, exact content bytes, MIME fallback, safe Content-Disposition, and tombstone delete response.
 
 Run unit API tests.
 Expected: FAIL on unimplemented routes.
 
-- [ ] **Step 5: Implement list/retrieve/content/delete routes and stable errors**
+- [x] **Step 5: Implement list/retrieve/content/delete routes and stable errors**
 
 Add FileService methods/query plumbing and encode OpenAI-style list object with `first_id`, `last_id`, `has_more`. Content must stream from the Blob path through FileService, not expose the path. Map `file_not_found`, `invalid_file_upload`, `file_too_large`, `file_storage_error` in `src/api/errors.ts`.
 
 Run unit API tests.
 Expected: PASS.
 
-- [ ] **Step 6: Add and pass restart lifecycle integration**
+- [x] **Step 6: Add and pass restart lifecycle integration**
 
 `tests/integration/files-lifecycle.test.ts` must perform POST → metadata → list → content → close runtime → reopen same `DATA_DIR` → content → DELETE → 404, plus same bytes twice => distinct public IDs / one Blob.
 
 Run: `corepack pnpm vitest run tests/integration/files-lifecycle.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Run server/runtime regressions and commit**
+- [x] **Step 7: Run server/runtime regressions and commit**
 
 Run: `corepack pnpm vitest run tests/integration/gateway-runtime.test.ts tests/unit/api-errors.test.ts tests/unit/request-schemas.test.ts`
 Expected: PASS.

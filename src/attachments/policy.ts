@@ -19,3 +19,13 @@ export type FilePurpose = (typeof FILE_PURPOSES)[number];
 export function isFilePurpose(value: string): value is FilePurpose {
   return (FILE_PURPOSES as readonly string[]).includes(value);
 }
+
+export function isSafeLogicalFilename(value: string): boolean {
+  if (value.length === 0) return false;
+  if (value.includes('/') || value.includes('\\')) return false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)) return false;
+  }
+  return Buffer.byteLength(value, 'utf8') <= 255;
+}

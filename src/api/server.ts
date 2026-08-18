@@ -1,6 +1,9 @@
 import Fastify from 'fastify';
 import type { FastifyError } from 'fastify';
+import multipart from '@fastify/multipart';
 
+import type { FileService } from '../attachments/file-service.js';
+import { MAX_FILE_BYTES } from '../attachments/policy.js';
 import type { AppConfig } from '../config/index.js';
 import { authenticateBearer } from './auth.js';
 import {
@@ -16,6 +19,7 @@ import {
   type NormalizedStreamingExecutionHandler,
 } from './execution.js';
 import { registerChatCompletionsRoute } from './routes/chat-completions.js';
+import { registerFilesRoute } from './routes/files.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerModelsRoute } from './routes/models.js';
 import { registerResponsesRoute } from './routes/responses.js';
@@ -24,6 +28,7 @@ export interface BuildServerOptions {
   config: AppConfig;
   execute?: NormalizedExecutionHandler;
   stream?: NormalizedStreamingExecutionHandler;
+  fileService?: FileService;
   logger?: boolean;
 }
 
@@ -36,6 +41,16 @@ function validationErrorFromFastify(error: FastifyError): ValidationError | unde
 
 export function buildServer(options: BuildServerOptions) {
   const app = Fastify({ logger: options.logger ?? false });
+  app.register(multipart, {
+    preservePath: true,
+    throwFileSizeLimit: false,
+    limits: {
+      fileSize: MAX_FILE_BYTES + 1,
+      files: 1,
+      fields: 2,
+      parts: 3,
+    },
+  });
 
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/v1/')) {
@@ -69,6 +84,7 @@ export function buildServer(options: BuildServerOptions) {
 
   registerHealthRoute(app);
   registerModelsRoute(app);
+  if (options.fileService) registerFilesRoute(app, options.fileService);
   registerChatCompletionsRoute(app, execute, stream);
   registerResponsesRoute(app, execute, stream);
 
