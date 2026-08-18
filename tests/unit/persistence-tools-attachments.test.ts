@@ -158,16 +158,20 @@ describe('AttachmentRepository', () => {
     insertBaseConversation(context);
     context.database
       .prepare(
+        `INSERT INTO file_blobs (id, sha256, size_bytes, storage_path, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('98989898-9898-4989-8989-989898989898', 'abc123', 3, '/data/files/blobs/abc123', 1000);
+    context.database
+      .prepare(
         `INSERT INTO files
-         (id, filename, size_bytes, sha256, storage_path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, public_id, blob_id, filename, mime_type, purpose, deleted_at, created_at, updated_at)
+         VALUES (?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
       )
       .run(
         '99999999-9999-4999-8999-999999999999',
+        '98989898-9898-4989-8989-989898989898',
         'notes.txt',
-        3,
-        'abc123',
-        '/data/files/notes.txt',
         1000,
         1000,
       );

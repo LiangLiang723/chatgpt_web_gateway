@@ -98,21 +98,21 @@
 - Produces `FileService.createPublicFile(input)`, `createPrivateFile(input)`, `getPublicFile(publicId)`, `listPublicFiles(query)`, `openContent(publicId)`, `acquirePublicFile(publicId)`, `deletePublicFile(publicId)`, `cleanup()`.
 - `createPublicFile`/`createPrivateFile` accept a byte stream plus safe metadata and return a logical `FileRecord` only after the Blob is durably adopted.
 
-- [ ] **Step 1: Add failing migration tests for schema 003 and legacy duplicate-hash migration**
+- [x] **Step 1: Add failing migration tests for schema 003 and legacy duplicate-hash migration**
 
 Extend `tests/unit/persistence-migrations.test.ts` so a fresh DB expects `file_blobs`, `files.public_id/blob_id/purpose/deleted_at`, and exactly migrations `001`, `002`, `003`. Add a legacy fixture with two old `files` rows sharing SHA/size but different paths plus an Attachment FK; after migration both logical rows must reference one Blob and the Attachment must still point at its original internal File UUID. Add a conflicting same-SHA/different-size fixture that expects migration rollback.
 
 Run: `corepack pnpm vitest run tests/unit/persistence-migrations.test.ts`
 Expected: FAIL because migration `003` and the new schema do not exist.
 
-- [ ] **Step 2: Implement migration 003 minimally**
+- [x] **Step 2: Implement migration 003 minimally**
 
 Create `003_add_file_blob_lifecycle.sql` using SQLite table rebuild semantics: create `file_blobs`, create the target `files_new`, populate one Blob per SHA after rejecting same-SHA/different-size, populate logical Files preserving internal IDs, rebuild Attachment FK compatibility, then rename/index. Keep SQL deterministic because migration checksums are persisted.
 
 Run: `corepack pnpm vitest run tests/unit/persistence-migrations.test.ts`
 Expected: PASS.
 
-- [ ] **Step 3: Add failing repository projection tests**
+- [x] **Step 3: Add failing repository projection tests**
 
 Define desired rows in `tests/unit/persistence-file-blobs.test.ts` and update `tests/unit/persistence-files-images.test.ts` to assert:
 
@@ -131,14 +131,14 @@ expect(files.getById(file.id)).toMatchObject({
 Run both repository test files.
 Expected: FAIL because types/repositories still expose the Phase 2 schema.
 
-- [ ] **Step 4: Implement Blob/File repositories and projections**
+- [x] **Step 4: Implement Blob/File repositories and projections**
 
 Add `FileBlobRepository` with `insert`, `getById`, `getBySha256`, `countReferences`, `deleteById`. Refactor `FileRepository` to join `files f JOIN file_blobs b ON b.id=f.blob_id` and provide `insert`, `getById`, `getByPublicId`, `listPublic`, `markDeleted`, `deleteById`, `countByBlobId`. Wire `fileBlobs` into `PersistenceContext`.
 
 Run repository tests.
 Expected: PASS.
 
-- [ ] **Step 5: Add failing FileService tests for atomic store/dedup/lease/delete/GC**
+- [x] **Step 5: Add failing FileService tests for atomic store/dedup/lease/delete/GC**
 
 Tests use a real temp filesystem + SQLite and assert:
 
@@ -155,14 +155,14 @@ Also assert 32 MiB + 1 byte rejects `file_too_large`, a lease keeps tombstoned b
 Run: `corepack pnpm vitest run tests/unit/file-service.test.ts`
 Expected: FAIL because FileService does not exist.
 
-- [ ] **Step 6: Implement minimal FileService and centralized policy**
+- [x] **Step 6: Implement minimal FileService and centralized policy**
 
 `src/attachments/policy.ts` exports exact constants and accepted purpose set. `FileService` writes `${DATA_DIR}/temp/<uuid>.part`, updates `createHash('sha256')` and byte count per chunk, fsyncs/closes, atomically adopts `${DATA_DIR}/files/blobs/<sha>`, then inserts Blob/File metadata. Same-hash creation reuses the existing Blob after size verification. Lease counts live only in-process and are checked before deferred cleanup.
 
 Run: `corepack pnpm vitest run tests/unit/file-service.test.ts tests/unit/persistence-file-blobs.test.ts tests/unit/persistence-files-images.test.ts tests/unit/persistence-migrations.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Run affected persistence integration regression and commit**
+- [x] **Step 7: Run affected persistence integration regression and commit**
 
 Run: `corepack pnpm vitest run tests/integration/persistence-recovery.test.ts tests/unit/persistence-tools-attachments.test.ts`
 Expected: PASS.

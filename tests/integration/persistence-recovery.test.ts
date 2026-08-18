@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { DataIntegrityError } from '../../src/persistence/errors.js';
 import { createPersistenceContext } from '../../src/persistence/index.js';
-import type { ConversationAggregate, FileRecord } from '../../src/persistence/types.js';
+import type {
+  ConversationAggregate,
+  FileBlobRecord,
+  FileRecord,
+} from '../../src/persistence/types.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
 
 const resources: TempPersistencePaths[] = [];
@@ -23,18 +27,36 @@ const toolCallMessageId = '33333333-3333-4333-8333-333333333333';
 const toolResultMessageId = '44444444-4444-4444-8444-444444444444';
 const finalMessageId = '55555555-5555-4555-8555-555555555555';
 const fileId = '66666666-6666-4666-8666-666666666666';
+const fileBlobId = '12121212-1212-4121-8121-121212121212';
+const fileSha256 = 'f'.repeat(64);
+
+function fileBlobRecord(): FileBlobRecord {
+  return {
+    id: fileBlobId,
+    sizeBytes: 12,
+    sha256: fileSha256,
+    storagePath: `/data/files/blobs/${fileSha256}`,
+    createdAt: 800,
+  };
+}
 
 function fileRecord(): FileRecord {
   return {
     id: fileId,
+    blobId: fileBlobId,
     filename: 'notes.txt',
     mimeType: 'text/plain',
     sizeBytes: 12,
-    sha256: 'filehash',
-    storagePath: '/data/files/notes.txt',
+    sha256: fileSha256,
+    storagePath: `/data/files/blobs/${fileSha256}`,
     createdAt: 900,
     updatedAt: 900,
   };
+}
+
+function insertFile(context: ReturnType<typeof createPersistenceContext>): void {
+  context.fileBlobs.insert(fileBlobRecord());
+  context.files.insert(fileRecord());
 }
 
 function aggregate(): ConversationAggregate {
@@ -167,6 +189,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
+    first.fileBlobs.insert(fileBlobRecord());
     first.files.insert(expectedFile);
     first.conversationStore.save(expectedAggregate);
     first.close();
@@ -188,7 +211,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
-    first.files.insert(fileRecord());
+    insertFile(first);
     first.conversationStore.save(expectedAggregate);
     const before = first.conversationStore.loadById(conversationId)!;
 
@@ -223,7 +246,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
-    context.files.insert(fileRecord());
+    insertFile(context);
     const invalid = aggregate();
     invalid.conversation.sync = { status: 'clean', syncedMessageCount: 5 };
 
@@ -239,7 +262,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
-    context.files.insert(fileRecord());
+    insertFile(context);
     context.conversationStore.save(original);
 
     const invalid = aggregate();
@@ -259,7 +282,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
-    context.files.insert(fileRecord());
+    insertFile(context);
     const original = aggregate();
     context.conversationStore.save(original);
 
@@ -280,7 +303,7 @@ describe('Conversation persistence recovery', () => {
       databasePath: paths.databasePath,
       migrationsDir: paths.migrationsDir,
     });
-    context.files.insert(fileRecord());
+    insertFile(context);
     const original = aggregate();
     context.conversationStore.save(original);
 

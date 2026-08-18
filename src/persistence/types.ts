@@ -68,10 +68,22 @@ export interface AttachmentRecord {
   createdAt: number;
 }
 
+export interface FileBlobRecord {
+  id: string;
+  sha256: string;
+  sizeBytes: number;
+  storagePath: string;
+  createdAt: number;
+}
+
 export interface FileRecord {
   id: string;
+  publicId?: string;
+  blobId: string;
   filename: string;
   mimeType?: string;
+  purpose?: string;
+  deletedAt?: number;
   sizeBytes: number;
   sha256: string;
   storagePath: string;

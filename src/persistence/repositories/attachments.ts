@@ -73,6 +73,14 @@ export class AttachmentRepository {
     ).map(mapRow);
   }
 
+  countByFileId(fileId: string): number {
+    assertUuidV4(fileId, 'Attachment file id');
+    const row = this.database
+      .prepare('SELECT COUNT(*) AS count FROM attachments WHERE file_id = ?')
+      .get(fileId) as { count: number | bigint } | undefined;
+    return Number(row?.count ?? 0);
+  }
+
   deleteByConversation(conversationId: string): void {
     assertUuidV4(conversationId, 'Conversation id');
     this.database.prepare('DELETE FROM attachments WHERE conversation_id = ?').run(conversationId);

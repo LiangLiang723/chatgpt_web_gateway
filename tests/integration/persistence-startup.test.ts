@@ -39,6 +39,7 @@ describe('Gateway persistence startup', () => {
     ).toEqual([
       expect.objectContaining({ version: 1, name: 'initial' }),
       expect.objectContaining({ version: 2, name: 'add_conversation_sync_checkpoint' }),
+      expect.objectContaining({ version: 3, name: 'add_file_blob_lifecycle' }),
     ]);
 
     await runtime.close();

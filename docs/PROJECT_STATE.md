@@ -13,18 +13,19 @@ STATUS=implementing-phase-6
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=implement-phase-6-task-1-file-blob-lifecycle
+NEXT_TASK=implement-phase-6-task-2-files-http-api
 UPDATED_AT=2026-08-18
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 6 — 图片和文件输入已进入实现阶段；公开附件能力仍未完成验收。
-- **当前状态：** `implementing-phase-6`。Governing Spec 已批准，详细实施计划已建立；当前从 File/Blob migration + FileService 开始按 TDD 执行。
+- **当前状态：** `implementing-phase-6`。Active Plan Task 1 已完成：migration 003、Blob/File Repository、原子 FileService、SHA-256 物理去重、lease/tombstone/GC 已通过确定性测试；当前进入 Task 2 Files HTTP API。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
 - **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
-- **下一个可执行任务：** Task 1 — File/Blob migration + FileService；代码能力完成并通过真实网页验收前，附件/API 兼容状态继续保持未实现。
-- **最新确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；migration 仍仅 `001_initial` + `002_add_conversation_sync_checkpoint`。
+- **下一个可执行任务：** Task 2 — Files HTTP API；在五个 Files endpoint 和后续真实网页附件验收完成前，公开 API 兼容状态继续保持未实现。
+- **最新完整确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；这是 Phase 5 最终证据。
+- **Phase 6 Task 1 新鲜证据：** 2026-08-18 migration/FileService 改动后 fresh `corepack pnpm verify` 全绿：57 test files / 342 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 通过；migration history 代码现已新增 `003_add_file_blob_lifecycle`。Phase 6 Docker 与真实 ChatGPT E2E 尚未执行。
 - **真实网页证据：** 2026-08-17 复用项目隔离已登录 Profile 与 `CHATGPT_PROXY_SERVER` 后，`inspect:chatgpt` 实际得到 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 返回 Chat Completions / Markdown / Responses / abort 全部 `true`；随后 combined `test:e2e:chatgpt` 返回 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 四项 Streaming 场景全部通过。
 
 ## Implemented Now（当前已实现）
@@ -61,9 +62,12 @@ UPDATED_AT=2026-08-18
 - ✅ Phase 5 real E2E harness 使用真实 TCP listener 增量读取，已真实证明长回复首个 meaningful delta 早于 target completion marker、Chat Completions terminal/单 `[DONE]`、Markdown/代码块 multiline、Responses typed lifecycle/稳定 IDs/严格 sequence、`delta concat == live authoritative DOM == SQLite`，以及 client abort 后真实 Stop、`in_flight`、Page affinity discard 与 same-key REBUILD。
 - ✅ **Phase 5 authenticated real ChatGPT Streaming E2E 已于 2026-08-17 standalone 与 combined 两条命令真实通过，Phase 5 正式关闭。**
 
-### 后续未实现能力
+### Phase 6 实现中
 
-- ❌ 文件 / 图片实际解析、落盘和上传；`/v1/files` 产品闭环仍属于 Phase 6。
+- ✅ Task 1 storage foundation：`003_add_file_blob_lifecycle`、逻辑 File / 物理 Blob 分离、SHA-256 去重、原子 temp→Blob 写入、32 MiB File 上限、public/private File identity、进程内 lease、DELETE tombstone/deferred GC 与 orphan cleanup 已实现并通过确定性测试。
+- ❌ `/v1/files` HTTP 生命周期、URL/Data URL/Base64 Attachment Resolver、multimodal Context、ChatGPT 网页上传/readiness 与附件 real E2E 尚未实现/验收。
+
+### 后续未实现能力
 - ❌ Tool Calling Prompt / Parser / Tool Result 执行闭环。
 - ❌ ChatGPT 图片生成。
 - ❌ NAS 实机部署、备份/恢复和生产运维成熟化。
@@ -83,6 +87,7 @@ UPDATED_AT=2026-08-18
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-18：Phase 6 Task 1 完成：新增 migration 003，将 Phase 2 `files` 迁移为 logical File + content-addressed `file_blobs`，并实现原子 FileService、SHA-256 物理去重、public/private logical identity、lease/tombstone/deferred GC 与 orphan cleanup；full test 57 files / 342 tests 通过，下一步 Files HTTP API。
 - 2026-08-17：Phase 6 图片和文件输入设计完成。规格锁定 `/v1/files` 生命周期、逻辑 File/物理 SHA-256 Blob 分离、URL/Data URL/Base64/`file_id` 统一解析、SSRF/文件名/大小安全边界、ordered multimodal Context fingerprint、FRESH/REBUILD 全有效附件重传与 APPEND/RESTORE 当前附件上传、Browser upload ownership/readiness、DELETE 历史引用保留语义，以及 image + PDF/TXT/DOCX/XLSX authenticated real E2E 门槛；实现尚未开始。
 - 2026-08-17：Phase 5 authenticated real Streaming 验收在真实 DevSpace 完成。真实 DOM 暴露并通过 TDD 修复了 Fresh `/c/WEB:*` provisional route、APPEND 临时 Assistant placeholder、Markdown renderer 短尾回排、writing-block 多正文边界，以及 conversation-history rate-limit 通知 overlay；未扩展附件/Tool/Structured Output/image execution。
 - 2026-08-17：fresh `corepack pnpm verify` 通过 55 files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。authenticated `inspect:chatgpt`、standalone Phase 5 real E2E、combined Phase 3/4/5 real E2E 随后全部通过，Phase 5 正式关闭。
@@ -91,8 +96,8 @@ UPDATED_AT=2026-08-18
 
 ## Next Steps（下一步）
 
-1. 执行 Active Plan Task 1：File/Blob migration + FileService，严格红测试 → 最小实现 → 绿测试。
-2. 继续按计划完成 Files API、Attachment Resolver、multimodal Context、authenticated DOM inspection/Driver upload 与 Conversation lifecycle。
+1. 执行 Active Plan Task 2：Files HTTP API，继续严格红测试 → 最小实现 → 绿测试。
+2. 随后按计划完成 Attachment Resolver、multimodal Context、authenticated DOM inspection/Driver upload 与 Conversation lifecycle。
 3. 实现完成后运行 fresh deterministic、Docker 与独立登录 Profile authenticated real Phase 6 E2E；只有 image + PDF/TXT/DOCX/XLSX 等真实上传通过后才关闭 Phase 6。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
