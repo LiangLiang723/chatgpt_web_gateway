@@ -97,8 +97,31 @@ export class FileService {
   async discardPrivateFile(id: string): Promise<void> {
     const file = this.options.files.getById(id);
     if (!file || file.publicId !== undefined) return;
+    if ((this.leaseCounts.get(id) ?? 0) > 0) return;
+    if (this.options.attachments.countByFileId(id) > 0) return;
     const deleted = this.options.fileLifecycleStore.deleteLogicalFile(id);
     if (deleted.deletedBlob) await rm(deleted.deletedBlob.storagePath, { force: true });
+  }
+
+  async readFilePrefix(file: FileRecord, maxBytes: number): Promise<Buffer> {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+      throw new AttachmentPipelineError('file_storage_error', 'File read limit is invalid');
+    }
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      handle = await open(file.storagePath, 'r');
+      const length = Math.min(maxBytes, file.sizeBytes);
+      const buffer = Buffer.alloc(length);
+      const result = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, result.bytesRead);
+    } catch (error) {
+      if (error instanceof AttachmentPipelineError) throw error;
+      throw new AttachmentPipelineError('file_storage_error', 'Stored File bytes are unavailable', {
+        cause: error,
+      });
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
   }
 
   getPublicFile(publicId: string): FileRecord | undefined {

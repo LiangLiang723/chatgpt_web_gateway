@@ -13,7 +13,8 @@
 - Message canonicalization（消息规范化）与 fingerprint（指纹）。
 - Stable Prefix（稳定前缀）。
 - Tool Prompt / Tool Parser。
-- MIME（媒体类型）、Base64、URL 输入解析。
+- MIME（媒体类型）、strict Base64/Data URL、PNG/JPEG/WEBP/GIF signature sniff、URL 输入解析。
+- Phase 6 SSRF/DNS/redirect/pinned-address guard、16 attachment / 32 MiB single / 64 MiB request limits、filename policy、request staging hardlink/copy/cleanup。
 - 文件 SHA-256 去重。
 - OpenAI 错误映射。
 - SQLite PRAGMA、checksum migration、失败 migration rollback。

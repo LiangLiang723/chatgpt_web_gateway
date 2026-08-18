@@ -270,49 +270,49 @@ Commit: `✨ 实现 OpenAI 兼容 Files 生命周期`
 - Produces `AttachmentResolver.resolveAll(attachments, { requestId, signal })` returning a request-scoped handle with `resolved`, `stage(uploadIds)`, and `release()`.
 - Network transport/DNS are injectable so SSRF behavior is deterministic without relaxing production policy.
 
-- [ ] **Step 1: Write failing filename/image/Base64 tests**
+- [x] **Step 1: Write failing filename/image/Base64 tests**
 
 Assert filename rejects `/`, `\\`, NUL/control characters, empty names, and >255 UTF-8 bytes while accepting normal Unicode. Assert strict Base64 rejects bad alphabet/padding. Assert PNG/JPEG/WEBP/GIF signatures and MIME mismatch behavior.
 
 Run: `corepack pnpm vitest run tests/unit/attachment-policy.test.ts tests/unit/attachment-image.test.ts`
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 2: Implement filename and image parsers**
+- [x] **Step 2: Implement filename and image parsers**
 
 Implement byte-length-safe filename validation, strict Base64 decode with encoded-size precheck + decoded-size check, `data:image/<type>;base64,...` parser, and signature sniffing that returns canonical MIME + extension.
 
 Run the two tests.
 Expected: PASS.
 
-- [ ] **Step 3: Write failing URL/SSRF tests**
+- [x] **Step 3: Write failing URL/SSRF tests**
 
 Cover scheme/credential rejection, IPv4 loopback/private/link-local/CGNAT/multicast/unspecified, IPv6 loopback/ULA/link-local/multicast/unspecified, all DNS answers checked, redirect revalidation, >5 redirects, response streaming >32 MiB, and sanitized fetch errors that exclude query tokens.
 
 Run: `corepack pnpm vitest run tests/unit/attachment-network-policy.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 4: Implement production URL policy with injectable DNS/transport**
+- [x] **Step 4: Implement production URL policy with injectable DNS/transport**
 
 Parse URL, resolve all addresses, reject non-global ranges, pin the selected validated address through the transport boundary, re-run policy for each redirect, apply 10s connect/30s total timeout, and stream into FileService without trusting `Content-Length` alone.
 
 Run network policy tests.
 Expected: PASS.
 
-- [ ] **Step 5: Write failing resolver/staging tests**
+- [x] **Step 5: Write failing resolver/staging tests**
 
 Cover URL image, Data URL image, Base64 document with required filename, public `file_id`, deleted/missing file, `file_id` image sniff, max 16 attachments, total 64 MiB, dedup semantic reuse, deterministic duplicate upload filenames (`notes.txt`, `notes (2).txt`), hardlink fallback copy, and cleanup.
 
 Run: `corepack pnpm vitest run tests/unit/attachment-resolver.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 6: Implement resolver and staging**
+- [x] **Step 6: Implement resolver and staging**
 
 Resolve all external descriptors into FileService logical Files, acquire leases before returning, never persist raw source content, then stage only selected attachment IDs under `${DATA_DIR}/temp/attachments/<request-id>/...`. `release()` must remove staging and release all leases even after partial failure.
 
 Run resolver tests.
 Expected: PASS.
 
-- [ ] **Step 7: Run normalized-input regressions and commit**
+- [x] **Step 7: Run normalized-input regressions and commit**
 
 Run: `corepack pnpm vitest run tests/unit/chat-completions-normalizer.test.ts tests/unit/responses-normalizer.test.ts tests/unit/normalized-common.test.ts tests/unit/normalizer-parity.test.ts`
 Expected: PASS.
