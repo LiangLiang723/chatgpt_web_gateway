@@ -101,6 +101,79 @@ export const conversationHistoryRateLimitAcknowledgeSelector = {
   locate: (modal: Locator): Locator => modal.getByRole('button', { name: 'Got it', exact: true }),
 } as const;
 
+export const attachmentFileInputsSelector: SelectorDefinition<'collection'> = {
+  name: 'attachmentFileInputs',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'all-file-inputs',
+      locate: (page) => page.locator('input[type="file"]'),
+    },
+  ],
+};
+
+export const attachmentDiagnosticControlsSelector: SelectorDefinition<'collection'> = {
+  name: 'attachmentDiagnosticControls',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'attachment-diagnostic-controls',
+      locate: (page) => page.locator('button, [role="button"], [data-testid]'),
+    },
+  ],
+};
+
+export const attachmentDiagnosticStatesSelector: SelectorDefinition<'collection'> = {
+  name: 'attachmentDiagnosticStates',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'attachment-diagnostic-states',
+      locate: (page) =>
+        page.locator('[data-testid], [data-state], [data-status], [aria-busy], [aria-invalid]'),
+    },
+  ],
+};
+
+export const attachmentInputSelector: SelectorDefinition<'unique'> = {
+  name: 'attachmentInput',
+  cardinality: 'unique',
+  candidates: [
+    {
+      name: 'generic-file-input-without-accept',
+      locate: (page) => page.locator('input[type="file"]:not([accept])'),
+    },
+  ],
+};
+
+export const attachmentTilesSelector: SelectorDefinition<'collection'> = {
+  name: 'attachmentTiles',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'file-tile-remove-control',
+      locate: (page) => page.locator('[role="group"]:has(button[aria-label^="Remove file "])'),
+    },
+  ],
+};
+
+export const attachmentUploadAlertsSelector: SelectorDefinition<'collection'> = {
+  name: 'attachmentUploadAlerts',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'role-alert',
+      locate: (page) => page.locator('[role="alert"]'),
+    },
+  ],
+};
+
+export const attachmentTilePendingSelector = {
+  name: 'attachmentTilePending',
+  candidateName: 'cursor-wait-or-progress-circle',
+  locate: (tile: Locator): Locator => tile.locator('button.cursor-wait, circle'),
+} as const;
+
 export const stopControlSelector: SelectorDefinition<'unique'> = {
   name: 'stopControl',
   cardinality: 'unique',
@@ -137,6 +210,13 @@ export const chatGptSelectors = {
   assistantTurnCompletion: assistantTurnCompletionSelector,
   conversationHistoryRateLimitModal: conversationHistoryRateLimitModalSelector,
   conversationHistoryRateLimitAcknowledge: conversationHistoryRateLimitAcknowledgeSelector,
+  attachmentFileInputs: attachmentFileInputsSelector,
+  attachmentDiagnosticControls: attachmentDiagnosticControlsSelector,
+  attachmentDiagnosticStates: attachmentDiagnosticStatesSelector,
+  attachmentInput: attachmentInputSelector,
+  attachmentTiles: attachmentTilesSelector,
+  attachmentUploadAlerts: attachmentUploadAlertsSelector,
+  attachmentTilePending: attachmentTilePendingSelector,
   stopControl: stopControlSelector,
   thinkingIndicators: thinkingIndicatorsSelector,
 } as const;

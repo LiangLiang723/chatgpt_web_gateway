@@ -1,0 +1,2 @@
+CHATGPT_WEB_GATEWAY_PHASE6_INSPECT_FIXTURE_20260818
+This file contains only synthetic diagnostic text for attachment DOM inspection.

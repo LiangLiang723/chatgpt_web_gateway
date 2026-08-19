@@ -56,7 +56,7 @@
 
 状态：**实现中**。Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)，Active Plan 见 [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。
 
-Task 1/2/3/4 已实现：migration 003、logical File / SHA-256 physical Blob、`/v1/files` 五接口、URL/Data URL/Base64/`file_id` Attachment Resolver/security/staging，以及 ordered multimodal canonical Context 与 FRESH/APPEND/RESTORE/REBUILD upload selection。ChatGPT upload readiness、Conversation attachment lifecycle 与 authenticated real E2E 仍未完成。
+Task 1/2/3/4/5 已实现：migration 003、logical File / SHA-256 physical Blob、`/v1/files` 五接口、URL/Data URL/Base64/`file_id` Attachment Resolver/security/staging、ordered multimodal canonical Context 与 FRESH/APPEND/RESTORE/REBUILD upload selection，以及经过 authenticated DOM inspection 锁定的 ChatGPT upload ownership/readiness Driver。Conversation attachment lifecycle 与模型内容理解的 authenticated real E2E 仍未完成。
 
 交付：`/v1/files` 生命周期、URL/Base64 图片、Base64 文件、`file_id`、SHA-256、ChatGPT upload readiness（上传就绪）检测。
 

@@ -393,41 +393,41 @@ Commit: `♻️ 扩展 Conversation 多模态上下文模型`
 - `inspect:chatgpt` report adds attachment trigger/input multiplicity and preview/readiness diagnostic facts.
 - Driver errors add `chatgpt_upload_failed` and `chatgpt_upload_timeout`.
 
-- [ ] **Step 1: Write failing inspection-contract tests without guessing selectors**
+- [x] **Step 1: Write failing inspection-contract tests without guessing selectors**
 
 Extend inspect result shape to require fields for file input presence/count/multiple support and attachment preview diagnostics. Unit tests use fake selector-registry results; production diagnostics may additionally enumerate safe `input[type=file]` metadata to discover candidates but must not expose user file content.
 
 Run: `corepack pnpm vitest run tests/unit/chatgpt-inspect.test.ts`
 Expected: FAIL because the result shape lacks attachment diagnostics.
 
-- [ ] **Step 2: Implement diagnostic-only attachment discovery and run deterministic tests**
+- [x] **Step 2: Implement diagnostic-only attachment discovery and run deterministic tests**
 
 Add inspection fields while keeping selector registration optional until real inspection proves a stable candidate. Do not add upload behavior yet.
 
 Run inspection unit tests.
 Expected: PASS.
 
-- [ ] **Step 3: Run fresh authenticated DOM inspection**
+- [x] **Step 3: Run fresh authenticated DOM inspection**
 
 Use the existing isolated E2E profile and configured ChatGPT proxy. Run `corepack pnpm inspect:chatgpt` with explicit `CHATGPT_PROFILE_DIR`/`CHATGPT_PROXY_SERVER` and capture whether attachment input, `multiple`, preview items, pending/ready/error signals are observable.
 
 Expected: `auth=authenticated`, `composer=unique`, and a deterministic attachment contract. If no reliable readiness contract exists, mark Task 5 `[!]`, record the blocker in `PROJECT_STATE`, and do not invent sleeps/selectors.
 
-- [ ] **Step 4: Lock only inspected selectors and write failing Driver ownership tests**
+- [x] **Step 4: Lock only inspected selectors and write failing Driver ownership tests**
 
 After Step 3 evidence, add exact stable candidates to `src/chatgpt/selectors.ts`. In `tests/unit/chatgpt-upload.test.ts`, fake Page/Locator behavior must assert: baseline existing previews are ignored; exactly N new owned previews must appear; all must reach ready; one owned error maps `chatgpt_upload_failed`; timeout maps `chatgpt_upload_timeout`; abort interrupts readiness; Send is never clicked before all owned uploads are ready.
 
 Run: `corepack pnpm vitest run tests/unit/chatgpt-upload.test.ts`
 Expected: FAIL because Driver has no attachment upload path.
 
-- [ ] **Step 5: Implement prepared upload path in Driver**
+- [x] **Step 5: Implement prepared upload path in Driver**
 
 Order: abort check → Assistant baseline → attachment baseline → `setInputFiles()` with staged paths → wait exact owned items ready → fill prompt → re-check ownership/readiness → Send → existing target-turn observer. Reuse existing selector ambiguity semantics and AbortSignal at every await boundary.
 
 Run: `corepack pnpm vitest run tests/unit/chatgpt-upload.test.ts tests/unit/chatgpt-driver.test.ts tests/unit/chatgpt-inspect.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit inspected Driver contract**
+- [x] **Step 6: Commit inspected Driver contract**
 
 Commit: `✨ 增加 ChatGPT 附件上传就绪检测`
 

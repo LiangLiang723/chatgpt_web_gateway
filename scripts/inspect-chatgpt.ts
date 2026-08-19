@@ -13,6 +13,7 @@ try {
   try {
     const result = await inspectChatGptPage(lease.page, {
       ...(options.diagnosticsDir ? { diagnosticsDir: options.diagnosticsDir } : {}),
+      ...(options.attachmentProbePath ? { attachmentProbePath: options.attachmentProbePath } : {}),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } finally {

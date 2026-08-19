@@ -5,8 +5,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { inspectChatGptPage, parseInspectEnvironment } from '../../src/chatgpt/inspect.js';
 
-function fakeLocator(count = 0): Locator {
-  return { count: async () => count } as unknown as Locator;
+function fakeLocator(count = 0, rows: unknown[] = []): Locator {
+  return {
+    count: async () => count,
+    evaluateAll: async () => rows,
+    setInputFiles: vi.fn(async () => undefined),
+  } as unknown as Locator;
 }
 
 function fakePage(
@@ -16,7 +20,39 @@ function fakePage(
   return {
     goto: vi.fn(async () => undefined),
     url: () => 'https://chatgpt.com/',
-    locator: () => fakeLocator(0),
+    locator: (selector: string) => {
+      if (selector === 'input[type="file"]') {
+        return fakeLocator(1, [
+          {
+            tag: 'INPUT',
+            testId: 'file-upload',
+            name: null,
+            accept: 'image/*,.pdf',
+            className: 'attachment-input',
+            multiple: true,
+            disabled: false,
+          },
+        ]);
+      }
+      if (selector === 'button, [role="button"], [data-testid]') {
+        return fakeLocator(1, [
+          {
+            tag: 'BUTTON',
+            className: 'attachment-control',
+            testId: 'composer-plus-btn',
+            ariaLabel: 'Add files and more',
+            role: null,
+            dataState: null,
+            dataStatus: null,
+            ariaBusy: null,
+            ariaInvalid: null,
+            title: null,
+            disabled: false,
+          },
+        ]);
+      }
+      return fakeLocator(0);
+    },
     getByRole: () => fakeLocator(0),
     screenshot,
     content,
@@ -34,17 +70,21 @@ describe('inspect:chatgpt safety', () => {
     ).toThrow(/e2e_profile_must_be_isolated/);
   });
 
-  it('normalizes an explicit isolated Profile and optional diagnostics directory', () => {
+  it('normalizes an explicit isolated Profile and optional diagnostics/probe paths', () => {
     expect(
       parseInspectEnvironment({
         DATA_DIR: '/data',
         CHATGPT_PROFILE_DIR: './e2e-browser-profile',
         CHATGPT_DIAGNOSTICS_DIR: './chatgpt-diagnostics',
+        CHATGPT_ATTACHMENT_PROBE_PATH: './tests/fixtures/phase6-inspect-upload.txt',
         CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
+      } as Parameters<typeof parseInspectEnvironment>[0] & {
+        CHATGPT_ATTACHMENT_PROBE_PATH: string;
       }),
     ).toEqual({
       profileDir: resolve('./e2e-browser-profile'),
       diagnosticsDir: resolve('./chatgpt-diagnostics'),
+      attachmentProbePath: resolve('./tests/fixtures/phase6-inspect-upload.txt'),
       proxyServer: 'http://proxy.example:7890',
     });
   });
@@ -59,6 +99,32 @@ describe('inspect:chatgpt safety', () => {
     ).resolves.toMatchObject({
       url: 'https://chatgpt.com/',
       auth: 'unknown',
+      attachments: {
+        fileInputs: {
+          status: 'unique',
+          count: 1,
+          items: [
+            {
+              tag: 'INPUT',
+              testId: 'file-upload',
+              accept: 'image/*,.pdf',
+              className: 'attachment-input',
+              multiple: true,
+              disabled: false,
+            },
+          ],
+        },
+        candidateControls: [
+          {
+            tag: 'BUTTON',
+            className: 'attachment-control',
+            testId: 'composer-plus-btn',
+            ariaLabel: 'Add files and more',
+            disabled: false,
+          },
+        ],
+        candidateStates: [],
+      },
     });
     expect(screenshot).not.toHaveBeenCalled();
     expect(content).not.toHaveBeenCalled();

@@ -17,9 +17,17 @@ export type ChatGptTextTarget =
   | { kind: 'current'; conversationUrl: string }
   | { kind: 'restore'; conversationUrl: string };
 
+export interface ChatGptPreparedUpload {
+  localAttachmentId: string;
+  kind: 'image' | 'file';
+  path: string;
+  displayFilename: string;
+}
+
 export interface ChatGptTextRequest {
   prompt: string;
   signal?: AbortSignal;
+  attachments?: readonly ChatGptPreparedUpload[];
   /** @deprecated Navigation is performed by openFresh/openConversation; retained until legacy executor removal. */
   target?: ChatGptTextTarget;
 }
@@ -56,6 +64,10 @@ export interface CreateChatGptDriverOptions {
   navigationTimeoutMs?: number;
   stopPollIntervalMs?: number;
   stopTimeoutMs?: number;
+  uploadPollIntervalMs?: number;
+  uploadTimeoutMs?: number;
+  uploadNow?: () => number;
+  uploadSleep?: (ms: number) => Promise<void>;
 }
 
 export function createChatGptDriver(
@@ -69,6 +81,12 @@ export function createChatGptDriver(
   const navigationTimeoutMs = options.navigationTimeoutMs ?? 60_000;
   const stopPollIntervalMs = options.stopPollIntervalMs ?? 100;
   const stopTimeoutMs = options.stopTimeoutMs ?? 5_000;
+  const uploadPollIntervalMs = options.uploadPollIntervalMs ?? 100;
+  const uploadTimeoutMs = options.uploadTimeoutMs ?? 60_000;
+  const uploadNow = options.uploadNow ?? Date.now;
+  const uploadSleep =
+    options.uploadSleep ??
+    ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   const ensureReady = async (page: Page): Promise<void> => {
     const auth = await authProbe(page);
@@ -137,6 +155,70 @@ export function createChatGptDriver(
     return conversationUrl.href;
   };
 
+  const inspectOwnedAttachmentState = async (options: {
+    tiles: Awaited<ReturnType<typeof inspectCollection>>;
+    alerts: Awaited<ReturnType<typeof inspectCollection>>;
+    baselineTiles: number;
+    baselineAlerts: number;
+    expectedOwned: number;
+    throwIfAborted: () => void;
+  }): Promise<'pending' | 'ready'> => {
+    const alertCount = await options.alerts.locator.count();
+    options.throwIfAborted();
+    if (alertCount > options.baselineAlerts) {
+      throw new ChatGptDriverError({
+        code: 'chatgpt_upload_failed',
+        message: 'ChatGPT reported an attachment upload error',
+        selectorName: chatGptSelectors.attachmentUploadAlerts.name,
+      });
+    }
+
+    const tileCount = await options.tiles.locator.count();
+    options.throwIfAborted();
+    const expectedTotal = options.baselineTiles + options.expectedOwned;
+    if (tileCount < options.baselineTiles || tileCount > expectedTotal) {
+      throw new ChatGptDriverError({
+        code: 'chatgpt_upload_failed',
+        message: 'ChatGPT attachment preview ownership changed unexpectedly',
+        selectorName: chatGptSelectors.attachmentTiles.name,
+      });
+    }
+    if (tileCount < expectedTotal) return 'pending';
+
+    for (let index = options.baselineTiles; index < expectedTotal; index += 1) {
+      const tile = options.tiles.locator.nth(index);
+      const pending = chatGptSelectors.attachmentTilePending.locate(tile);
+      const pendingCount = await pending.count();
+      options.throwIfAborted();
+      if (pendingCount > 0) return 'pending';
+    }
+    return 'ready';
+  };
+
+  const waitForAttachmentsReady = async (options: {
+    tiles: Awaited<ReturnType<typeof inspectCollection>>;
+    alerts: Awaited<ReturnType<typeof inspectCollection>>;
+    baselineTiles: number;
+    baselineAlerts: number;
+    expectedOwned: number;
+    throwIfAborted: () => void;
+  }): Promise<void> => {
+    const startedAt = uploadNow();
+    while (true) {
+      const state = await inspectOwnedAttachmentState(options);
+      if (state === 'ready') return;
+      if (uploadNow() - startedAt >= uploadTimeoutMs) {
+        throw new ChatGptDriverError({
+          code: 'chatgpt_upload_timeout',
+          message: 'ChatGPT attachment upload did not become ready before the timeout',
+          selectorName: chatGptSelectors.attachmentTiles.name,
+        });
+      }
+      await uploadSleep(uploadPollIntervalMs);
+      options.throwIfAborted();
+    }
+  };
+
   const startText = async (page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn> => {
     const throwIfAborted = () => {
       if (request.signal?.aborted) throw new TextStreamAbortedError();
@@ -149,12 +231,69 @@ export function createChatGptDriver(
       const assistantTurns = await inspectCollectionSelector(page, chatGptSelectors.assistantTurns);
       throwIfAborted();
       const baseline = assistantTurns.count;
+      const attachments = request.attachments ?? [];
+      let attachmentState:
+        | {
+            tiles: Awaited<ReturnType<typeof inspectCollection>>;
+            alerts: Awaited<ReturnType<typeof inspectCollection>>;
+            baselineTiles: number;
+            baselineAlerts: number;
+            expectedOwned: number;
+            throwIfAborted: () => void;
+          }
+        | undefined;
+
+      if (attachments.length > 0) {
+        const tiles = await inspectCollectionSelector(page, chatGptSelectors.attachmentTiles);
+        throwIfAborted();
+        const alerts = await inspectCollectionSelector(
+          page,
+          chatGptSelectors.attachmentUploadAlerts,
+        );
+        throwIfAborted();
+        const attachmentInput = await resolveUniqueSelector(page, chatGptSelectors.attachmentInput);
+        throwIfAborted();
+        try {
+          await attachmentInput.locator.setInputFiles(
+            attachments.map((attachment) => attachment.path),
+          );
+        } catch (error) {
+          throw new ChatGptDriverError({
+            code: 'chatgpt_upload_failed',
+            message: 'ChatGPT attachment input rejected the prepared upload',
+            selectorName: chatGptSelectors.attachmentInput.name,
+            cause: error,
+          });
+        }
+        throwIfAborted();
+        attachmentState = {
+          tiles,
+          alerts,
+          baselineTiles: tiles.count,
+          baselineAlerts: alerts.count,
+          expectedOwned: attachments.length,
+          throwIfAborted,
+        };
+        await waitForAttachmentsReady(attachmentState);
+        throwIfAborted();
+      }
+
       const composer = await resolveUniqueSelector(page, chatGptSelectors.composer);
       throwIfAborted();
       await composer.locator.fill(request.prompt);
       throwIfAborted();
       await dismissConversationHistoryRateLimitModal(page);
       throwIfAborted();
+      if (attachmentState !== undefined) {
+        const state = await inspectOwnedAttachmentState(attachmentState);
+        if (state !== 'ready') {
+          throw new ChatGptDriverError({
+            code: 'chatgpt_upload_failed',
+            message: 'ChatGPT attachment readiness changed before Send',
+            selectorName: chatGptSelectors.attachmentTiles.name,
+          });
+        }
+      }
       const sendButton = await resolveUniqueSelector(page, chatGptSelectors.sendButton);
       throwIfAborted();
       await sendButton.locator.click();
