@@ -127,7 +127,9 @@ Phase 1 起 Docker 是正式运行边界，因此除普通 Unit / Integration �
 - 当前 Ubuntu x11vnc `0.9.16` 必须使用 `-threads`；真实故障复现表明默认单线程模式会持续高 CPU 且不发送 RFB banner。
 - noVNC 密码不出现在进程命令行参数中。
 - `/data/gateway.db` 由指定 `PUID/PGID` 创建并可持续读取/写入。
-- `schema_migrations` 包含且只包含当前三条 migration：`001_initial`、`002_add_conversation_sync_checkpoint` 与 `003_add_file_blob_lifecycle`，checksum 与顺序均正确。Phase 6 Task 8 必须把 Docker smoke 的旧两 migration 断言同步到这一当前产品事实。
+- `schema_migrations` 包含且只包含当前三条 migration：`001_initial`、`002_add_conversation_sync_checkpoint` 与 `003_add_file_blob_lifecycle`，checksum 与顺序均正确。
+- `/data/files/blobs` 与 `/data/temp` 在容器内由指定 `PUID/PGID` Gateway 可写；File/Blob bytes 不依赖容器可写层。
+- 通过容器 HTTP `/v1/files` 上传 fixture 后 metadata/content 可读；使用同一 Bind Mount restart Gateway 后 exact bytes 可恢复；DELETE 后 metadata/content 均返回 404。
 - 使用同一 Bind Mount restart Gateway 后数据库和 migration history 仍可用。
 - 正常 `UI_MODE=headless` Compose 存在且只存在一个 `/data/browser-profile/` full Chromium browser owner，命令行不得带 `--headless`，并以指定 `PUID/PGID` 运行。
 - maintenance overlay 存在且只存在一个 headed Google Chrome Stable owner；产品 BrowserManager 不并发占用同一 Profile。
@@ -169,4 +171,8 @@ corepack pnpm docker:smoke
 
 ### Phase 5 Docker 验收事实
 
-2026-08-17 最终产品代码 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 实际通过，最终镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`。Smoke 的产品断言覆盖 normal/maintenance single owner、SQLite migrations/restart、PUID/PGID、Chrome sandbox/seccomp 与 noVNC RFB；migration 仍仅 `001_initial` 与 `002_add_conversation_sync_checkpoint`。此前 hosted runner 的临时 bind mount cleanup 修复仍只作用于 smoke 清理，不改变产品容器运行身份。
+2026-08-17 最终 Phase 5 产品代码 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 实际通过，最终镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`。这是 Phase 5 历史证据，不代表当前 Phase 6 镜像。
+
+### Phase 6 Docker 验收事实
+
+2026-08-19 Task 8 fresh `linux/amd64` Docker build 实际通过，镜像 digest 为 `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；随后完整 `docker:smoke` 通过。Smoke 实际覆盖 migration `001/002/003`、`/data/files/blobs` 与 `/data/temp` PUID/PGID writeability、容器 `/v1/files` upload/metadata/content、same Bind Mount restart 后 exact bytes recovery、DELETE 后 public metadata/content 404，以及既有 normal/maintenance single owner、SQLite restart、Chrome sandbox/seccomp 与 noVNC RFB。Docker smoke 仍不访问真实 ChatGPT，因此不证明模型能读取附件。

@@ -541,18 +541,18 @@ Commit: `🧪 完成 Phase 6 确定性附件验收`
 **Interfaces:**
 - Docker smoke remains deterministic and does not access real ChatGPT.
 
-- [ ] **Step 1: Add smoke assertions for migration 003 and File directories**
+- [x] **Step 1: Add smoke assertions for migration 003 and File directories**
 
 Require migration history exactly `001`, `002`, `003`; verify `/data/files/blobs` and `/data/temp` are writable by configured PUID/PGID.
 
 Run the relevant smoke script against a fresh image after code exists.
 Expected before smoke implementation: existing assertions fail on old migration count.
 
-- [ ] **Step 2: Add Files lifecycle smoke**
+- [x] **Step 2: Add Files lifecycle smoke**
 
 Through the container HTTP API: upload a small multipart fixture, GET metadata/content, restart with same bind mount, GET exact content, DELETE, then verify public 404. Also retain all existing normal/maintenance single-owner, seccomp/sandbox, RFB, SQLite restart checks.
 
-- [ ] **Step 3: Fresh Docker build and smoke**
+- [x] **Step 3: Fresh Docker build and smoke**
 
 Run: `corepack pnpm docker:build`
 Expected: PASS on `linux/amd64`.
@@ -560,7 +560,7 @@ Expected: PASS on `linux/amd64`.
 Run: `corepack pnpm docker:smoke`
 Expected: PASS with migrations `001/002/003` and File persistence lifecycle.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit: `🐳 验证 Phase 6 文件持久化容器边界`
 

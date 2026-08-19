@@ -132,8 +132,16 @@ async function assertNovncRfbHandshake() {
   }
 }
 
+function gatewayApiUrl(pathname) {
+  return `http://127.0.0.1:${gatewayPort}${pathname}`;
+}
+
+function authenticatedHeaders() {
+  return { authorization: 'Bearer smoke-api-key' };
+}
+
 async function assertHttpContract() {
-  const modelsUrl = `http://127.0.0.1:${gatewayPort}/v1/models`;
+  const modelsUrl = gatewayApiUrl('/v1/models');
   const unauthenticated = await fetch(modelsUrl);
   if (unauthenticated.status !== 401) {
     throw new Error(
@@ -141,15 +149,86 @@ async function assertHttpContract() {
     );
   }
 
-  const authenticated = await fetch(modelsUrl, {
-    headers: { authorization: 'Bearer smoke-api-key' },
-  });
+  const authenticated = await fetch(modelsUrl, { headers: authenticatedHeaders() });
   if (authenticated.status !== 200) {
     throw new Error(`Expected authenticated /v1/models to return 200, got ${authenticated.status}`);
   }
   const body = await authenticated.json();
   if (body?.data?.[0]?.id !== 'chatgpt-web') {
     throw new Error('Authenticated /v1/models did not expose chatgpt-web');
+  }
+}
+
+const fileSmokeBytes = Buffer.from('PHASE6_DOCKER_FILE_TOKEN\n', 'utf8');
+
+async function createSmokeFile() {
+  const form = new FormData();
+  form.append('purpose', 'user_data');
+  form.append('file', new Blob([fileSmokeBytes], { type: 'text/plain' }), 'phase6-docker.txt');
+  const response = await fetch(gatewayApiUrl('/v1/files'), {
+    method: 'POST',
+    headers: authenticatedHeaders(),
+    body: form,
+  });
+  if (response.status !== 200) {
+    throw new Error(
+      `Expected /v1/files upload 200, got ${response.status}: ${await response.text()}`,
+    );
+  }
+  const body = await response.json();
+  if (
+    typeof body?.id !== 'string' ||
+    !body.id.startsWith('file-') ||
+    body.filename !== 'phase6-docker.txt' ||
+    body.purpose !== 'user_data' ||
+    body.bytes !== fileSmokeBytes.byteLength
+  ) {
+    throw new Error(`Unexpected /v1/files create object: ${JSON.stringify(body)}`);
+  }
+  return body.id;
+}
+
+async function assertSmokeFileContent(fileId) {
+  const metadata = await fetch(gatewayApiUrl(`/v1/files/${encodeURIComponent(fileId)}`), {
+    headers: authenticatedHeaders(),
+  });
+  if (metadata.status !== 200) {
+    throw new Error(`Expected File metadata 200 after restart, got ${metadata.status}`);
+  }
+
+  const content = await fetch(gatewayApiUrl(`/v1/files/${encodeURIComponent(fileId)}/content`), {
+    headers: authenticatedHeaders(),
+  });
+  if (content.status !== 200) {
+    throw new Error(`Expected File content 200, got ${content.status}`);
+  }
+  const bytes = Buffer.from(await content.arrayBuffer());
+  if (!bytes.equals(fileSmokeBytes)) {
+    throw new Error(`Docker File content mismatch: ${bytes.toString('utf8')}`);
+  }
+}
+
+async function deleteSmokeFile(fileId) {
+  const response = await fetch(gatewayApiUrl(`/v1/files/${encodeURIComponent(fileId)}`), {
+    method: 'DELETE',
+    headers: authenticatedHeaders(),
+  });
+  if (response.status !== 200) {
+    throw new Error(`Expected File DELETE 200, got ${response.status}: ${await response.text()}`);
+  }
+  const body = await response.json();
+  if (body?.id !== fileId || body?.deleted !== true) {
+    throw new Error(`Unexpected File DELETE response: ${JSON.stringify(body)}`);
+  }
+
+  for (const pathname of [
+    `/v1/files/${encodeURIComponent(fileId)}`,
+    `/v1/files/${encodeURIComponent(fileId)}/content`,
+  ]) {
+    const missing = await fetch(gatewayApiUrl(pathname), { headers: authenticatedHeaders() });
+    if (missing.status !== 404) {
+      throw new Error(`Expected deleted File ${pathname} to return 404, got ${missing.status}`);
+    }
   }
 }
 
@@ -187,6 +266,7 @@ function assertPersistence(id) {
   const expectedMigrations = [
     { version: 1, name: 'initial' },
     { version: 2, name: 'add_conversation_sync_checkpoint' },
+    { version: 3, name: 'add_file_blob_lifecycle' },
   ];
   if (JSON.stringify(persistenceState?.migrations) !== JSON.stringify(expectedMigrations)) {
     throw new Error(
@@ -228,7 +308,14 @@ function assertRuntimeIdentity(id) {
       id,
       'sh',
       '-lc',
-      'touch /data/.gateway-smoke-write && rm /data/.gateway-smoke-write',
+      [
+        'touch /data/.gateway-smoke-write',
+        'test -d /data/files/blobs',
+        'test -d /data/temp',
+        'touch /data/files/blobs/.gateway-smoke-write',
+        'touch /data/temp/.gateway-smoke-write',
+        'rm /data/.gateway-smoke-write /data/files/blobs/.gateway-smoke-write /data/temp/.gateway-smoke-write',
+      ].join(' && '),
     ],
     { quiet: true },
   );
@@ -404,6 +491,8 @@ async function main() {
     assertPersistence(baseId);
     assertBrowserMode(baseId, false);
     assertMaintenanceProcesses(baseId, false);
+    const fileId = await createSmokeFile();
+    await assertSmokeFileContent(fileId);
 
     runDocker(composeArgs(false, 'restart', 'gateway'));
     await waitForHealth();
@@ -412,6 +501,8 @@ async function main() {
     assertPersistence(baseId);
     assertBrowserMode(baseId, false);
     assertMaintenanceProcesses(baseId, false);
+    await assertSmokeFileContent(fileId);
+    await deleteSmokeFile(fileId);
   } finally {
     down(false);
   }
