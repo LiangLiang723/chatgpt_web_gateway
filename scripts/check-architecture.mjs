@@ -56,10 +56,24 @@ for (const file of sourceFiles(src)) {
     errors.push(`${relative} reads process.env directly; runtime configuration belongs in src/config/`);
   }
 
+  const imports = importsFrom(content);
   if (!relative.startsWith('src/persistence/')) {
-    for (const imported of importsFrom(content)) {
+    for (const imported of imports) {
       if (imported === 'node:sqlite') {
         errors.push(`${relative} imports node:sqlite; SQLite access belongs in src/persistence/`);
+      }
+    }
+  }
+
+  if (
+    relative === 'src/api/routes/files.ts' ||
+    relative === 'src/chatgpt/driver.ts'
+  ) {
+    for (const imported of imports) {
+      if (imported === 'node:fs' || imported === 'node:fs/promises') {
+        errors.push(
+          `${relative} imports ${imported}; File/Blob filesystem logic belongs in src/attachments/`,
+        );
       }
     }
   }

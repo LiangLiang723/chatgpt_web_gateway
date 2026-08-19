@@ -502,28 +502,28 @@ Commit: `✨ 接通 Conversation 附件执行生命周期`
 **Interfaces:**
 - Both Chat Completions and Responses must feed the same Resolver/Conversation Engine and differ only at protocol adapters/encoders.
 
-- [ ] **Step 1: Add failing HTTP integration matrix**
+- [x] **Step 1: Add failing HTTP integration matrix**
 
 Cover Chat Completions image URL/Data URL/file data/file_id and Responses input_image/input_file, each with non-stream and at least representative stream paths. Include same-key FIFO during slow resolve/upload, different-key parallel, invalid/deleted file pre-start error, post-start Driver upload error/no success terminal.
 
 Run targeted integration files.
 Expected: FAIL only for uncovered wiring/errors.
 
-- [ ] **Step 2: Make minimal protocol wiring/error corrections**
+- [x] **Step 2: Make minimal protocol wiring/error corrections**
 
 Do not duplicate attachment logic in routes. Extend Phase request validation so attachments are supported while Tools/structured/image output still produce `unsupported_phase6_request`.
 
 Run targeted integration matrix.
 Expected: PASS.
 
-- [ ] **Step 3: Add architecture-check assertions**
+- [x] **Step 3: Add architecture-check assertions**
 
 Make `scripts/check-architecture.mjs` fail if `attachments/` imports Playwright/`api/`/`chatgpt/`, `chatgpt/` imports persistence/FileRepository, or File/Blob filesystem logic appears in API routes/Driver. Preserve existing selector-definition-only-in-`selectors.ts` rule.
 
 Run: `node scripts/check-architecture.mjs`
 Expected: PASS after implementation boundaries comply.
 
-- [ ] **Step 4: Run deterministic full verify and commit**
+- [x] **Step 4: Run deterministic full verify and commit**
 
 Run: `corepack pnpm verify`
 Expected: all format/lint/typecheck/unit/integration/build/governance checks PASS.

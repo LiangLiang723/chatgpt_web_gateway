@@ -9,16 +9,18 @@ import type {
   CanonicalConversationRequest,
   CanonicalMessage,
 } from '../context/types.js';
-import { Phase4ExecutionError, Phase5ExecutionError } from './errors.js';
+import { Phase4ExecutionError, Phase5ExecutionError, Phase6ExecutionError } from './errors.js';
 
-type RequestPhase = 'phase4' | 'phase5';
+type RequestPhase = 'phase4' | 'phase5' | 'phase6';
 
 function unsupported(phase: RequestPhase, message: string): never {
+  if (phase === 'phase6') throw new Phase6ExecutionError('unsupported_phase6_request', message);
   if (phase === 'phase5') throw new Phase5ExecutionError('unsupported_phase5_request', message);
   throw new Phase4ExecutionError('unsupported_phase4_request', message);
 }
 
 function invalid(phase: RequestPhase, message: string): never {
+  if (phase === 'phase6') throw new Phase6ExecutionError('invalid_conversation_request', message);
   if (phase === 'phase5') throw new Phase5ExecutionError('invalid_conversation_request', message);
   throw new Phase4ExecutionError('invalid_conversation_request', message);
 }
@@ -120,7 +122,11 @@ export function toCanonicalConversationRequest(
   request: NormalizedRequest,
   resolvedAttachments?: ResolvedAttachmentSemanticMap,
 ): CanonicalConversationRequest {
-  return canonicalConversationRequest(request, 'phase4', resolvedAttachments);
+  return canonicalConversationRequest(
+    request,
+    resolvedAttachments === undefined ? 'phase4' : 'phase6',
+    resolvedAttachments,
+  );
 }
 
 export function toCanonicalStreamingConversationRequest(
@@ -133,5 +139,9 @@ export function toCanonicalStreamingConversationRequest(
       'Streaming execution requires output.stream=true',
     );
   }
-  return canonicalConversationRequest(request, 'phase5', resolvedAttachments);
+  return canonicalConversationRequest(
+    request,
+    resolvedAttachments === undefined ? 'phase5' : 'phase6',
+    resolvedAttachments,
+  );
 }

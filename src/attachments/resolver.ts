@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 
-import type { NormalizedAttachment } from '../api/normalized.js';
+import type { AttachmentDescriptor } from './types.js';
 import type { AttachmentRecord, AttachmentSourceRecord, FileRecord } from '../persistence/types.js';
 import { AttachmentPipelineError } from './errors.js';
 import type { FileLease, FileService } from './file-service.js';
@@ -96,7 +96,7 @@ export class AttachmentResolver {
   }
 
   async resolveAll(
-    attachments: readonly NormalizedAttachment[],
+    attachments: readonly AttachmentDescriptor[],
     request: { requestId: string; signal?: AbortSignal },
   ): Promise<ResolvedAttachmentHandle> {
     if (attachments.length > MAX_ATTACHMENTS_PER_REQUEST) {
@@ -172,7 +172,7 @@ export class AttachmentResolver {
   }
 
   private async resolveOne(
-    attachment: NormalizedAttachment,
+    attachment: AttachmentDescriptor,
     signal: AbortSignal | undefined,
     leases: FileLease[],
     privateFileIds: string[],
@@ -184,7 +184,7 @@ export class AttachmentResolver {
   }
 
   private async resolveImage(
-    attachment: Extract<NormalizedAttachment, { kind: 'image' }>,
+    attachment: Extract<AttachmentDescriptor, { kind: 'image' }>,
     signal: AbortSignal | undefined,
     leases: FileLease[],
     privateFileIds: string[],
@@ -247,7 +247,7 @@ export class AttachmentResolver {
   }
 
   private async resolveFile(
-    attachment: Extract<NormalizedAttachment, { kind: 'file' }>,
+    attachment: Extract<AttachmentDescriptor, { kind: 'file' }>,
     leases: FileLease[],
     privateFileIds: string[],
   ): Promise<ResolvedAttachment> {

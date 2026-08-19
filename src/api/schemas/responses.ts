@@ -68,7 +68,7 @@ const ResponsesMessageSchema = Type.Object(
       Type.Literal('user'),
       Type.Literal('assistant'),
     ]),
-    content: Type.Union([Type.String(), Type.Array(ResponsesContentPartSchema, { minItems: 1 })]),
+    content: Type.Union([Type.Array(ResponsesContentPartSchema, { minItems: 1 }), Type.String()]),
   },
   { additionalProperties: false },
 );
@@ -97,11 +97,11 @@ export const ResponsesRequestSchema = Type.Object(
     model: Type.String({ minLength: 1 }),
     instructions: Type.Optional(Type.String()),
     input: Type.Union([
-      Type.String(),
       Type.Array(
         Type.Union([ResponsesMessageSchema, FunctionCallInputSchema, FunctionCallOutputSchema]),
         { minItems: 1 },
       ),
+      Type.String(),
     ]),
     tools: Type.Optional(Type.Array(ResponsesFunctionToolSchema)),
     tool_choice: Type.Optional(ResponsesToolChoiceSchema),

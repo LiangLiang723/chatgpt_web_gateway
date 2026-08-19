@@ -6,6 +6,15 @@ const rules = [
     message: 'api/ must not import Playwright or ChatGPT selectors directly',
   },
   {
+    dir: 'attachments',
+    forbidden: (value) =>
+      value === 'playwright' ||
+      value.startsWith('playwright/') ||
+      /(?:^|\/)api(?:\/|$)/.test(value) ||
+      /(?:^|\/)chatgpt(?:\/|$)/.test(value),
+    message: 'attachments/ must stay independent from api/chatgpt/playwright',
+  },
+  {
     dir: 'context',
     forbidden: (value) =>
       value === 'playwright' ||

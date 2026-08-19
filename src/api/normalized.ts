@@ -1,3 +1,5 @@
+import type { AttachmentDescriptor } from '../attachments/types.js';
+
 export type NormalizedInstructionRole = 'system' | 'developer';
 
 export interface NormalizedInstruction {
@@ -31,21 +33,7 @@ export interface NormalizedTool {
 export type NormalizedToolChoice =
   { mode: 'auto' | 'none' | 'required' } | { mode: 'function'; name: string };
 
-export type NormalizedAttachment =
-  | {
-      id: string;
-      kind: 'image';
-      source:
-        | { type: 'url'; url: string }
-        | { type: 'data_url'; dataUrl: string }
-        | { type: 'file_id'; fileId: string };
-    }
-  | {
-      id: string;
-      kind: 'file';
-      source:
-        { type: 'file_id'; fileId: string } | { type: 'base64'; data: string; filename?: string };
-    };
+export type NormalizedAttachment = AttachmentDescriptor;
 
 export type NormalizedStructuredOutput =
   | { type: 'json_object' }
