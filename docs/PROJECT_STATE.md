@@ -13,19 +13,19 @@ STATUS=implementing-phase-6
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=implement-phase-6-task-6-conversation-attachment-lifecycle
+NEXT_TASK=implement-phase-6-task-7-cross-protocol-deterministic-integration
 UPDATED_AT=2026-08-19
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 6 — 图片和文件输入已进入实现阶段；公开附件能力仍未完成验收。
-- **当前状态：** `implementing-phase-6`。Active Plan Task 1/2/3/4/5 已完成：File/Blob storage、Files API、Attachment Resolver/security/staging、ordered multimodal Context/四-mode upload selection，以及经过 authenticated DOM inspection 锁定的 ChatGPT upload ownership/readiness Driver contract 已完成；当前进入 Task 6 Conversation attachment lifecycle。
+- **当前状态：** `implementing-phase-6`。Active Plan Task 1/2/3/4/5/6 已完成：File/Blob storage、Files API、Attachment Resolver/security/staging、ordered multimodal Context/四-mode upload selection、authenticated ChatGPT upload Driver，以及 Conversation resolve/checkpoint/upload/final persistence lifecycle 已完成；当前进入 Task 7 cross-protocol deterministic integration。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
 - **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
-- **下一个可执行任务：** Task 6 — Conversation attachment lifecycle；Resolver/Context/Driver 已各自完成独立闭环，下一步接通 resolve → started/checkpoint → Browser upload → Send → final Attachment/File persistence。
+- **下一个可执行任务：** Task 7 — Cross-Protocol Deterministic Integration and Architecture Guards；把已接通的 Conversation attachment lifecycle 从 Chat Completions/Responses HTTP 两套入口完整验证，并补齐 Phase 6 稳定 unsupported/error/architecture 边界。
 - **最新完整确定性/Docker 证据：** 2026-08-17 在真实 DevSpace checkout 上 fresh `corepack pnpm verify` 全绿：55 个 test files / 332 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过。随后 fresh `linux/amd64` Docker build 与完整 `docker:smoke` 通过，最终本地镜像 digest 为 `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0`；这是 Phase 5 最终证据。
-- **Phase 6 最新确定性证据：** 2026-08-19 Task 5 文档回写后 fresh `corepack pnpm verify` 全绿：66 test files / 461 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。Phase 6 Docker 与模型实际理解附件的 authenticated real E2E 尚未执行。
+- **Phase 6 最新确定性证据：** 2026-08-19 Task 6 改动后 fresh `corepack pnpm verify` 全绿：67 test files / 471 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。专门的 Conversation attachment integration 覆盖 FRESH/APPEND/RESTORE/REBUILD、pre-start resolver failure、post-start upload failure/abort、final-save failure、redacted source + required File linkage。Phase 6 Docker 与模型实际理解附件的 authenticated real E2E 尚未执行。
 - **真实网页证据：** 2026-08-19 复用隔离已登录 E2E Profile 与 `CHATGPT_PROXY_SERVER` 后，fresh `inspect:chatgpt` 为 `auth=authenticated` / `composer=unique`，实测 3 个 file input，其中唯一 generic input 为 `input[type=file]:not([accept])` 且支持 multiple；owned file tile 以 baseline count 归属，pending 时 `cursor-wait` + progress circles，ready 时同一 tile 上两者同时消失。`package.json` probe 在约 6 秒进入 ready；0-byte fixture 实测新 `role=alert` 且 `/backend-api/files` 返回 400，锁定 upload error 边界。该证据只证明 ChatGPT Web 当前 upload/readiness DOM，不证明模型已实际 ingest 文件内容；后者仍由 Task 9 E2E 验收。2026-08-17 Phase 3/4/5 combined real E2E 仍保持通过事实。
 
 ## Implemented Now（当前已实现）
@@ -69,7 +69,8 @@ UPDATED_AT=2026-08-19
 - ✅ Task 3 Attachment Resolver：strict Base64/Data URL、PNG/JPEG/WEBP/GIF signature sniff、public `file_id` lease、URL DNS/IP/redirect SSRF guard、32/64 MiB limits、敏感 source redaction、collision-safe request staging 与 hardlink→copy fallback 已实现并通过确定性测试。
 - ✅ Task 4 multimodal Context：含附件 message 使用 ordered canonical `content[]`，纯文本继续保持既有 `{role,text}` fingerprint/plan 形状；attachment semantic fingerprint 仅使用 kind/SHA-256/filename/MIME，prompt 只暴露 kind/filename/upload_filename；FRESH/REBUILD 与 APPEND/RESTORE upload reference selection 已有确定性测试。
 - ✅ Task 5 ChatGPT upload Driver：authenticated inspection 已锁定 unique generic file input、owned file-tile baseline、pending `cursor-wait`/progress 与 ready 消失语义，以及新增 `role=alert` error 边界；Driver 在 Send 前等待 exact owned tiles ready，并覆盖 timeout/abort/error/no-Send。
-- ❌ Conversation attachment lifecycle 与附件 real E2E 尚未实现/验收。
+- ✅ Task 6 Conversation attachment lifecycle：same-key queue 内先 resolve/retain/canonical/plan/stage，再 acquire Page；stream resolver failure 在 `started` 前结束，checkpoint 早于 Browser upload；FRESH/REBUILD 上传有效全历史附件，APPEND/RESTORE 当前-only；成功原子保存 ordered Message content + redacted AttachmentRecords/required File refs + Assistant clean checkpoint；upload failure/abort/final-save failure 保持 `in_flight` 并 discard Page。
+- ❌ Cross-protocol HTTP matrix、Docker acceptance 与附件 real E2E 尚未完成/验收。
 
 ### 后续未实现能力
 - ❌ Tool Calling Prompt / Parser / Tool Result 执行闭环。
@@ -91,6 +92,7 @@ UPDATED_AT=2026-08-19
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-19：Phase 6 Task 6 完成实现：Conversation Engine 将 attachment resolve/retained history/canonical plan/staging 放入 same-key FIFO 并早于 Page acquire；checkpoint 保持在 Browser upload 前，FRESH/APPEND/RESTORE/REBUILD upload selection 真正接入 Driver；成功 clean aggregate 持久化 redacted source + required File refs，stream pre-start/post-start/final-save 失败语义均有集成测试。fresh `corepack pnpm verify` 67 files / 471 tests 全绿。
 - 2026-08-19：Phase 6 Task 5 完成实现：fresh authenticated DOM inspection 锁定 generic file input、file-tile ownership、pending/ready 与 role-alert error contract；Driver 支持 prepared staged paths、多文件 exact ownership、readiness timeout、abort 与 Send-before-ready 禁止。模型内容理解仍待 Task 9 real E2E。
 - 2026-08-18：Phase 6 Task 4 完成：canonical Conversation 支持 ordered multimodal content，同时保持 text-only 既有 shape；attachment fingerprint 排除 request-local identity，Planner 四种 mode 不变并得到 FRESH/REBUILD 全附件、APPEND/RESTORE 当前附件 upload selection；fresh `corepack pnpm verify` 64 files / 454 tests 全绿，下一步 authenticated upload DOM inspection。
 - 2026-08-18：Phase 6 Task 3 完成：Attachment Resolver 已支持 URL/Data URL/Base64/public `file_id` → Gateway-owned File，新增严格图片 signature/MIME 验证、SSRF/DNS/redirect/pinned-address 安全边界、16 附件/64 MiB 请求上限与 request-scoped staging；fresh `corepack pnpm verify` 63 files / 445 tests 全绿，下一步 multimodal Context。
@@ -104,8 +106,8 @@ UPDATED_AT=2026-08-19
 
 ## Next Steps（下一步）
 
-1. 执行 Active Plan Task 6：把 Resolver/Planner/Staging/Driver 接进同一个 Conversation lifecycle，并锁定 pre-start/post-checkpoint/stream abort/final persistence 语义。
-2. 随后按计划完成跨协议 deterministic integration、Docker 与 authenticated real E2E。
+1. 执行 Active Plan Task 7：完成 Chat Completions / Responses 双入口 deterministic attachment HTTP matrix、Phase 6 unsupported/error mapping 与 architecture guards。
+2. 随后按计划完成 Docker acceptance 与 authenticated real E2E。
 3. 实现完成后运行 fresh deterministic、Docker 与独立登录 Profile authenticated real Phase 6 E2E；只有 image + PDF/TXT/DOCX/XLSX 等真实上传通过后才关闭 Phase 6。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）

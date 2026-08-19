@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { DataIntegrityError } from '../errors.js';
 import { decodeJson, encodeJson } from '../json.js';
-import { assertUuidV4, type AttachmentRecord } from '../types.js';
+import { assertUuidV4, type AttachmentRecord, type AttachmentSourceRecord } from '../types.js';
 
 interface AttachmentRow {
   id: string;
@@ -15,15 +15,34 @@ interface AttachmentRow {
   created_at: number;
 }
 
+function decodeSource(value: string): AttachmentSourceRecord {
+  const decoded = decodeJson<unknown>('attachments.source_json', value);
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+    throw new DataIntegrityError('Attachment source provenance is invalid');
+  }
+  const keys = Object.keys(decoded);
+  if (keys.length !== 1 || keys[0] !== 'type') {
+    throw new DataIntegrityError('Attachment source provenance contains persisted payload data');
+  }
+  const type = (decoded as { type?: unknown }).type;
+  if (type !== 'url' && type !== 'data_url' && type !== 'base64' && type !== 'file_id') {
+    throw new DataIntegrityError('Attachment source provenance type is invalid');
+  }
+  return { type };
+}
+
 function mapRow(row: AttachmentRow): AttachmentRecord {
+  if (row.file_id === null) {
+    throw new DataIntegrityError('Attachment File reference is required');
+  }
   return {
     id: row.id,
     conversationId: row.conversation_id,
     messageId: row.message_id,
     localAttachmentId: row.local_attachment_id,
     kind: row.kind,
-    source: decodeJson('attachments.source_json', row.source_json),
-    fileId: row.file_id ?? undefined,
+    source: decodeSource(row.source_json),
+    fileId: row.file_id,
     createdAt: row.created_at,
   };
 }
@@ -35,7 +54,8 @@ export class AttachmentRepository {
     assertUuidV4(record.id, 'Attachment id');
     assertUuidV4(record.conversationId, 'Attachment conversation id');
     assertUuidV4(record.messageId, 'Attachment message id');
-    if (record.fileId) assertUuidV4(record.fileId, 'Attachment file id');
+    assertUuidV4(record.fileId, 'Attachment file id');
+    decodeSource(encodeJson(record.source));
 
     const message = this.database
       .prepare('SELECT conversation_id FROM messages WHERE id = ?')
@@ -57,7 +77,7 @@ export class AttachmentRepository {
         record.localAttachmentId,
         record.kind,
         encodeJson(record.source),
-        record.fileId ?? null,
+        record.fileId,
         record.createdAt,
       );
   }

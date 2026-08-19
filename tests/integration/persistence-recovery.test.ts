@@ -149,7 +149,8 @@ function aggregate(): ConversationAggregate {
         messageId: userMessageId,
         localAttachmentId: 'attachment-1',
         kind: 'image',
-        source: { type: 'url', url: 'https://example.com/cat.png' },
+        source: { type: 'url' },
+        fileId,
         createdAt: 2000,
       },
       {
@@ -158,7 +159,7 @@ function aggregate(): ConversationAggregate {
         messageId: userMessageId,
         localAttachmentId: 'attachment-2',
         kind: 'file',
-        source: { type: 'file_id', fileId },
+        source: { type: 'file_id' },
         fileId,
         createdAt: 2100,
       },

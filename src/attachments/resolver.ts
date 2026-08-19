@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 
 import type { NormalizedAttachment } from '../api/normalized.js';
-import type { FileRecord } from '../persistence/types.js';
+import type { AttachmentRecord, AttachmentSourceRecord, FileRecord } from '../persistence/types.js';
 import { AttachmentPipelineError } from './errors.js';
 import type { FileLease, FileService } from './file-service.js';
 import { decodeBase64Strict, parseImageDataUrl, validateImageBytes } from './image.js';
@@ -19,8 +19,7 @@ import {
   type StagingResult,
 } from './staging.js';
 
-export type AttachmentSourceRecord =
-  { type: 'url' } | { type: 'data_url' } | { type: 'base64' } | { type: 'file_id' };
+export type { AttachmentSourceRecord } from '../persistence/types.js';
 
 export interface ResolvedAttachment {
   localAttachmentId: string;
@@ -33,7 +32,15 @@ export interface ResolvedAttachment {
 
 export interface ResolvedAttachmentHandle {
   readonly resolved: ResolvedAttachment[];
-  stage(localAttachmentIds: readonly string[]): Promise<PreparedAttachment[]>;
+  stage(
+    localAttachmentIds: readonly string[],
+    additional?: readonly ResolvedAttachment[],
+  ): Promise<PreparedAttachment[]>;
+  release(): Promise<void>;
+}
+
+export interface RetainedAttachmentHandle {
+  readonly resolved: ResolvedAttachment[];
   release(): Promise<void>;
 }
 
@@ -54,6 +61,38 @@ export class AttachmentResolver {
   constructor(private readonly options: AttachmentResolverOptions) {
     this.stager = options.stager ?? new AttachmentStager({ dataDir: '/data' });
     this.remoteFetcher = options.remoteFetcher ?? new RemoteImageFetcher();
+  }
+
+  async retainStored(attachments: readonly AttachmentRecord[]): Promise<RetainedAttachmentHandle> {
+    const leases: FileLease[] = [];
+    const resolved: ResolvedAttachment[] = [];
+    let released = false;
+
+    const release = async (): Promise<void> => {
+      if (released) return;
+      released = true;
+      for (const lease of leases.reverse()) await lease.release().catch(() => undefined);
+    };
+
+    try {
+      for (const attachment of attachments) {
+        const lease = this.options.fileService.acquireRetainedFileById(attachment.fileId);
+        leases.push(lease);
+        ensureNonEmptyFile(lease.file);
+        resolved.push({
+          localAttachmentId: storedAttachmentReference(attachment.id),
+          kind: attachment.kind,
+          file: lease.file,
+          filename: lease.file.filename,
+          ...(lease.file.mimeType === undefined ? {} : { mimeType: lease.file.mimeType }),
+          source: attachment.source,
+        });
+      }
+      return { resolved, release };
+    } catch (error) {
+      await release();
+      throw error;
+    }
   }
 
   async resolveAll(
@@ -109,7 +148,7 @@ export class AttachmentResolver {
 
       return {
         resolved,
-        stage: async (localAttachmentIds) => {
+        stage: async (localAttachmentIds, additional = []) => {
           if (released) {
             throw new AttachmentPipelineError(
               'invalid_attachment',
@@ -120,7 +159,7 @@ export class AttachmentResolver {
             await staging.cleanup();
             staging = undefined;
           }
-          const selected = selectForStaging(resolved, localAttachmentIds);
+          const selected = selectForStaging([...resolved, ...additional], localAttachmentIds);
           staging = await this.stager.stage(request.requestId, selected);
           return staging.prepared;
         },
@@ -308,6 +347,10 @@ async function* replaySource(
   } finally {
     await iterator.return?.().catch(() => undefined);
   }
+}
+
+export function storedAttachmentReference(attachmentRecordId: string): string {
+  return `stored:${attachmentRecordId}`;
 }
 
 function selectForStaging(

@@ -37,6 +37,7 @@
 - Phase 4：Gateway runtime headless → BrowserManager → Conversation Queue → Page Registry → Conversation Engine → fake ChatGPT Driver → SQLite ConversationStore；maintenance 模式不启动产品 BrowserManager/Queue/Registry。
 - Phase 4：同 key HTTP 请求 FIFO、不同 key 可并行；full-history 与 single-user incremental APPEND 都不重发已确认前缀；close/recreate runtime 后 RESTORE 使用持久化 Conversation URL；post-checkpoint unknown failure 保持 `in_flight` 并在下一轮 REBUILD。
 - Phase 6 Task 1/2：真实临时 SQLite + 文件系统 → migration 003 → SHA-256 Blob dedup → `/v1/files` multipart streaming create/list/retrieve/content/delete → close/reopen runtime → exact content recovery；private File 不进入公开 list，DELETE 保持历史 Attachment 引用边界。
+- Phase 6 Task 6：真实临时 SQLite/FileService + AttachmentResolver + fake Driver 覆盖 same-key queue 内 resolve、Page acquire 前 staging、checkpoint-before-Browser-upload、FRESH/APPEND/RESTORE/REBUILD upload selection、redacted AttachmentRecords + required File refs，以及 stream pre-start resolver failure / post-start upload failure/abort / final-save failure 的 `in_flight` 收敛。
 - Client abort（客户端断开）→ stop generation。
 
 ## E2E（端到端）

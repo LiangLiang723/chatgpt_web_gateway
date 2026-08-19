@@ -39,6 +39,25 @@ function setup(): TestContext {
   const paths = createTempPersistencePaths();
   const database = openDatabase(paths.databasePath);
   runMigrations(database, { migrationsDir: paths.migrationsDir, now: () => 1000 });
+  database
+    .prepare(
+      `INSERT INTO file_blobs (id, sha256, size_bytes, storage_path, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run('98989898-9898-4989-8989-989898989898', 'abc123', 3, '/data/files/blobs/abc123', 1000);
+  database
+    .prepare(
+      `INSERT INTO files
+       (id, public_id, blob_id, filename, mime_type, purpose, deleted_at, created_at, updated_at)
+       VALUES (?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
+    )
+    .run(
+      '99999999-9999-4999-8999-999999999999',
+      '98989898-9898-4989-8989-989898989898',
+      'notes.txt',
+      1000,
+      1000,
+    );
   const context = {
     paths,
     database,
@@ -99,7 +118,8 @@ function attachment(overrides: Partial<AttachmentRecord> = {}): AttachmentRecord
     messageId: '22222222-2222-4222-8222-222222222222',
     localAttachmentId: 'attachment-1',
     kind: 'image',
-    source: { type: 'url', url: 'https://example.com/cat.png' },
+    source: { type: 'url' },
+    fileId: '99999999-9999-4999-8999-999999999999',
     createdAt: 3000,
     ...overrides,
   };
@@ -153,34 +173,14 @@ describe('ToolCallRepository', () => {
 });
 
 describe('AttachmentRepository', () => {
-  it('round-trips URL, file-id, and base64 attachment descriptors in stable order', () => {
+  it('round-trips redacted URL, file-id, and base64 source provenance in stable order', () => {
     const context = setup();
     insertBaseConversation(context);
-    context.database
-      .prepare(
-        `INSERT INTO file_blobs (id, sha256, size_bytes, storage_path, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run('98989898-9898-4989-8989-989898989898', 'abc123', 3, '/data/files/blobs/abc123', 1000);
-    context.database
-      .prepare(
-        `INSERT INTO files
-         (id, public_id, blob_id, filename, mime_type, purpose, deleted_at, created_at, updated_at)
-         VALUES (?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
-      )
-      .run(
-        '99999999-9999-4999-8999-999999999999',
-        '98989898-9898-4989-8989-989898989898',
-        'notes.txt',
-        1000,
-        1000,
-      );
-
     const urlImage = attachment();
     const fileImage = attachment({
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       localAttachmentId: 'attachment-2',
-      source: { type: 'file_id', fileId: '99999999-9999-4999-8999-999999999999' },
+      source: { type: 'file_id' },
       fileId: '99999999-9999-4999-8999-999999999999',
       createdAt: 4000,
     });
@@ -188,7 +188,8 @@ describe('AttachmentRepository', () => {
       id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       localAttachmentId: 'attachment-3',
       kind: 'file',
-      source: { type: 'base64', data: 'QUJD', filename: 'small.txt' },
+      source: { type: 'base64' },
+      fileId: '99999999-9999-4999-8999-999999999999',
       createdAt: 5000,
     });
 
@@ -201,6 +202,22 @@ describe('AttachmentRepository', () => {
       fileImage,
       base64File,
     ]);
+  });
+
+  it('rejects source payload fields instead of persisting URL/Base64/file-id secrets', () => {
+    const context = setup();
+    insertBaseConversation(context);
+
+    expect(() =>
+      context.attachments.insert({
+        ...attachment(),
+        source: {
+          type: 'url',
+          url: 'https://example.com/private?token=secret',
+        } as unknown as AttachmentRecord['source'],
+      }),
+    ).toThrowError(DataIntegrityError);
+    expect(context.attachments.listByConversation(attachment().conversationId)).toEqual([]);
   });
 
   it('rejects duplicate local attachment ids and unknown file foreign keys', () => {
@@ -216,7 +233,7 @@ describe('AttachmentRepository', () => {
         attachment({
           id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
           localAttachmentId: 'attachment-2',
-          source: { type: 'file_id', fileId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' },
+          source: { type: 'file_id' },
           fileId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
         }),
       ),

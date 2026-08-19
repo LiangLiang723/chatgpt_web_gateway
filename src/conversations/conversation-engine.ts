@@ -7,6 +7,12 @@ import type {
   TextExecutionResult,
 } from '../api/execution.js';
 import type { NormalizedRequest } from '../api/normalized.js';
+import {
+  storedAttachmentReference,
+  type ResolvedAttachment,
+  type ResolvedAttachmentHandle,
+  type RetainedAttachmentHandle,
+} from '../attachments/resolver.js';
 import type {
   ChatGptStreamingTextDriver,
   ChatGptTextDriver,
@@ -15,21 +21,32 @@ import type {
 } from '../chatgpt/driver.js';
 import { ChatGptDriverError } from '../chatgpt/errors.js';
 import { canonicalizeInstructions, canonicalizeText } from '../context/canonicalize.js';
+import {
+  selectUploadAttachmentReferences,
+  type ResolvedAttachmentSemanticMap,
+} from '../context/multimodal.js';
 import { planContextSync } from '../context/planner.js';
 import type {
+  CanonicalContentPart,
   CanonicalConversationRequest,
   CanonicalMessage,
   CanonicalStoredConversation,
-  CanonicalTextMessage,
   ContextSyncPlan,
 } from '../context/types.js';
 import type { ConversationStore } from '../persistence/conversation-store.js';
-import type { ConversationAggregate, ConversationRecord } from '../persistence/types.js';
+import type {
+  AttachmentRecord,
+  ConversationAggregate,
+  ConversationRecord,
+} from '../persistence/types.js';
 import { TextStreamAbortedError } from '../stream/errors.js';
 import { streamAssistantText } from '../stream/text-stream.js';
 import type { StreamClock } from '../stream/types.js';
 
-import { buildFinalConversationAggregate } from './aggregate-builder.js';
+import {
+  buildFinalConversationAggregate,
+  type PersistenceAttachmentBinding,
+} from './aggregate-builder.js';
 import type { ConversationPageRegistry, ConversationPageSession } from './page-registry.js';
 import { buildAppendPrompt, buildContextPrompt } from './prompts.js';
 import type { ConversationQueue } from './conversation-queue.js';
@@ -38,11 +55,20 @@ import {
   toCanonicalStreamingConversationRequest,
 } from './request-context.js';
 
+export interface ConversationAttachmentResolver {
+  resolveAll(
+    attachments: readonly NormalizedRequest['attachments'][number][],
+    request: { requestId: string; signal?: AbortSignal },
+  ): Promise<ResolvedAttachmentHandle>;
+  retainStored(attachments: readonly AttachmentRecord[]): Promise<RetainedAttachmentHandle>;
+}
+
 export interface CreateConversationEngineOptions {
   pageRegistry: ConversationPageRegistry;
   queue: ConversationQueue;
   driver: ChatGptTextDriver;
   conversationStore: ConversationStore;
+  attachmentResolver?: ConversationAttachmentResolver;
   now?: () => number;
   randomUuid?: () => string;
   streamClock?: StreamClock;
@@ -51,27 +77,83 @@ export interface CreateConversationEngineOptions {
   streamTimeoutMs?: number;
 }
 
-function canonicalStoredMessage(
-  record: ConversationAggregate['messages'][number],
-): CanonicalTextMessage {
+function retainedByAttachmentRecord(
+  aggregate: ConversationAggregate,
+  resolved: readonly ResolvedAttachment[],
+): Map<string, ResolvedAttachment> {
+  if (aggregate.attachments.length !== resolved.length) {
+    throw new Error('Stored Attachment resolution count does not match persistence');
+  }
+  return new Map(
+    aggregate.attachments.map((attachment, index) => [
+      attachment.id,
+      resolved[index] as ResolvedAttachment,
+    ]),
+  );
+}
+
+function canonicalStoredMessage(options: {
+  aggregate: ConversationAggregate;
+  record: ConversationAggregate['messages'][number];
+  retained: ReadonlyMap<string, ResolvedAttachment>;
+}): CanonicalMessage {
+  const { aggregate, record, retained } = options;
   if (record.role !== 'user' && record.role !== 'assistant') {
-    throw new Error('Phase 4 stored Conversation contains a non-text-history role');
+    throw new Error('Stored Conversation contains an unsupported history role');
   }
-  if (record.content.some((part) => part.type !== 'text')) {
-    throw new Error('Phase 4 stored Conversation contains non-text content');
+  if (record.content.every((part) => part.type === 'text')) {
+    return {
+      role: record.role,
+      text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
+    };
   }
-  return {
-    role: record.role,
-    text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
+
+  const records = new Map(
+    aggregate.attachments
+      .filter((attachment) => attachment.messageId === record.id)
+      .map((attachment) => [attachment.localAttachmentId, attachment]),
+  );
+  const content: CanonicalContentPart[] = [];
+  let pendingText: string[] = [];
+  const flushText = (): void => {
+    if (pendingText.length === 0) return;
+    content.push({ type: 'text', text: canonicalizeText(pendingText) });
+    pendingText = [];
   };
+
+  for (const part of record.content) {
+    if (part.type === 'text') {
+      pendingText.push(part.text);
+      continue;
+    }
+    flushText();
+    const attachment = records.get(part.attachmentId);
+    if (!attachment) throw new Error('Stored Message attachment reference is missing');
+    const resolved = retained.get(attachment.id);
+    if (!resolved) throw new Error('Stored Attachment File metadata is missing');
+    content.push({
+      type: 'attachment',
+      reference: storedAttachmentReference(attachment.id),
+      kind: attachment.kind,
+      sha256: resolved.file.sha256,
+      filename: resolved.filename,
+      ...(resolved.mimeType === undefined ? {} : { mimeType: resolved.mimeType }),
+    });
+  }
+  flushText();
+  return { role: record.role, content };
 }
 
 function canonicalStoredConversation(
   aggregate: ConversationAggregate,
+  retainedResolved: readonly ResolvedAttachment[] = [],
 ): CanonicalStoredConversation {
+  const retained = retainedByAttachmentRecord(aggregate, retainedResolved);
   return {
     instructions: canonicalizeInstructions(aggregate.conversation.instructions),
-    messages: aggregate.messages.map(canonicalStoredMessage),
+    messages: aggregate.messages.map((record) =>
+      canonicalStoredMessage({ aggregate, record, retained }),
+    ),
     conversationUrl: aggregate.conversation.chatgptConversationUrl,
     sync: {
       status: aggregate.conversation.sync.status,
@@ -147,15 +229,6 @@ function authoritativeMessages(options: {
   return [...confirmed, options.plan.currentUser];
 }
 
-function textOnlyMessages(messages: readonly CanonicalMessage[]): CanonicalTextMessage[] {
-  return messages.map((message) => {
-    if (!('text' in message)) {
-      throw new Error('Attachment persistence is not wired into the Conversation Engine yet');
-    }
-    return message;
-  });
-}
-
 async function preparePage(options: {
   driver: ChatGptTextDriver;
   session: ConversationPageSession;
@@ -186,9 +259,10 @@ function buildPrompt(options: {
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
+  uploadFilenameByReference?: ReadonlyMap<string, string>;
 }): string {
   return options.promptMode === 'append'
-    ? buildAppendPrompt(options.plan.currentUser)
+    ? buildAppendPrompt(options.plan.currentUser, options.uploadFilenameByReference)
     : buildContextPrompt({
         instructions: options.canonicalRequest.instructions,
         history: contextHistory({
@@ -197,7 +271,167 @@ function buildPrompt(options: {
           ...(options.stored === undefined ? {} : { stored: options.stored }),
         }),
         currentUser: options.plan.currentUser,
+        ...(options.uploadFilenameByReference === undefined
+          ? {}
+          : { uploadFilenameByReference: options.uploadFilenameByReference }),
       });
+}
+
+function semanticMap(resolved: readonly ResolvedAttachment[]): ResolvedAttachmentSemanticMap {
+  return new Map(
+    resolved.map((item) => [
+      item.localAttachmentId,
+      {
+        kind: item.kind,
+        sha256: item.file.sha256,
+        filename: item.filename,
+        ...(item.mimeType === undefined ? {} : { mimeType: item.mimeType }),
+      },
+    ]),
+  );
+}
+
+function attachmentBindings(options: {
+  current: readonly ResolvedAttachment[];
+  storedAggregate?: ConversationAggregate;
+  retained: readonly ResolvedAttachment[];
+}): Map<string, PersistenceAttachmentBinding> {
+  const result = new Map<string, PersistenceAttachmentBinding>();
+  for (const item of options.current) {
+    result.set(item.localAttachmentId, {
+      localAttachmentId: item.localAttachmentId,
+      kind: item.kind,
+      source: item.source,
+      fileId: item.file.id,
+    });
+  }
+  if (options.storedAggregate !== undefined) {
+    if (options.storedAggregate.attachments.length !== options.retained.length) {
+      throw new Error('Stored Attachment binding count does not match retained Files');
+    }
+    options.storedAggregate.attachments.forEach((record, index) => {
+      const retained = options.retained[index] as ResolvedAttachment;
+      result.set(storedAttachmentReference(record.id), {
+        localAttachmentId: record.localAttachmentId,
+        kind: record.kind,
+        source: record.source,
+        fileId: retained.file.id,
+      });
+    });
+  }
+  return result;
+}
+
+interface PreparedConversationContext {
+  canonicalRequest: CanonicalConversationRequest;
+  stored?: CanonicalStoredConversation;
+  plan: ContextSyncPlan;
+  preparedUploads: Array<{
+    localAttachmentId: string;
+    kind: 'image' | 'file';
+    path: string;
+    displayFilename: string;
+  }>;
+  uploadFilenameByReference: ReadonlyMap<string, string>;
+  persistenceBindings: ReadonlyMap<string, PersistenceAttachmentBinding>;
+  release(): Promise<void>;
+}
+
+async function prepareConversationContext(options: {
+  engine: CreateConversationEngineOptions;
+  request: NormalizedRequest;
+  existing?: ConversationAggregate;
+  conversationId: string;
+  streaming: boolean;
+  signal?: AbortSignal;
+}): Promise<PreparedConversationContext> {
+  const resolver = options.engine.attachmentResolver;
+  if (resolver === undefined) {
+    const canonicalRequest = options.streaming
+      ? toCanonicalStreamingConversationRequest(options.request)
+      : toCanonicalConversationRequest(options.request);
+    const stored =
+      options.existing === undefined ? undefined : canonicalStoredConversation(options.existing);
+    const plan = planContextSync({
+      ...(stored === undefined ? {} : { stored }),
+      request: canonicalRequest,
+      hasAffinityPage:
+        options.existing === undefined
+          ? false
+          : options.engine.pageRegistry.hasAffinity(options.conversationId),
+    });
+    return {
+      canonicalRequest,
+      ...(stored === undefined ? {} : { stored }),
+      plan,
+      preparedUploads: [],
+      uploadFilenameByReference: new Map(),
+      persistenceBindings: new Map(),
+      release: async () => undefined,
+    };
+  }
+
+  const current = await resolver.resolveAll(options.request.attachments, {
+    requestId: options.request.requestId,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  let retained: RetainedAttachmentHandle = { resolved: [], release: async () => undefined };
+  let released = false;
+  const release = async (): Promise<void> => {
+    if (released) return;
+    released = true;
+    await retained.release().catch(() => undefined);
+    await current.release().catch(() => undefined);
+  };
+
+  try {
+    if (options.existing !== undefined && options.existing.attachments.length > 0) {
+      retained = await resolver.retainStored(options.existing.attachments);
+    }
+    const canonicalRequest = options.streaming
+      ? toCanonicalStreamingConversationRequest(options.request, semanticMap(current.resolved))
+      : toCanonicalConversationRequest(options.request, semanticMap(current.resolved));
+    const stored =
+      options.existing === undefined
+        ? undefined
+        : canonicalStoredConversation(options.existing, retained.resolved);
+    const plan = planContextSync({
+      ...(stored === undefined ? {} : { stored }),
+      request: canonicalRequest,
+      hasAffinityPage:
+        options.existing === undefined
+          ? false
+          : options.engine.pageRegistry.hasAffinity(options.conversationId),
+    });
+    const uploadReferences = selectUploadAttachmentReferences(plan);
+    const prepared =
+      uploadReferences.length === 0 ? [] : await current.stage(uploadReferences, retained.resolved);
+    const uploadFilenameByReference = new Map(
+      prepared.map((item) => [item.localAttachmentId, item.uploadFilename]),
+    );
+
+    return {
+      canonicalRequest,
+      ...(stored === undefined ? {} : { stored }),
+      plan,
+      preparedUploads: prepared.map((item) => ({
+        localAttachmentId: item.localAttachmentId,
+        kind: item.kind,
+        path: item.stagingPath,
+        displayFilename: item.uploadFilename,
+      })),
+      uploadFilenameByReference,
+      persistenceBindings: attachmentBindings({
+        current: current.resolved,
+        ...(options.existing === undefined ? {} : { storedAggregate: options.existing }),
+        retained: retained.resolved,
+      }),
+      release,
+    };
+  } catch (error) {
+    await release();
+    throw error;
+  }
 }
 
 function startCheckpoint(options: {
@@ -231,6 +465,7 @@ function buildFinalResult(options: {
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
+  persistenceBindings?: ReadonlyMap<string, PersistenceAttachmentBinding>;
   assistantText: string;
   conversationUrl: string;
   completedAt: number;
@@ -242,13 +477,15 @@ function buildFinalResult(options: {
       initial: options.initial,
       request: options.request,
     }),
-    authoritativeMessages: textOnlyMessages(
-      authoritativeMessages({
-        canonicalRequest: options.canonicalRequest,
-        plan: options.plan,
-        ...(options.stored === undefined ? {} : { stored: options.stored }),
-      }),
-    ),
+    ...(options.stored === undefined ? {} : { storedCanonicalMessages: options.stored.messages }),
+    authoritativeMessages: authoritativeMessages({
+      canonicalRequest: options.canonicalRequest,
+      plan: options.plan,
+      ...(options.stored === undefined ? {} : { stored: options.stored }),
+    }),
+    ...(options.persistenceBindings === undefined
+      ? {}
+      : { attachmentBindings: options.persistenceBindings }),
     assistantText: options.assistantText,
     conversationUrl: options.conversationUrl,
     completedAt: options.completedAt,
@@ -265,7 +502,6 @@ function buildFinalResult(options: {
 async function executeConversation(options: {
   engine: CreateConversationEngineOptions;
   request: NormalizedRequest;
-  canonicalRequest: CanonicalConversationRequest;
   conversationKey?: string;
   existing?: ConversationAggregate;
   now: () => number;
@@ -273,23 +509,24 @@ async function executeConversation(options: {
 }): Promise<TextExecutionResult> {
   const existing = options.existing;
   const conversationId = existing?.conversation.id ?? options.randomUuid();
-  const stored = existing === undefined ? undefined : canonicalStoredConversation(existing);
-  const plan = planContextSync({
-    ...(stored === undefined ? {} : { stored }),
-    request: options.canonicalRequest,
-    hasAffinityPage:
-      existing === undefined ? false : options.engine.pageRegistry.hasAffinity(conversationId),
+  const context = await prepareConversationContext({
+    engine: options.engine,
+    request: options.request,
+    ...(existing === undefined ? {} : { existing }),
+    conversationId,
+    streaming: false,
   });
-  const session = await options.engine.pageRegistry.acquire(
-    options.conversationKey === undefined ? undefined : conversationId,
-  );
+  let session: ConversationPageSession | undefined;
   let completed = false;
 
   try {
+    session = await options.engine.pageRegistry.acquire(
+      options.conversationKey === undefined ? undefined : conversationId,
+    );
     const promptMode = await preparePage({
       driver: options.engine.driver,
       session,
-      plan,
+      plan: context.plan,
       conversationUrl: existing?.conversation.chatgptConversationUrl,
     });
     const startedAt = options.now();
@@ -303,12 +540,14 @@ async function executeConversation(options: {
     });
     const prompt = buildPrompt({
       promptMode,
-      canonicalRequest: options.canonicalRequest,
-      plan,
-      stored,
+      canonicalRequest: context.canonicalRequest,
+      plan: context.plan,
+      stored: context.stored,
+      uploadFilenameByReference: context.uploadFilenameByReference,
     });
     const result: ChatGptTextResult = await options.engine.driver.sendText(session.page, {
       prompt,
+      ...(context.preparedUploads.length === 0 ? {} : { attachments: context.preparedUploads }),
     });
     const completedAt = options.now();
     const finalResult = buildFinalResult({
@@ -316,9 +555,10 @@ async function executeConversation(options: {
       existing,
       initial,
       request: options.request,
-      canonicalRequest: options.canonicalRequest,
-      plan,
-      stored,
+      canonicalRequest: context.canonicalRequest,
+      plan: context.plan,
+      stored: context.stored,
+      persistenceBindings: context.persistenceBindings,
       assistantText: result.text,
       conversationUrl: result.conversationUrl,
       completedAt,
@@ -327,7 +567,11 @@ async function executeConversation(options: {
     completed = true;
     return finalResult;
   } finally {
-    if (!completed) await session.fail();
+    try {
+      if (!completed) await session?.fail();
+    } finally {
+      await context.release();
+    }
   }
 }
 
@@ -353,7 +597,6 @@ function isStreamAborted(error: unknown): boolean {
 async function streamConversation(options: {
   engine: CreateConversationEngineOptions;
   request: NormalizedRequest;
-  canonicalRequest: CanonicalConversationRequest;
   streamOptions: StreamingExecutionOptions;
   conversationKey?: string;
   existing?: ConversationAggregate;
@@ -362,25 +605,27 @@ async function streamConversation(options: {
 }): Promise<TextExecutionResult> {
   const existing = options.existing;
   const conversationId = existing?.conversation.id ?? options.randomUuid();
-  const stored = existing === undefined ? undefined : canonicalStoredConversation(existing);
-  const plan = planContextSync({
-    ...(stored === undefined ? {} : { stored }),
-    request: options.canonicalRequest,
-    hasAffinityPage:
-      existing === undefined ? false : options.engine.pageRegistry.hasAffinity(conversationId),
+  const context = await prepareConversationContext({
+    engine: options.engine,
+    request: options.request,
+    ...(existing === undefined ? {} : { existing }),
+    conversationId,
+    streaming: true,
+    signal: options.streamOptions.signal,
   });
-  const session = await options.engine.pageRegistry.acquire(
-    options.conversationKey === undefined ? undefined : conversationId,
-  );
   const driver = requireStreamingDriver(options.engine.driver);
+  let session: ConversationPageSession | undefined;
   let completed = false;
   let turn: ChatGptTextTurn | undefined;
 
   try {
+    session = await options.engine.pageRegistry.acquire(
+      options.conversationKey === undefined ? undefined : conversationId,
+    );
     const promptMode = await preparePage({
       driver,
       session,
-      plan,
+      plan: context.plan,
       conversationUrl: existing?.conversation.chatgptConversationUrl,
     });
     const startedAt = options.now();
@@ -397,13 +642,15 @@ async function streamConversation(options: {
     });
     const prompt = buildPrompt({
       promptMode,
-      canonicalRequest: options.canonicalRequest,
-      plan,
-      stored,
+      canonicalRequest: context.canonicalRequest,
+      plan: context.plan,
+      stored: context.stored,
+      uploadFilenameByReference: context.uploadFilenameByReference,
     });
     turn = await driver.startText(session.page, {
       prompt,
       signal: options.streamOptions.signal,
+      ...(context.preparedUploads.length === 0 ? {} : { attachments: context.preparedUploads }),
     });
     const assistantText = await streamAssistantText({
       observe: turn.observe,
@@ -429,9 +676,10 @@ async function streamConversation(options: {
       existing,
       initial,
       request: options.request,
-      canonicalRequest: options.canonicalRequest,
-      plan,
-      stored,
+      canonicalRequest: context.canonicalRequest,
+      plan: context.plan,
+      stored: context.stored,
+      persistenceBindings: context.persistenceBindings,
       assistantText,
       conversationUrl,
       completedAt,
@@ -454,7 +702,11 @@ async function streamConversation(options: {
     }
     throw error;
   } finally {
-    if (!completed) await session.fail();
+    try {
+      if (!completed) await session?.fail();
+    } finally {
+      await context.release();
+    }
   }
 }
 
@@ -466,11 +718,9 @@ function executeHandler(
   return async (request) => {
     const conversationKey = request.conversationKey;
     if (conversationKey === undefined) {
-      const canonicalRequest = toCanonicalConversationRequest(request);
       return executeConversation({
         engine: options,
         request,
-        canonicalRequest,
         now,
         randomUuid,
       });
@@ -478,11 +728,9 @@ function executeHandler(
 
     return options.queue.run(conversationKey, async () => {
       const existing = options.conversationStore.loadByKey(conversationKey);
-      const canonicalRequest = toCanonicalConversationRequest(request);
       return executeConversation({
         engine: options,
         request,
-        canonicalRequest,
         conversationKey,
         ...(existing === undefined ? {} : { existing }),
         now,
@@ -504,11 +752,9 @@ export function createConversationExecutionEngine(
     stream: async (request, streamOptions) => {
       const conversationKey = request.conversationKey;
       if (conversationKey === undefined) {
-        const canonicalRequest = toCanonicalStreamingConversationRequest(request);
         return streamConversation({
           engine: options,
           request,
-          canonicalRequest,
           streamOptions,
           now,
           randomUuid,
@@ -517,11 +763,9 @@ export function createConversationExecutionEngine(
 
       return options.queue.run(conversationKey, async () => {
         const existing = options.conversationStore.loadByKey(conversationKey);
-        const canonicalRequest = toCanonicalStreamingConversationRequest(request);
         return streamConversation({
           engine: options,
           request,
-          canonicalRequest,
           streamOptions,
           conversationKey,
           ...(existing === undefined ? {} : { existing }),

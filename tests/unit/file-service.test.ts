@@ -158,7 +158,7 @@ describe('FileService', () => {
       messageId,
       localAttachmentId: 'attachment-1',
       kind: 'file',
-      source: { type: 'file_id', fileId: created.publicId! },
+      source: { type: 'file_id' },
       fileId: created.id,
       createdAt: 1000,
     });

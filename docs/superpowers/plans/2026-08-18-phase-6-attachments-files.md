@@ -451,42 +451,42 @@ Commit: `✨ 增加 ChatGPT 附件上传就绪检测`
 - Stored `AttachmentRecord.source` becomes redacted `AttachmentSourceRecord` and `fileId` is required for Phase 6-created records.
 - Resolver handle owns leases/staging and is always released in `finally`.
 
-- [ ] **Step 1: Write failing non-stream lifecycle tests**
+- [x] **Step 1: Write failing non-stream lifecycle tests**
 
 Use real temp SQLite/FileService + fake Driver. Assert resolve occurs inside same-key queue before page acquisition; pre-browser resolver failure leaves checkpoint clean; first browser upload occurs only after checkpoint `in_flight`; APPEND/RESTORE upload current attachments only; FRESH/REBUILD upload all selected effective attachments; success persists User content + redacted AttachmentRecords + Assistant + clean checkpoint atomically.
 
 Run: `corepack pnpm vitest run tests/integration/conversation-attachments.test.ts`
 Expected: FAIL because Engine rejects attachments.
 
-- [ ] **Step 2: Implement non-stream attachment orchestration**
+- [x] **Step 2: Implement non-stream attachment orchestration**
 
 Inside queue: load latest aggregate → resolve all descriptors → canonicalize using resolved metadata → plan → acquire Page → prepare page → stage only selected IDs → checkpoint → call Driver with staged prepared uploads → final aggregate with AttachmentRecords → session complete. Always release resolver handle/staging in `finally`.
 
 Run conversation attachment tests.
 Expected: PASS for non-stream cases.
 
-- [ ] **Step 3: Add failing stream ordering/error tests**
+- [x] **Step 3: Add failing stream ordering/error tests**
 
 Assert resolver failure occurs before internal `started`; after successful resolver, `started` precedes checkpoint/upload; post-start upload failure emits stream error and no success terminal; upload abort keeps `in_flight` and discards Page; final-save failure with attachments still prevents `[DONE]`/`response.completed`.
 
 Run: `corepack pnpm vitest run tests/integration/conversation-attachments.test.ts tests/integration/conversation-streaming-consistency.test.ts`
 Expected: FAIL on stream attachment path.
 
-- [ ] **Step 4: Implement stream attachment lifecycle while reusing Phase 5 core**
+- [x] **Step 4: Implement stream attachment lifecycle while reusing Phase 5 core**
 
 Only pre-Send path changes. After Driver returns a `ChatGptTextTurn`, continue using existing `streamAssistantText`, Stop, conversation URL, final save, and terminal rules unchanged.
 
 Run the two tests.
 Expected: PASS.
 
-- [ ] **Step 5: Tighten persistence validation and sensitive-source tests**
+- [x] **Step 5: Tighten persistence validation and sensitive-source tests**
 
 Update ConversationStore validation so every attachment content reference has an AttachmentRecord, every new AttachmentRecord has `fileId`, and persisted source JSON can only be `{type:'url'|'data_url'|'base64'|'file_id'}` with no payload fields. Add regression asserting raw signed URL/Base64 is absent from DB text.
 
 Run: `corepack pnpm vitest run tests/unit/persistence-tools-attachments.test.ts tests/integration/persistence-recovery.test.ts tests/integration/conversation-attachments.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit: `✨ 接通 Conversation 附件执行生命周期`
 

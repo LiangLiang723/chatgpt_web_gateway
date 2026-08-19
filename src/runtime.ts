@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 
 import { FileService } from './attachments/file-service.js';
+import { AttachmentResolver } from './attachments/resolver.js';
+import { AttachmentStager } from './attachments/staging.js';
 import {
   browserMaintenanceModeExecution,
   browserMaintenanceModeStreamingExecution,
@@ -45,6 +47,7 @@ export interface GatewayRuntime {
   readonly app: FastifyInstance;
   readonly persistence: PersistenceContext;
   readonly fileService: FileService;
+  readonly attachmentResolver: AttachmentResolver;
   readonly browser?: BrowserManager;
   readonly pageRegistry?: ConversationPageRegistry;
   close(): Promise<void>;
@@ -63,6 +66,10 @@ export async function createGatewayRuntime(
     files: persistence.files,
     fileBlobs: persistence.fileBlobs,
     fileLifecycleStore: persistence.fileLifecycleStore,
+  });
+  const attachmentResolver = new AttachmentResolver({
+    fileService,
+    stager: new AttachmentStager({ dataDir: options.config.dataDir }),
   });
   try {
     await fileService.cleanup();
@@ -124,6 +131,7 @@ export async function createGatewayRuntime(
           queue: conversationQueue,
           driver: options.driver ?? createChatGptDriver(),
           conversationStore: persistence.conversationStore,
+          attachmentResolver,
         });
 
   let app: FastifyInstance;
@@ -149,6 +157,7 @@ export async function createGatewayRuntime(
     app,
     persistence,
     fileService,
+    attachmentResolver,
     ...(browser === undefined ? {} : { browser }),
     ...(pageRegistry === undefined ? {} : { pageRegistry }),
     async close() {

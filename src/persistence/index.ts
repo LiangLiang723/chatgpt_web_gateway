@@ -62,6 +62,7 @@ export function createPersistenceContext(
     messages,
     toolCalls,
     attachments,
+    files,
     generatedImages,
   });
 

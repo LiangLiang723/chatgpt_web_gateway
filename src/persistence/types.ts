@@ -1,5 +1,4 @@
 import type {
-  NormalizedAttachment,
   NormalizedContentPart,
   NormalizedInstruction,
   NormalizedTool,
@@ -57,14 +56,17 @@ export interface ToolCallRecord {
   createdAt: number;
 }
 
+export type AttachmentSourceRecord =
+  { type: 'url' } | { type: 'data_url' } | { type: 'base64' } | { type: 'file_id' };
+
 export interface AttachmentRecord {
   id: string;
   conversationId: string;
   messageId: string;
   localAttachmentId: string;
   kind: 'image' | 'file';
-  source: NormalizedAttachment['source'];
-  fileId?: string;
+  source: AttachmentSourceRecord;
+  fileId: string;
   createdAt: number;
 }
 

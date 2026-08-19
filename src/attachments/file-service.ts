@@ -180,6 +180,17 @@ export class FileService {
     return this.acquireFile(file);
   }
 
+  acquireRetainedFileById(id: string): FileLease {
+    const file = this.options.files.getById(id);
+    if (!file) {
+      throw new AttachmentPipelineError(
+        'file_storage_error',
+        'Retained attachment File is missing',
+      );
+    }
+    return this.acquireFile(file);
+  }
+
   async deletePublicFile(publicId: string): Promise<FileRecord> {
     const file = this.options.files.getByPublicId(publicId);
     if (!file) {

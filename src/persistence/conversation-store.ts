@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { DataIntegrityError } from './errors.js';
 import { AttachmentRepository } from './repositories/attachments.js';
 import { ConversationRepository } from './repositories/conversations.js';
+import { FileRepository } from './repositories/files.js';
 import { GeneratedImageRepository } from './repositories/generated-images.js';
 import { MessageRepository } from './repositories/messages.js';
 import { ToolCallRepository } from './repositories/tool-calls.js';
@@ -14,10 +15,11 @@ export interface ConversationStoreRepositories {
   messages: MessageRepository;
   toolCalls: ToolCallRepository;
   attachments: AttachmentRepository;
+  files: FileRepository;
   generatedImages: GeneratedImageRepository;
 }
 
-function validateAggregate(aggregate: ConversationAggregate): void {
+function validateAggregate(aggregate: ConversationAggregate, files?: FileRepository): void {
   const conversationId = aggregate.conversation.id;
   if (aggregate.conversation.sync.syncedMessageCount > aggregate.messages.length) {
     throw new DataIntegrityError('Conversation sync message count exceeds aggregate Messages');
@@ -60,9 +62,49 @@ function validateAggregate(aggregate: ConversationAggregate): void {
     }
   }
 
+  const attachmentKeys = new Set<string>();
   for (const attachment of aggregate.attachments) {
     if (attachment.conversationId !== conversationId || !messageIds.has(attachment.messageId)) {
       throw new DataIntegrityError('Attachment must reference a Message in the same Conversation');
+    }
+    const sourceKeys = Object.keys(attachment.source as object);
+    if (sourceKeys.length !== 1 || sourceKeys[0] !== 'type') {
+      throw new DataIntegrityError('Attachment source provenance must not persist source payloads');
+    }
+    const key = `${attachment.messageId}\u0000${attachment.localAttachmentId}`;
+    if (attachmentKeys.has(key)) {
+      throw new DataIntegrityError(
+        'Conversation aggregate contains duplicate Attachment references',
+      );
+    }
+    attachmentKeys.add(key);
+    if (files !== undefined && files.getById(attachment.fileId) === undefined) {
+      throw new DataIntegrityError('Attachment must reference an existing File');
+    }
+  }
+
+  for (const message of aggregate.messages) {
+    for (const part of message.content) {
+      if (part.type !== 'attachment') continue;
+      const key = `${message.id}\u0000${part.attachmentId}`;
+      if (!attachmentKeys.has(key)) {
+        throw new DataIntegrityError(
+          'Message attachment content must have a matching Attachment record',
+        );
+      }
+    }
+  }
+
+  for (const attachment of aggregate.attachments) {
+    const message = aggregate.messages.find((item) => item.id === attachment.messageId);
+    if (
+      !message?.content.some(
+        (part) => part.type === 'attachment' && part.attachmentId === attachment.localAttachmentId,
+      )
+    ) {
+      throw new DataIntegrityError(
+        'Attachment record must have a matching Message content reference',
+      );
     }
   }
 
@@ -83,7 +125,7 @@ export class ConversationStore {
   ) {}
 
   save(aggregate: ConversationAggregate): void {
-    validateAggregate(aggregate);
+    validateAggregate(aggregate, this.repositories.files);
 
     transaction(this.database, () => {
       if (this.repositories.conversations.getById(aggregate.conversation.id)) {
@@ -132,12 +174,14 @@ export class ConversationStore {
     conversationId: string,
     conversation: ConversationAggregate['conversation'],
   ): ConversationAggregate {
-    return {
+    const aggregate: ConversationAggregate = {
       conversation,
       messages: this.repositories.messages.listByConversation(conversationId),
       toolCalls: this.repositories.toolCalls.listByConversation(conversationId),
       attachments: this.repositories.attachments.listByConversation(conversationId),
       generatedImages: this.repositories.generatedImages.listByConversation(conversationId),
     };
+    validateAggregate(aggregate, this.repositories.files);
+    return aggregate;
   }
 }
