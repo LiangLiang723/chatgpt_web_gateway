@@ -92,6 +92,9 @@ function harness(
         }
         return { status: 'missing', count: 0 };
       }
+      if (definition.name === 'sendButton') {
+        return { status: 'unique', candidateName: 'send-test', count: 1, locator: send };
+      }
       if (definition.name !== 'stopControl') return { status: 'missing', count: 0 };
       return stopped
         ? { status: 'missing', count: 0 }
@@ -108,6 +111,8 @@ function harness(
     },
     stopPollIntervalMs: 0,
     stopTimeoutMs: 10,
+    sendPollIntervalMs: 0,
+    sendTimeoutMs: 10,
   });
 
   return {

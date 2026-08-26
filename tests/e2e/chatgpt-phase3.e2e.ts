@@ -23,6 +23,10 @@ export interface Phase3ChatGptE2EResult {
   gatewayChallenge: true;
 }
 
+export interface Phase3GatewayRegressionResult {
+  gatewayChallenge: true;
+}
+
 function challengeToken(): string {
   return `CWG_PHASE3_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 }
@@ -35,6 +39,49 @@ function assertConversationUrl(value: string): void {
   const url = new URL(value);
   assert.equal(url.hostname, 'chatgpt.com');
   assert.notEqual(url.pathname, '/');
+}
+
+export async function runPhase3GatewayRegression(
+  options: RunPhase3ChatGptE2EOptions,
+): Promise<Phase3GatewayRegressionResult> {
+  const runtimeDataDir = mkdtempSync(join(tmpdir(), 'cwg-phase3-e2e-'));
+  try {
+    const runtime = await createGatewayRuntime({
+      config: loadConfig({
+        GATEWAY_API_KEY: 'phase3-e2e-gateway-key',
+        DATA_DIR: runtimeDataDir,
+        MAX_ACTIVE_PAGES: '1',
+        ...(options.proxyServer ? { CHATGPT_PROXY_SERVER: options.proxyServer } : {}),
+      }),
+      browserProfileDir: options.profileDir,
+      logger: false,
+    });
+
+    try {
+      const token = challengeToken();
+      const response = await runtime.app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        headers: { authorization: 'Bearer phase3-e2e-gateway-key' },
+        payload: {
+          model: 'chatgpt-web',
+          messages: [{ role: 'user', content: challengePrompt(token) }],
+        },
+      });
+      assert.equal(response.statusCode, 200, response.body);
+      const body = response.json();
+      assert.equal(body.model, 'chatgpt-web');
+      assert.equal(body.choices?.[0]?.message?.role, 'assistant');
+      assert.match(String(body.choices?.[0]?.message?.content ?? ''), new RegExp(token));
+      assert.equal(body.choices?.[0]?.finish_reason, 'stop');
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    rmSync(runtimeDataDir, { recursive: true, force: true });
+  }
+
+  return { gatewayChallenge: true };
 }
 
 export async function runPhase3ChatGptE2E(
@@ -78,42 +125,7 @@ export async function runPhase3ChatGptE2E(
     await browser.close();
   }
 
-  const runtimeDataDir = mkdtempSync(join(tmpdir(), 'cwg-phase3-e2e-'));
-  try {
-    const runtime = await createGatewayRuntime({
-      config: loadConfig({
-        GATEWAY_API_KEY: 'phase3-e2e-gateway-key',
-        DATA_DIR: runtimeDataDir,
-        MAX_ACTIVE_PAGES: '1',
-        ...(options.proxyServer ? { CHATGPT_PROXY_SERVER: options.proxyServer } : {}),
-      }),
-      browserProfileDir: options.profileDir,
-      logger: false,
-    });
-
-    try {
-      const token = challengeToken();
-      const response = await runtime.app.inject({
-        method: 'POST',
-        url: '/v1/chat/completions',
-        headers: { authorization: 'Bearer phase3-e2e-gateway-key' },
-        payload: {
-          model: 'chatgpt-web',
-          messages: [{ role: 'user', content: challengePrompt(token) }],
-        },
-      });
-      assert.equal(response.statusCode, 200, response.body);
-      const body = response.json();
-      assert.equal(body.model, 'chatgpt-web');
-      assert.equal(body.choices?.[0]?.message?.role, 'assistant');
-      assert.match(String(body.choices?.[0]?.message?.content ?? ''), new RegExp(token));
-      assert.equal(body.choices?.[0]?.finish_reason, 'stop');
-    } finally {
-      await runtime.close();
-    }
-  } finally {
-    rmSync(runtimeDataDir, { recursive: true, force: true });
-  }
+  await runPhase3GatewayRegression(options);
 
   return {
     auth: 'authenticated',

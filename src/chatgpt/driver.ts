@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Locator, Page } from 'playwright';
 
 import { TextStreamAbortedError } from '../stream/errors.js';
 import type { AssistantSnapshot } from '../stream/types.js';
@@ -65,6 +65,8 @@ export interface CreateChatGptDriverOptions {
   navigationTimeoutMs?: number;
   stopPollIntervalMs?: number;
   stopTimeoutMs?: number;
+  sendPollIntervalMs?: number;
+  sendTimeoutMs?: number;
   uploadPollIntervalMs?: number;
   uploadTimeoutMs?: number;
   uploadNow?: () => number;
@@ -85,6 +87,8 @@ export function createChatGptDriver(
   const navigationTimeoutMs = options.navigationTimeoutMs ?? 60_000;
   const stopPollIntervalMs = options.stopPollIntervalMs ?? 100;
   const stopTimeoutMs = options.stopTimeoutMs ?? 5_000;
+  const sendPollIntervalMs = options.sendPollIntervalMs ?? 100;
+  const sendTimeoutMs = options.sendTimeoutMs ?? 5_000;
   const uploadPollIntervalMs = options.uploadPollIntervalMs ?? 100;
   const uploadTimeoutMs = options.uploadTimeoutMs ?? 60_000;
   const uploadNow = options.uploadNow ?? Date.now;
@@ -107,6 +111,28 @@ export function createChatGptDriver(
         selectorName: chatGptSelectors.composer.name,
       });
     }
+  };
+
+  const waitForSendControl = async (page: Page, context: string): Promise<Locator> => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt <= sendTimeoutMs) {
+      const sendControl = await inspectUniqueSelector(page, chatGptSelectors.sendButton);
+      if (sendControl.status === 'unique') return sendControl.locator;
+      if (sendControl.status === 'ambiguous') {
+        throw new ChatGptDriverError({
+          code: 'selector_ambiguous',
+          message: `ChatGPT send control is ambiguous ${context}`,
+          selectorName: chatGptSelectors.sendButton.name,
+          candidateName: sendControl.candidateName,
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, sendPollIntervalMs));
+    }
+    throw new ChatGptDriverError({
+      code: 'selector_missing',
+      message: `ChatGPT send control did not appear ${context}`,
+      selectorName: chatGptSelectors.sendButton.name,
+    });
   };
 
   const dismissConversationHistoryRateLimitModal = async (page: Page): Promise<void> => {
@@ -298,9 +324,9 @@ export function createChatGptDriver(
           });
         }
       }
-      const sendButton = await resolveUniqueSelector(page, chatGptSelectors.sendButton);
+      const sendButton = await waitForSendControl(page, 'after Composer fill');
       throwIfAborted();
-      await sendButton.locator.click();
+      await sendButton.click();
 
       const observe = async (): Promise<AssistantSnapshot> => {
         if (waitingForStableConversationRoute) {

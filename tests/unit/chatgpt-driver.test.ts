@@ -50,6 +50,8 @@ function successfulSendHarness(
     stopControlStatus?: 'missing' | 'unique';
     expectedGenerating?: boolean;
     finalUrlAfterCompletion?: string;
+    postCompletionSendStatuses?: Array<'missing' | 'unique'>;
+    sendResolveFails?: boolean;
   } = {},
 ) {
   const { page, events, setUrl } = fakePage(currentUrl);
@@ -102,24 +104,48 @@ function successfulSendHarness(
         locator: { count: async () => 0 } as unknown as Locator,
       };
     },
-    inspectUnique: async (_page, definition) =>
-      definition.name === 'stopControl' && options.stopControlStatus === 'unique'
+    inspectUnique: async (_page, definition) => {
+      if (definition.name === 'sendButton') {
+        const status = options.postCompletionSendStatuses?.shift() ?? 'unique';
+        events.push(`inspect:send:${status}`);
+        return status === 'unique'
+          ? {
+              status: 'unique',
+              candidateName: 'send-test',
+              count: 1,
+              locator: send,
+            }
+          : { status: 'missing', count: 0 };
+      }
+      return definition.name === 'stopControl' && options.stopControlStatus === 'unique'
         ? {
             status: 'unique',
             candidateName: 'stop-test',
             count: 1,
             locator: { count: async () => 1 } as unknown as Locator,
           }
-        : { status: 'missing', count: 0 },
+        : { status: 'missing', count: 0 };
+    },
     resolveUnique: async (_page, definition) => {
       if (definition.name === 'composer') {
         return { locator: composer, candidateName: 'composer-test' };
       }
       if (definition.name === 'sendButton') {
+        if (options.sendResolveFails) {
+          throw new ChatGptDriverError({
+            code: 'selector_missing',
+            message: 'Send button is not mounted yet',
+            selectorName: 'sendButton',
+          });
+        }
         return { locator: send, candidateName: 'send-test' };
       }
       throw new Error(`Unexpected selector ${definition.name}`);
     },
+    stopPollIntervalMs: 1,
+    stopTimeoutMs: 50,
+    sendPollIntervalMs: 1,
+    sendTimeoutMs: 5,
     waitForAssistantCompletion: async (completionOptions) => {
       events.push('completion');
       const observation = await completionOptions.observe();
@@ -271,7 +297,50 @@ describe('ChatGptDriver sendText', () => {
     });
 
     expect(page.goto).not.toHaveBeenCalled();
-    expect(events).toEqual(['baseline', 'fill:hello', 'click:send', 'completion', 'turn:3']);
+    expect(events).toEqual([
+      'baseline',
+      'fill:hello',
+      'inspect:send:unique',
+      'click:send',
+      'completion',
+      'turn:3',
+    ]);
+  });
+
+  it('does not require an empty Composer to expose Send after the target turn is complete', async () => {
+    const { page, events, driver } = successfulSendHarness(
+      'https://chatgpt.com/c/test-conversation',
+      {
+        postCompletionSendStatuses: ['unique', 'missing', 'missing', 'missing'],
+      },
+    );
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
+      text: 'final answer',
+    });
+
+    expect(events.filter((event) => event.startsWith('inspect:send:'))).toEqual([
+      'inspect:send:unique',
+    ]);
+  });
+
+  it('waits for the Send control to appear after fill instead of failing a transient fresh-page race', async () => {
+    const { page, events, driver } = successfulSendHarness(
+      'https://chatgpt.com/c/test-conversation',
+      {
+        sendResolveFails: true,
+        postCompletionSendStatuses: ['missing', 'missing', 'unique', 'unique'],
+      },
+    );
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
+      text: 'final answer',
+    });
+    expect(events.filter((event) => event.startsWith('inspect:send:'))).toEqual([
+      'inspect:send:missing',
+      'inspect:send:missing',
+      'inspect:send:unique',
+    ]);
   });
 
   it('treats the target Assistant turn completion marker as final even when a stale global stop control remains', async () => {

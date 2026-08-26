@@ -75,6 +75,38 @@ describe('streamAssistantText', () => {
 
     expect(finalText).toBe(final);
     expect(deltas.join('')).toBe(final);
+  });
+
+  it('absorbs the observed 38-code-point Markdown renderer tail rewrite before committing it', async () => {
+    const deltas: string[] = [];
+    const stablePrefix = 'A'.repeat(36);
+    const transient = `${stablePrefix}${'B'.repeat(38)}`;
+    const final = `${stablePrefix}${'C'.repeat(40)}`;
+
+    const finalText = await streamAssistantText({
+      observe: observations([
+        { exists: true, text: transient, completionMarkerPresent: false },
+        { exists: true, text: transient, completionMarkerPresent: false },
+        { exists: true, text: transient, completionMarkerPresent: false },
+        { exists: true, text: stablePrefix, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: false },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+        { exists: true, text: final, completionMarkerPresent: true },
+      ]),
+      onDelta: async (delta) => {
+        deltas.push(delta);
+      },
+      clock: scriptedClock(),
+      pollIntervalMs: 10,
+      timeoutMs: 200,
+    });
+
+    expect(finalText).toBe(final);
+    expect(deltas.join('')).toBe(final);
     expect(deltas.length).toBeGreaterThan(1);
   });
 

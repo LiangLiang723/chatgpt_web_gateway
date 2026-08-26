@@ -124,7 +124,10 @@ function uploadHarness(options: UploadHarnessOptions = {}) {
       }
       throw new Error(`Unexpected collection selector ${definition.name}`);
     },
-    inspectUnique: async () => ({ status: 'missing', count: 0 }),
+    inspectUnique: async (_page, definition) =>
+      definition.name === 'sendButton'
+        ? { status: 'unique', candidateName: 'send-test', count: 1, locator: send }
+        : { status: 'missing', count: 0 },
     resolveUnique: async (_page, definition) => {
       if (definition.name === 'attachmentInput') {
         return { locator: attachmentInput, candidateName: 'attachment-input-test' };
@@ -141,6 +144,8 @@ function uploadHarness(options: UploadHarnessOptions = {}) {
     uploadSleep: options.uploadSleep,
     uploadTimeoutMs: options.uploadTimeoutMs,
     uploadPollIntervalMs: options.uploadPollIntervalMs,
+    sendPollIntervalMs: 0,
+    sendTimeoutMs: 10,
   } as Parameters<typeof createChatGptDriver>[0] & {
     uploadNow?: () => number;
     uploadSleep?: (ms: number) => Promise<void>;

@@ -1,4 +1,4 @@
-import { runPhase3ChatGptE2E } from '../tests/e2e/chatgpt-phase3.e2e.js';
+import { runPhase3GatewayRegression } from '../tests/e2e/chatgpt-phase3.e2e.js';
 import { runPhase4ChatGptE2E } from '../tests/e2e/chatgpt-phase4.e2e.js';
 import { runPhase5ChatGptE2E } from '../tests/e2e/chatgpt-phase5.e2e.js';
 import { runPhase6ChatGptE2E } from '../tests/e2e/chatgpt-phase6.e2e.js';
@@ -9,7 +9,7 @@ const options = parseRealE2EEnvironment(process.env);
 requireCombinedRealE2E(process.env);
 const phase3Profile = cloneRealE2EProfile(options.profileDir);
 try {
-  const phase3 = await runPhase3ChatGptE2E({
+  const phase3 = await runPhase3GatewayRegression({
     ...options,
     profileDir: phase3Profile.profileDir,
   });

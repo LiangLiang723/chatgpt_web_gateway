@@ -21,7 +21,7 @@ export interface StreamAssistantTextOptions {
 export async function streamAssistantText(options: StreamAssistantTextOptions): Promise<string> {
   let stableState = createStablePrefixState({
     stableSamples: options.stableSamples ?? 3,
-    holdbackCodePoints: options.holdbackCodePoints ?? 16,
+    holdbackCodePoints: options.holdbackCodePoints ?? 64,
   });
 
   const finalText = await waitForStreamingCompletion({

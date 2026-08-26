@@ -378,10 +378,10 @@ describe('Conversation true Streaming', () => {
     const registry = new FakePageRegistry();
     const queue = new DirectQueue();
     driver.snapshots.push(
-      { exists: true, text: 'ABCDEFGHIJKLMNOPQRST', completionMarkerPresent: false },
-      { exists: true, text: 'ABCDEFGHIJKLMNOPQRSTU', completionMarkerPresent: false },
-      { exists: true, text: 'ABCDEFGHIJKLMNOPQRSTUV', completionMarkerPresent: false },
-      { exists: true, text: 'ABCDEFGHIJKLMNOPQRSTUVW', completionMarkerPresent: false },
+      { exists: true, text: 'A'.repeat(80), completionMarkerPresent: false },
+      { exists: true, text: 'A'.repeat(81), completionMarkerPresent: false },
+      { exists: true, text: 'A'.repeat(82), completionMarkerPresent: false },
+      { exists: true, text: 'A'.repeat(83), completionMarkerPresent: false },
     );
     const engine = createEngine({ db, driver, registry, queue });
     const controller = new AbortController();
