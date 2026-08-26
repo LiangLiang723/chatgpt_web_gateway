@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript 6、Node 24、Fastify 5、Playwright 1.62.1、Vitest 4、Node `http.ServerResponse` SSE、SQLite `node:sqlite`。
 
-**Execution status (2026-08-16):** Tasks 1–11 的设计激活、产品实现、TDD、deterministic integration、真实 TCP E2E harness 与 combined harness 接入均已完成；Task 12 的 fresh deterministic 与 Docker build/smoke 已通过。当前仅 authenticated `inspect:chatgpt`、Phase 5 real E2E 和 combined Phase 3/4/5 real E2E 因本会话无法访问隔离已登录 Browser Profile / LAN proxy 而阻塞，因此 Phase 5 保持开放。
+**Execution status:** Phase 5 已于 2026-08-17 完成 deterministic、Docker、standalone authenticated E2E 与 combined Phase 3/4/5 real E2E 并正式关闭。后续 2026-08-26 Phase 6 最终 combined regression 又观测到更长的 Markdown 尾部回排，当前实现把默认 commit-tail holdback 从 16 调整为 64 code points；这属于已完成 Phase 5 Streaming 边界的后续真实网页收紧。
 
 ## Global Constraints
 
@@ -732,7 +732,7 @@ corepack pnpm test:e2e:chatgpt
 
 Expected: Phase 3 + Phase 4 + Phase 5 all PASS.
 
-2026-08-17 final execution evidence: `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`; standalone `test:e2e:chatgpt:phase5` returned `chatCompletions=true`, `markdown=true`, `responses=true`, `abort=true`; combined `test:e2e:chatgpt` returned Phase 3 auth/driver/gateway challenge, Phase 4 APPEND/RESTORE/REBUILD and all Phase 5 scenarios as PASS. The authenticated runs exposed and TDD-fixed provisional `/c/WEB:*` ownership, Assistant placeholders without `.markdown`, renderer tail rewrites requiring a 16-code-point commit holdback, and the explicit conversation-history rate-limit notification modal. Final fresh deterministic evidence is 55 test files / 332 tests; final fresh `linux/amd64` Docker digest is `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` with full smoke PASS.
+2026-08-17 final execution evidence: `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`; standalone `test:e2e:chatgpt:phase5` returned `chatCompletions=true`, `markdown=true`, `responses=true`, `abort=true`; combined `test:e2e:chatgpt` returned Phase 3 auth/driver/gateway challenge, Phase 4 APPEND/RESTORE/REBUILD and all Phase 5 scenarios as PASS. The authenticated runs exposed and TDD-fixed provisional `/c/WEB:*` ownership, Assistant placeholders without `.markdown`, renderer tail rewrites requiring a bounded commit holdback, and the explicit conversation-history rate-limit notification modal. A later 2026-08-26 authenticated combined regression observed a 38-code-point Markdown tail rewrite, so the current default holdback was raised from 16 to 64 code points with deterministic regression coverage. Final fresh deterministic evidence is 55 test files / 332 tests; final fresh `linux/amd64` Docker digest is `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` with full smoke PASS.
 
 - [x] **Step 6: Final docs writeback**
 

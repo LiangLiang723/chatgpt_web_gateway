@@ -8,8 +8,8 @@
 |---|---:|---:|
 | `GET /health` | ✅ | ✅ |
 | `GET /v1/models` | ✅ | ✅ |
-| `POST /v1/chat/completions` | ✅ | ✅ 纯文本 |
-| `POST /v1/responses` | ✅ | ✅ 纯文本 |
+| `POST /v1/chat/completions` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 |
+| `POST /v1/responses` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 |
 | `POST /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `GET /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `GET /v1/files/:id` | ✅ | ✅ Phase 6 local Files lifecycle |
@@ -18,9 +18,9 @@
 | `POST /v1/images/generations` | ✅ | ❌ Phase 8 |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ | ❌ |
 
-## Current Phase 6 Files Foundation（当前 Phase 6 Files 基础）
+## Current Phase 6 Files and Attachments（当前 Phase 6 Files 与附件输入）
 
-当前代码已经实现本地 `/v1/files` 生命周期，但**尚未把这些 File 送入 ChatGPT Web**：
+Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E 与最终 combined Phase 3/4/5/6 real E2E：
 
 - 五个 Files endpoint 均沿用现有 `/v1/*` Bearer authentication。
 - `POST /v1/files` 使用 `@fastify/multipart` stream API；恰好一个 file + 一个已批准 purpose，拒绝 `expires_after`、额外字段、非法 filename 和超过 32 MiB 的文件。
@@ -28,8 +28,10 @@
 - 逻辑 File 与 content-addressed SHA-256 Blob 分离；相同字节可有多个公开 File ID，但只保存一份 Blob。
 - `GET /v1/files` 支持 `after`、`limit=1..10000`、`order=asc|desc`、`purpose`；只返回未删除 public File。
 - metadata/content 可跨 Gateway runtime restart 恢复；content 从 Blob 流式返回，不暴露 storage path。
-- `DELETE` 立即撤销公开访问，并在没有 lease / persisted Attachment 引用时 GC logical File；Blob 只有零 logical references 才删除。
-- Task 2 fresh deterministic `corepack pnpm verify` 已通过；ChatGPT upload/readiness、multimodal Context 与 authenticated attachment E2E 仍属于后续 Phase 6 Task，因此 Chat Completions / Responses attachment input 仍是 ❌。
+- `DELETE` 立即撤销公开访问；若历史 Conversation Attachment 仍引用该 File，内部 bytes 会保留以保证 REBUILD/恢复，不承诺立即 secure erase。
+- Chat Completions 支持 `image_url` URL/Data URL、`file.file_data` 与 `file.file_id`；Responses 支持 `input_image.image_url/file_id` 与 `input_file.file_data/file_id`。两套协议共享 Attachment Resolver、multimodal Context、Conversation Engine 与 ChatGPT upload readiness。
+- Gateway 防御性限制为单 File/附件 32 MiB、单请求最多 16 个附件、累计 64 MiB；这是本产品策略，不代表 OpenAI 或 ChatGPT Web 官方上限。
+- 2026-08-26 combined real E2E 实际通过 Phase 3/4/5/6；Phase 6 场景返回 `imageDataUrl=true`、`imageFileId=true`、`txt=true`、`pdf=true`、`docx=true`、`xlsx=true`、`append=true`、`restore=true`、`streaming=true`。Remote URL fetch 的 SSRF/DNS/redirect 链有 deterministic coverage，但本轮没有使用公网 fixture 做 live remote-fetch E2E。
 
 ## Current Phase 5 Implementation（当前 Phase 5 实现）
 
@@ -38,7 +40,7 @@
 - 两套 POST 都经过 TypeBox/Ajv → 统一 Normalizer → Conversation Engine；route 不直接实现浏览器逻辑。
 - 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint；无 key 时仍为独立 FRESH `conversation_key = NULL`。
 - Phase 5 `stream=true` 与 non-stream 使用相同的 target Assistant turn ownership 和 completion 语义，不改变 Context Sync 规则。
-- Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 16 个 Unicode code points 作为 bounded commit tail；completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
+- Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 **64 个 Unicode code points** 作为 bounded commit tail；2026-08-26 real E2E 观测到一次 38-code-point Markdown 尾部回排后从 16 提升为 64。completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
 - Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage。
 - Responses 使用 typed SSE：`response.created`、`response.in_progress`、item/content added、`response.output_text.delta`、done events、`response.completed`；IDs 稳定，`sequence_number` 单调，`usage=null`。
 - 首个 internal `started` 之前的错误仍返回普通 OpenAI-style 非 200 JSON；SSE 已开始后的错误使用协议流内 error，并且不发送成功 terminal。
@@ -62,10 +64,10 @@
 | `developer` / `system` | ✅ | ✅ 参与 Context Sync；通过 prompt envelope 近似映射，不声称网页有原生 privilege channel |
 | `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发 |
 | 字符串 / text part `content` | ✅ | ✅ |
-| `stream=false` | ✅ | ✅ 非流式纯文本 |
-| `stream=true` | ✅ | ✅ 纯文本 DOM Streaming 已实现并通过 authenticated Phase 5 standalone + combined real E2E |
-| `image_url` URL/Base64 | ✅ | ❌ Phase 6 |
-| file / `file_id` / Base64 file | ✅ | ❌ Phase 6 |
+| `stream=false` | ✅ | ✅ 文本与 Phase 6 附件请求 |
+| `stream=true` | ✅ | ✅ 文本与 Phase 6 附件请求均复用真实 DOM Streaming |
+| `image_url` URL/Base64 | ✅ | ✅ Phase 6；URL 安全获取 + Data URL，authenticated E2E 覆盖 Data URL |
+| file / `file_id` / Base64 file | ✅ | ✅ Phase 6 |
 | `tools` / tool messages | ✅ | ❌ Phase 7 |
 | `tool_choice` 非默认策略 | ✅ | ❌ Phase 7 |
 | `response_format=json_object/json_schema` | 🟡 | ❌ Phase 5 execution 仍拒绝 |
@@ -78,14 +80,16 @@
 
 Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conversation Engine。
 
-当前纯文本支持：
+当前支持：
 
 - `input` string。
 - text message array / `input_text`。
+- `input_image.image_url`（URL/Data URL）与 `input_image.file_id`。
+- `input_file.file_data` 与 `input_file.file_id`。
 - `stream=false`。
-- `stream=true` typed SSE。
+- `stream=true` typed SSE，包括 attachment Streaming。
 
-`input_image`、`input_file`、tools 仍属于后续 Phase。
+`input_file.file_url`、tools 与 Structured Output execution 仍不支持。
 
 ## Stable Error Boundary（稳定错误边界）
 
@@ -106,7 +110,13 @@ Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conver
 | `invalid_file_upload` | 400 | multipart / filename / purpose / file body 无效 |
 | `file_too_large` | 413 | `/v1/files` 超过 Gateway 32 MiB 单文件上限 |
 | `file_storage_error` | 500 | Gateway 本地 Blob/File 持久化失败 |
-| `unsupported_phase5_request` | 501 | 请求需要附件/Tools/Structured/Image 等后续能力 |
+| `invalid_attachment` | 400 | attachment source/Base64/Data URL/type 无效或 URL SSRF policy 拒绝 |
+| `attachment_too_large` | 413 | 单附件或请求累计附件超过 Gateway 上限 |
+| `attachment_fetch_failed` | 400 | client-supplied remote image URL 无法安全获取 |
+| `chatgpt_upload_failed` | 502 | ChatGPT 明确拒绝或附件上传失败 |
+| `chatgpt_upload_timeout` | 504 | 本请求 owned attachment 未在规定时间 ready |
+| `unsupported_phase6_request` | 501 | Tools/Structured/Image output/`input_file.file_url` 等 Phase 6 外能力 |
+| `unsupported_phase5_request` | 501 | 仅保留旧 Phase 5 execution error 类型；当前公开执行链使用 Phase 6 capability gate |
 | `invalid_conversation_request` | 400 | 当前 Conversation 请求形状无效 |
 
 SSE 已开始后 HTTP status 已固定为 200；相同稳定错误改用协议流内 error framing，并且不发送成功 terminal。
@@ -123,4 +133,4 @@ chatgpt-web
 
 ## Files / Images Generation（Files 当前状态 / Images 后续目标）
 
-Files 元数据/字节生命周期已经在 Phase 6 Task 1/2 实现；附件 source resolve 与 ChatGPT Web 上传仍未实现，因此 Files endpoint 可用不代表 `file_id` 已能作为模型输入。ChatGPT 图片生成仍属于 Phase 8。V1 已批准范围不等于当前实现。
+Files 元数据/字节生命周期、Attachment Resolver、ChatGPT Web upload/readiness 与 `file_id` 模型输入已经在 Phase 6 完成并通过真实网页验收。`DELETE /v1/files/:id` 撤销公开访问，但为保证已持久化 Conversation 的 REBUILD/恢复，历史 Attachment 引用仍可保留内部 bytes。ChatGPT 图片生成仍属于 Phase 8。V1 已批准范围不等于当前实现。

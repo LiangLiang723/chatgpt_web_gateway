@@ -141,7 +141,7 @@ Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增�
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
 
-Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航/readiness 与提交彻底拆分为 `openFresh(page)`、`openConversation(page, savedUrl)` 和纯 `sendText(page, { prompt })`。`openConversation` 只接受安全 `https://chatgpt.com` non-root Conversation URL，以 canonical pathname 比较 identity（忽略 query/hash）；确认无法恢复时返回显式 `not_restorable`，auth/selector/browser 异常继续作为错误传播。所有路径仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer。2026-08-16 真实 DOM 验收发现全局 `stop-button` 可能在答案可见文本已经稳定后继续滞留，因此它不再是唯一完成条件；Driver 现在绑定本次新 Assistant turn，并等待该 turn 的 `copy-turn-action-button` completion marker 出现，再结合非空文本连续稳定采样确认完成。固定约 250ms 只是 polling cadence，不把任意 sleep、`networkidle` 或全局按钮瞬时状态当作完成证据。
+Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航/readiness 与提交彻底拆分为 `openFresh(page)`、`openConversation(page, savedUrl)` 和纯 `sendText(page, { prompt })`。`openConversation` 只接受安全 `https://chatgpt.com` non-root Conversation URL，以 canonical pathname 比较 identity（忽略 query/hash）；确认无法恢复时返回显式 `not_restorable`，auth/selector/browser 异常继续作为错误传播。所有路径仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer。2026-08-16 真实 DOM 验收发现全局 `stop-button` 可能在答案可见文本已经稳定后继续滞留，因此它不再是唯一完成条件；Driver 现在绑定本次新 Assistant turn，并等待该 turn 的 `copy-turn-action-button` completion marker 出现，再结合非空文本连续稳定采样确认完成。固定约 250ms 只是 polling cadence，不把任意 sleep、`networkidle` 或全局按钮瞬时状态当作完成证据。2026-08-26 real E2E 进一步确认 Composer `fill()` 成功后 Send control 仍可能短暂未挂载，因此 Driver 在 fill 后以 strict unique selector 轮询等待 Send readiness；Assistant 完成后的空 Composer 不再被错误要求必须暴露 Send。
 
 Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。Phase 5 authenticated real E2E 进一步确认 Fresh 会短暂进入 `/c/WEB:<uuid>` provisional route，APPEND 也可能先挂载没有 `.markdown` 正文的临时 Assistant placeholder；Driver 因此只有在正式安全 Conversation URL 与 owned turn 唯一 `.markdown` 正文同时成立后才暴露 authoritative snapshot。若 ChatGPT 生成 writing-block/editor 导致多个正文节点，继续严格 `selector_ambiguous`，不截断结构化 UI 冒充纯文本。
 
@@ -171,7 +171,7 @@ Protocol-neutral TextStreamEvent
 
 `src/stream/` 是纯逻辑层，不依赖 Playwright、`api/`、`browser/`、`chatgpt/`、`persistence/` 或 `node:sqlite`。Assistant ownership 仍由发送前 `assistantTurns.count()` 的 baseline 决定；Driver 的 `ChatGptTextTurn` 只观察固定 target turn，并提供 `observe()`、严格唯一 Stop 的 `stop()` 和安全 `conversationUrl()`。
 
-Stable Prefix 使用最近 3 个 snapshot 的 longest common prefix，并在普通生成阶段默认把最后 16 个 Unicode code points 作为 bounded commit-tail holdback 留在内存；authenticated real Markdown E2E 证明当前 renderer 会在 `<pre>` 挂载/重排期间短距离改写尾部。最终 completion 确认后再精确 flush 被保留的完整尾部。已经发送的 prefix 永不撤回；若后续 DOM rewrite 穿过已 committed prefix，仍进入稳定 `chatgpt_stream_diverged`，不发送 correction/backspace。Completion 以 target turn 自身的 `copy-turn-action-button` marker + 连续稳定 final text + final reread 为终态，不把可能滞留的全局 Stop control 当成功必要条件。
+Stable Prefix 使用最近 3 个 snapshot 的 longest common prefix，并在普通生成阶段默认把最后 **64 个 Unicode code points** 作为 bounded commit-tail holdback 留在内存。2026-08-26 authenticated combined regression 观测到 Markdown renderer 一次 **38 code-point** 尾部回排，因此当前默认值从 16 提升为 64 并有确定性回归测试。最终 completion 确认后再精确 flush 被保留的完整尾部。已经发送的 prefix 永不撤回；若后续 DOM rewrite 穿过已 committed prefix，仍进入稳定 `chatgpt_stream_diverged`，不发送 correction/backspace。Completion 以 target turn 自身的 `copy-turn-action-button` marker + 连续稳定 final text + final reread 为终态，不把可能滞留的全局 Stop control 当成功必要条件。
 
 Conversation Engine 在首个 protocol-neutral `started` 后、第一次可能写网页 turn 前持久化 `in_flight`。若客户端在首帧后立即断开，Engine 会在 checkpoint 前检查 AbortSignal；若断开发生在 checkpoint 后但 Send 前，Driver 在 baseline/composer/fill/send 异步边界继续检查同一个 signal，保证不继续点击 Send。生成中 abort 会 best-effort Stop、不保存 partial Assistant、保持 `in_flight` 并 discard 当前 Page；下一 keyed request 通过 REBUILD 收敛。
 
@@ -205,7 +205,7 @@ OpenAI tool_calls
 
 ## Attachments（附件）
 
-Phase 6 已完成设计、尚未实现；Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。批准的数据流是：
+Phase 6 已完成实现与 authenticated real E2E 验收；Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。当前数据流是：
 
 ```text
 OpenAI content part / file_id
@@ -231,7 +231,7 @@ Phase 6 锁定逻辑 File 与物理 Blob 分离：公开 `/v1/files` 和 inline 
 
 Context Sync 仍只有 `FRESH | APPEND | RESTORE | REBUILD`：APPEND/RESTORE 只上传当前新增 user turn 附件；FRESH/REBUILD 从本地 File 事实源重新上传当前有效 full context 所需附件。第一次 Browser upload side effect 前必须先持久化 `in_flight`；upload/readiness 的未知失败保持 `in_flight` 并 discard Page。stream/non-stream 在 Send 后继续共享 Phase 5 target Assistant / completion / Stable Prefix。
 
-SQLite 保存 File/Blob/Attachment 元数据和引用，大文件字节保存在 `data/files/`。具体 migration、Files DELETE retention、SSRF/资源限制与 authenticated real E2E 边界以 Phase 6 spec 为准；在实现和真实验收完成前，公开附件能力仍保持未实现。
+SQLite 保存 File/Blob/Attachment 元数据和引用，大文件字节保存在 `data/files/`。migration 003、Files DELETE retained-history、SSRF/资源限制、upload ownership/readiness 与双协议附件执行链均已实现。2026-08-26 最终 combined Phase 3/4/5/6 real E2E 通过，Phase 6 因而关闭；该验收覆盖 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、APPEND/RESTORE 与 attachment Streaming。Remote URL image fetch 的安全链由 deterministic tests 覆盖，本轮没有使用公网 fixture 做 live remote-fetch E2E。
 
 ## 图片生成
 

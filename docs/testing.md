@@ -114,7 +114,7 @@ Phase 3/4/5/6 均提供 standalone 入口；主 `test:e2e:chatgpt` 只用于最�
 
 Phase 6 Task 5 已于 2026-08-19 完成 authenticated DOM inspection：当前网页有唯一 generic `input[type=file]:not([accept])`，owned file tile 用 baseline count 归属；pending 时 tile 内存在 `cursor-wait` / progress circles，ready 时两者同时消失；0-byte fixture 会新增 `role=alert` 并被映射为 upload failure。`inspect:chatgpt` 可通过 `CHATGPT_ATTACHMENT_PROBE_PATH` 运行受控、不点击 Send 的 readiness probe，并在完成后 reload Composer。
 
-2026-08-21 standalone Phase 6 real E2E 已进一步真实通过：Data URL image、image `file_id`、TXT、PDF、DOCX、XLSX、same-key APPEND、runtime restart RESTORE 和 attachment Streaming 均返回成功证据，并要求最终 Conversation 保持 clean 的 Attachment → File → Blob linkage。该 standalone 结果证明模型实际 ingest 代表性附件，而不只是 preview 出现。combined Phase 3/4/5/6 regression 随后在既有 Phase 3 text challenge 处失败，因此 Phase 6 仍保持开放，不能把 standalone 成功替代 combined regression。完整设计见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+2026-08-21 standalone Phase 6 real E2E 真实通过 Data URL image、image `file_id`、TXT、PDF、DOCX、XLSX、same-key APPEND、runtime restart RESTORE 和 attachment Streaming，并要求最终 Conversation 保持 clean 的 Attachment → File → Blob linkage。随后真实网页调试修复了 Markdown 38-code-point 尾部回排与 Composer fill 后 Send 短暂未挂载两个回归。2026-08-26 最终 combined Phase 3/4/5/6 real E2E 以退出码 0 完成，Phase 3 `gatewayChallenge=true`、Phase 4 `append/restore/rebuild=true`、Phase 5 `chatCompletions/markdown/responses/abort=true`、Phase 6 九项均为 `true`，因此 Phase 6 authenticated real E2E 门槛关闭。Remote URL image fetch 的 SSRF/DNS/redirect 安全链由 deterministic tests 覆盖；本轮没有使用公网 fixture 做 live remote-fetch E2E。完整设计见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
 
 ## DOM 诊断
 
@@ -178,7 +178,7 @@ corepack pnpm docker:build
 corepack pnpm docker:smoke
 ```
 
-当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 5 deterministic coverage 已新增 Snapshot normalization、Unicode-safe Stable Prefix、16-code-point commit-tail holdback、completion/divergence、provisional `/c/WEB:*` / Assistant placeholder ownership、conversation-history rate-limit 通知 modal、Assistant turn handle/Stop/pre-Send abort、SSE backpressure、Chat Completions / Responses encoders、真实本地 TCP route streaming、FRESH/APPEND/RESTORE/REBUILD、same-key FIFO / different-key parallel、final-save failure、生成中 abort 与首帧后取消。2026-08-17 fresh DevSpace `corepack pnpm verify` 实际通过 55 个 test files / 332 tests；使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
+当前 `corepack pnpm verify` 已组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。Phase 5 deterministic coverage 包含 Snapshot normalization、Unicode-safe Stable Prefix、**64-code-point commit-tail holdback**、completion/divergence、provisional `/c/WEB:*` / Assistant placeholder ownership、conversation-history rate-limit 通知 modal、Assistant turn handle/Stop/pre-Send abort、SSE backpressure、Chat Completions / Responses encoders、真实本地 TCP route streaming、FRESH/APPEND/RESTORE/REBUILD、same-key FIFO / different-key parallel、final-save failure、生成中 abort 与首帧后取消；2026-08-26 新增 38-code-point Markdown renderer 尾部回排回归测试和 Composer fill 后 Send readiness 竞态覆盖。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
@@ -192,7 +192,7 @@ corepack pnpm docker:smoke
 - 图片实际生成并能下载。
 - 当前 ChatGPT UI 没有破坏完成检测。
 
-真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3/4/5 现在都有 authenticated real E2E 通过证据。2026-08-17 `inspect:chatgpt` 在隔离登录 Profile 上实际返回 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 真实返回 `chatCompletions=true`、`markdown=true`、`responses=true`、`abort=true`。Harness 通过真实 TCP listener 证明长回复首个 meaningful delta 早于 target completion marker，Chat Completions 只有一个 stop terminal 与一个 `[DONE]`，Markdown/code multiline 不重复/不丢尾，Responses typed lifecycle/IDs/`sequence_number` 正确，并要求最终 `delta concat == authoritative live DOM == SQLite`。abort 场景在 meaningful delta 后真实断开 socket，要求 Driver Stop 成功、SQLite 保持 `in_flight`、Page affinity 被丢弃，下一 same-key authoritative request 通过 REBUILD 收敛且 ChatGPT Conversation URL 改变。随后 combined `test:e2e:chatgpt` 再次真实通过 Phase 3 auth/driver/gateway challenge、Phase 4 APPEND/RESTORE/REBUILD 和 Phase 5 全部四项。
+真实 E2E 没有通过时，最终汇报必须明确实际停在哪个外部边界。Phase 3/4/5/6 现在都有 authenticated real E2E 通过证据。2026-08-17 `inspect:chatgpt` 在隔离登录 Profile 上实际返回 `auth=authenticated` / `composer=unique`；standalone `test:e2e:chatgpt:phase5` 真实返回 `chatCompletions=true`、`markdown=true`、`responses=true`、`abort=true`。Harness 通过真实 TCP listener 证明长回复首个 meaningful delta 早于 target completion marker，Chat Completions 只有一个 stop terminal 与一个 `[DONE]`，Markdown/code multiline 不重复/不丢尾，Responses typed lifecycle/IDs/`sequence_number` 正确，并要求最终 `delta concat == authoritative live DOM == SQLite`。abort 场景在 meaningful delta 后真实断开 socket，要求 Driver Stop 成功、SQLite 保持 `in_flight`、Page affinity 被丢弃，下一 same-key authoritative request 通过 REBUILD 收敛且 ChatGPT Conversation URL 改变。2026-08-26 最终 combined `test:e2e:chatgpt` 再次真实通过 Phase 3 gateway regression、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 全部四项与 Phase 6 图片/文档/恢复/Streaming 全部场景。
 
 ### Phase 5 Docker 验收事实
 

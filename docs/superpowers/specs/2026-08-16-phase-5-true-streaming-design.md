@@ -520,12 +520,12 @@ snapshot 2: "hello"
 ```text
 poll interval        = 200ms
 stable samples       = 3
-commit tail holdback = 16 Unicode code points
+commit tail holdback = 64 Unicode code points
 ```
 
 保留最近最多 3 个**已存在 target turn**的 normalized text snapshot。
 
-2026-08-17 authenticated real E2E 进一步证明，正式 `/c/<uuid>` route 上的 Markdown renderer 也会在生成期间短距离回排当前尾部：已经连续稳定多轮的可见文本仍可能在后续 snapshot 从 `N` 缩短 1–3 code points，LCP 保持为新的完整文本长度。由于已经写入 SSE 的字节不能撤回，3-sample window 之外还需要一个**bounded commit tail holdback**：普通生成 snapshot 的 Stable Prefix 最后 16 个 Unicode code points 只保留在内存，不提前承诺给客户端；Completion Detector 最终确认后再精确 flush。这个 guard 不 trim、不改写、不丢弃字符，只延迟极短尾部的提交；如果 rewrite 穿过已经 committed 的 guard 之外前缀，仍然必须 `chatgpt_stream_diverged`。
+2026-08-17 authenticated real E2E 证明，正式 `/c/<uuid>` route 上的 Markdown renderer 会在生成期间短距离回排当前尾部；2026-08-26 最终 Phase 6 combined regression 又观测到一次 **38 code-point** 的尾部回排。由于已经写入 SSE 的字节不能撤回，3-sample window 之外还需要一个 **bounded commit tail holdback**：普通生成 snapshot 的 Stable Prefix 最后 **64 个 Unicode code points** 只保留在内存，不提前承诺给客户端；Completion Detector 最终确认后再精确 flush。64 是对已观测 38-code-point 回排留下余量的当前默认值。这个 guard 不 trim、不改写、不丢弃字符，只延迟尾部提交；如果 rewrite 穿过已经 committed 的 guard 之外前缀，仍然必须 `chatgpt_stream_diverged`。
 
 例如：
 

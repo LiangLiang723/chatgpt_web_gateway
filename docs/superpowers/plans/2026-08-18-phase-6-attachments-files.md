@@ -597,18 +597,20 @@ Expected evidence:
 - stream meaningful delta occurs before target completion and final delta concat equals DOM/SQLite;
 - final Conversation is clean with Attachment → File → Blob linkage.
 
-- [!] **Step 4: Run combined Phase 3/4/5/6 E2E**
+- [x] **Step 4: Run combined Phase 3/4/5/6 E2E**
 
 Run: `E2E_CHATGPT=1 ... corepack pnpm test:e2e:chatgpt`
 Expected: all earlier phase regressions plus Phase 6 PASS.
 
-2026-08-21 execution evidence: fresh authenticated attachment inspection passed, and standalone Phase 6 real E2E returned `imageDataUrl=true`, `imageFileId=true`, `txt=true`, `pdf=true`, `docx=true`, `xlsx=true`, `append=true`, `restore=true`, and `streaming=true`. Real E2E exposed two implementation defects that were fixed with deterministic regressions: non-stream `sendText()` must wait for the final target-turn snapshot without applying Stable Prefix divergence semantics, and BrowserManager cleanup must tolerate Playwright's explicit already-closed context error. The combined Phase 3/4/5/6 run then failed in the existing Phase 3 text challenge because ChatGPT returned a generic acknowledgement instead of the unique challenge marker. Step 4 therefore remains blocked; do not repeatedly rerun the full combined suite while diagnosing that external regression.
+2026-08-21 execution evidence: fresh authenticated attachment inspection passed, and standalone Phase 6 real E2E returned `imageDataUrl=true`, `imageFileId=true`, `txt=true`, `pdf=true`, `docx=true`, `xlsx=true`, `append=true`, `restore=true`, and `streaming=true`. Real E2E exposed two implementation defects that were fixed with deterministic regressions: non-stream `sendText()` must wait for the final target-turn snapshot without applying Stable Prefix divergence semantics, and BrowserManager cleanup must tolerate Playwright's explicit already-closed context error. The first combined attempt then failed in the existing Phase 3 text challenge, so Task 9A reduced real-web request/session cost before retrying.
 
-- [ ] **Step 5: Record any real remote URL coverage explicitly and commit**
+2026-08-26 final execution evidence: standalone Phase 5 passed again after two additional real-DOM fixes — Markdown renderer emitted a 38-code-point tail rewrite, so the default commit-tail holdback increased from 16 to 64; Composer `fill()` could complete before Send control mounted, so Driver now waits for strict unique Send readiness after fill and does not require the empty post-completion Composer to expose Send. The final single combined process then exited `0` and returned Phase 3 `gatewayChallenge=true`, Phase 4 `append/restore/rebuild=true`, Phase 5 `chatCompletions/markdown/responses/abort=true`, and all nine Phase 6 booleans `true`. Step 4 is complete.
+
+- [x] **Step 5: Record any real remote URL coverage explicitly and commit**
 
 If a safe stable public fixture is available, run a real URL image path. If not, record that remote fetch was deterministically verified but not live-network E2E; never bypass SSRF with localhost/private IP.
 
-Commit: `🧪 增加 Phase 6 真实附件端到端验收`
+2026-08-26 outcome: no stable public fixture was used for real remote-fetch E2E. URL parsing, DNS/IP classification, redirects, pinned-address transport, timeout and size guards remain deterministically covered; authenticated real E2E covered upload/model understanding using Data URL/Base64/`file_id` paths. The final real-web regression fixes and combined request-budget change were committed as `248e54f` (`🐛 修复真实网页流式回排与发送竞态`).
 
 ---
 
@@ -671,15 +673,15 @@ After Task 9A is complete, diagnose the current Phase 3 blocker with `test:e2e:c
 **Interfaces:**
 - Only evidence already produced in Tasks 1–9 may become “implemented/verified” facts.
 
-- [ ] **Step 1: Mark plan tasks with actual outcomes**
+- [x] **Step 1: Mark plan tasks with actual outcomes**
 
 Use `[x]`, `[!]`, or `[-]` per `docs/project-memory-protocol.md`; do not mark blocked real E2E as complete.
 
-- [ ] **Step 2: Update compatibility/architecture/testing/state from evidence**
+- [x] **Step 2: Update compatibility/architecture/testing/state from evidence**
 
 If and only if Task 9 passes, mark Files five endpoints, Chat Completions URL/Data URL/file data/file_id, Responses input_image/input_file data/file_id as implemented and authenticated-real-E2E accepted. Keep `input_file.file_url`, Tools, Structured Output, and Image Generation unsupported. Document DELETE retained-history semantics and Gateway 32/64 MiB limits as product policy, not upstream limits.
 
-- [ ] **Step 3: Fresh final verification**
+- [x] **Step 3: Fresh final verification**
 
 Run: `corepack pnpm verify`
 Expected: PASS.

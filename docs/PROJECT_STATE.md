@@ -8,25 +8,24 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-6-implementation
-STATUS=implementing-phase-6
+PHASE=phase-6-complete
+STATUS=phase-6-finalizing
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=diagnose-phase-3-standalone-before-combined-retry
+NEXT_TASK=commit-phase-6-final-writeback
 UPDATED_AT=2026-08-26
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 6 — 图片和文件输入已进入实现阶段；公开附件能力仍未完成验收。
-- **当前状态：** `implementing-phase-6`。Active Plan Task 1–8 已完成；Task 9 的 fixture/harness、fresh authenticated inspect gate 与 standalone Phase 6 real E2E 已通过。combined Phase 3/4/5/6 regression 当前在既有 Phase 3 text challenge 处失败，因此先执行真实 E2E 会话/请求预算优化，再重试 combined。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
-- **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
-- **下一个可执行任务：** 使用新增 `test:e2e:chatgpt:phase3` 单独诊断当前 Phase 3 text challenge；只有 standalone Phase 3 恢复后才允许带 `E2E_CHATGPT_COMBINED=1` 重试 Task 9 combined regression。
-- **最新完整确定性/Docker 证据：** 2026-08-19 Phase 6 Task 8 fresh `linux/amd64` Docker build 通过，本地镜像 digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；随后完整 `docker:smoke` 通过，覆盖 migration `001/002/003`、`/data/files/blobs`/`/data/temp` PUID/PGID writeability、容器 HTTP `/v1/files` upload/metadata/content、same Bind Mount restart exact-content recovery、DELETE 后 metadata/content 404，以及既有 normal/maintenance single owner、Chrome sandbox/seccomp/noVNC RFB 回归。
-- **Phase 6 最新确定性证据：** 2026-08-26 Task 9A real-E2E/session recovery hardening 后 fresh `corepack pnpm verify` 全绿：71 test files / 491 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。新增 `project:status`、standalone Phase 3、combined 二次 opt-in 与 Phase 6 四 conversation group 预算均有 deterministic coverage；本次优化没有访问真实 ChatGPT。此前 Task 8 fresh `linux/amd64` Docker build/smoke 已通过。
-- **真实网页证据：** 2026-08-21 fresh authenticated inspect gate 通过，standalone Phase 6 real E2E 真实返回 `imageDataUrl=true`、`imageFileId=true`、`txt=true`、`pdf=true`、`docx=true`、`xlsx=true`、`append=true`、`restore=true`、`streaming=true`，证明模型实际读取代表性图片/文档与附件上下文/Streaming。随后 combined Phase 3/4/5/6 regression 在 Phase 3 unique text challenge 处失败：ChatGPT 返回通用 acknowledgement 而非 marker；这属于当前 combined blocker，不能据此关闭 Phase 6。
+- **当前阶段：** Phase 6 — 图片和文件输入的产品能力与真实网页验收已经完成；当前只剩 Task 10 branch/documentation 收尾。
+- **当前状态：** `phase-6-finalizing`。Task 1–9 已完成，Task 10 的事实回写与 fresh final verify 已通过；下一步是 staged inspection、提交和 push，这些 Git 收尾完成后进入 Phase 7 Tool Calling 设计。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+- **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。
+- **最新 deterministic 证据：** 2026-08-26 real-web 修复后 fresh `corepack pnpm verify` 通过 **72 test files / 495 tests**；format、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。
+- **最新 Docker 证据：** Phase 6 Task 8 fresh `linux/amd64` build digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`，full `docker:smoke` 通过 migration `001/002/003`、Files restart lifecycle、PUID/PGID writeability 与既有 Browser/noVNC/seccomp 回归。
+- **最新真实网页证据：** 2026-08-26 最终 combined Phase 3/4/5/6 real E2E 单进程退出码 **0**。结果为 Phase 3 `gatewayChallenge=true`；Phase 4 `append/restore/rebuild=true`；Phase 5 `chatCompletions/markdown/responses/abort=true`；Phase 6 `imageDataUrl/imageFileId/txt/pdf/docx/xlsx/append/restore/streaming=true`。
 
 ## Implemented Now（当前已实现）
 
@@ -35,91 +34,68 @@ UPDATED_AT=2026-08-26
 - ✅ Living Repository：`AGENTS.md`、Project Memory、Architecture/API/Testing/Roadmap、spec/plan 工作流和可执行治理检查。
 - ✅ TypeScript / Fastify / TypeBox/Ajv / Vitest 工具链；`corepack pnpm verify` 是确定性总入口。
 - ✅ 正式 `linux/amd64` Docker 运行边界、Playwright Chromium、Xvfb 产品模式、按需 noVNC maintenance Google Chrome Stable、非 root `PUID/PGID`、`/data` Bind Mount。
-- ✅ Node 24 `node:sqlite` 单连接持久化、checksum migrations、Conversation aggregate / File metadata 持久化和 restart 恢复。
-- ✅ BrowserManager、bounded Page Pool、Conversation Page affinity、idle timeout、LRU idle eviction 与 Browser Profile single-owner 边界。
-- ✅ Selector Registry、Auth Probe、显式 `inspect:chatgpt` / real E2E safety gate 与可选 `CHATGPT_PROXY_SERVER`。
-- ✅ `corepack pnpm project:status` 提供 branch/HEAD/dirty/Phase/Active Plan/NEXT_TASK 恢复摘要；真实 E2E 采用 standalone-first、combined 二次 opt-in、同类失败一次复现后退避与 Phase 6 四 conversation group 请求预算。
+- ✅ Node 24 `node:sqlite` 单连接持久化、checksum migrations `001/002/003`、Conversation aggregate / File metadata / Blob lifecycle 与 restart 恢复。
+- ✅ BrowserManager、bounded Page Pool、Conversation Page affinity、idle timeout、LRU idle eviction、Browser Profile single-owner 与显式 ChatGPT proxy 边界。
+- ✅ `corepack pnpm project:status`、standalone Phase E2E、combined 二次 opt-in、单主会话与 real-E2E 请求退避规则。
 
-### API / Conversation
+### API / Conversation / Streaming
 
-- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses` 的当前文本执行链。
+- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`。
 - ✅ Gateway Bearer API Key；`/health` 免认证，`/v1/*` 默认认证。
-- ✅ 两套协议共享 `NormalizedRequest`、`X-Conversation-Key` 与统一 Conversation Engine，不在 route 中复制浏览器逻辑。
-- ✅ Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、full-history / single-user incremental、same-key FIFO、different-key parallel、SQLite `clean | in_flight` checkpoint、安全 ChatGPT Conversation URL restore/rebuild。
-- ✅ ChatGPT Driver 使用发送前 Assistant baseline 锁定本请求 target turn；target-turn `copy-turn-action-button` completion marker 是当前完成主证据，不依赖可能滞留的全局 Stop control。
+- ✅ 两套协议共享 `NormalizedRequest`、`X-Conversation-Key` 与统一 Conversation Engine。
+- ✅ Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、full-history / incremental、same-key FIFO、different-key parallel、SQLite `clean | in_flight` checkpoint、安全 Conversation URL restore/rebuild。
+- ✅ Phase 5 True Streaming：Chat Completions SSE、Responses typed SSE、backpressure、client abort/Stop、final-clean-before-terminal、target Assistant ownership 与 completion marker。
+- ✅ Stable Prefix 当前默认 **64 Unicode code points commit-tail holdback**。2026-08-26 real E2E 观测到 38-code-point Markdown renderer 尾部回排，因此从 16 提升为 64；如果 rewrite 穿过已 committed prefix，仍返回 `chatgpt_stream_diverged`，不撤回已发 SSE。
+- ✅ Driver 在 Composer `fill()` 后等待 strict unique Send readiness；不会错误要求 Assistant 完成后的空 Composer 必须仍暴露 Send control。
 
-### Phase 5 True Streaming 代码
+### Phase 6 Files / Attachments
 
-- ✅ `src/stream/` 纯逻辑层：CRLF/CR normalization、Unicode code-point-safe longest common prefix、3-sample Stable Prefix、默认 16 Unicode code points commit-tail holdback、target disappearance / committed-prefix rewrite divergence、约 200ms 默认 polling、120s completion timeout；最终 completion 精确 flush 被保留尾部。
-- ✅ ChatGPT Driver `ChatGptTextTurn`：`observe()` / `stop()` / safe `conversationUrl()`；non-stream `sendText()` 与 stream 复用 target-turn ownership / completion semantics。真实验收进一步固化 `/c/WEB:*` provisional route 拒绝、无 `.markdown` placeholder 忽略、owned turn 唯一 `.markdown` 正文读取，以及明确 `modal-conversation-history-rate-limit` 的唯一 `Got it` 通知确认；不处理 CAPTCHA/MFA/其它 modal。
-- ✅ `ChatGptTextRequest.signal` 在 baseline/composer/fill/send 等异步边界前传播取消；首个 SSE `started` 后若已断开，Engine 在 checkpoint 前退出，不产生网页 turn。
-- ✅ Conversation Engine 提供 protocol-neutral `{ execute, stream }`；Streaming 继续共享 Phase 4 Planner、Page Registry、same-key Queue、checkpoint 和 final aggregate builder。
-- ✅ Streaming 成功顺序为 stable deltas → final clean SQLite save → Page success → protocol success terminal；final clean save 失败不会发送成功终止。
-- ✅ 生成中 client abort：best-effort Stop、no partial Assistant persistence、checkpoint 保持 `in_flight`、Page session fail；clean commit 后才发生的 terminal transport close 不 Stop/回滚已完成 turn。
-- ✅ Chat Completions SSE：稳定 id/created/model、Assistant role chunk、text delta、single stop chunk、single `[DONE]`，不伪造 usage。
-- ✅ Responses SSE：`response.created` / `in_progress` / item+content added / `output_text.delta` / done / `response.completed`，稳定 IDs 和单调 `sequence_number`，`usage=null`。
-- ✅ Fastify Streaming transport：首个 internal `started` 才 `reply.hijack()`，raw SSE writer 支持 Node backpressure；pre-start error 保持普通 HTTP JSON，post-start error 使用流内错误且不写成功 terminal。
-- ✅ Streaming 集成覆盖 FRESH、full-history APPEND、RESTORE、history-divergence REBUILD、same-key FIFO、different-key parallel、final-save failure、生成中 abort 和 pre-Send abort。
-- ✅ Phase 5 real E2E harness 使用真实 TCP listener 增量读取，已真实证明长回复首个 meaningful delta 早于 target completion marker、Chat Completions terminal/单 `[DONE]`、Markdown/代码块 multiline、Responses typed lifecycle/稳定 IDs/严格 sequence、`delta concat == live authoritative DOM == SQLite`，以及 client abort 后真实 Stop、`in_flight`、Page affinity discard 与 same-key REBUILD。
-- ✅ **Phase 5 authenticated real ChatGPT Streaming E2E 已于 2026-08-17 standalone 与 combined 两条命令真实通过，Phase 5 正式关闭。**
-
-### Phase 6 实现中
-
-- ✅ Task 1 storage foundation：`003_add_file_blob_lifecycle`、逻辑 File / 物理 Blob 分离、SHA-256 去重、原子 temp→Blob 写入、32 MiB File 上限、public/private File identity、进程内 lease、DELETE tombstone/deferred GC 与 orphan cleanup 已实现并通过确定性测试。
-- ✅ Task 2 Files API：`POST/GET/list/content/DELETE /v1/files` 已实现，multipart 文件流不使用 `toBuffer()`；支持 purpose、after/limit/order filter、跨 runtime restart content recovery、public/private 隔离和 DELETE retained-history 语义基础。
-- ✅ Task 3 Attachment Resolver：strict Base64/Data URL、PNG/JPEG/WEBP/GIF signature sniff、public `file_id` lease、URL DNS/IP/redirect SSRF guard、32/64 MiB limits、敏感 source redaction、collision-safe request staging 与 hardlink→copy fallback 已实现并通过确定性测试。
-- ✅ Task 4 multimodal Context：含附件 message 使用 ordered canonical `content[]`，纯文本继续保持既有 `{role,text}` fingerprint/plan 形状；attachment semantic fingerprint 仅使用 kind/SHA-256/filename/MIME，prompt 只暴露 kind/filename/upload_filename；FRESH/REBUILD 与 APPEND/RESTORE upload reference selection 已有确定性测试。
-- ✅ Task 5 ChatGPT upload Driver：authenticated inspection 已锁定 unique generic file input、owned file-tile baseline、pending `cursor-wait`/progress 与 ready 消失语义，以及新增 `role=alert` error 边界；Driver 在 Send 前等待 exact owned tiles ready，并覆盖 timeout/abort/error/no-Send。
-- ✅ Task 6 Conversation attachment lifecycle：same-key queue 内先 resolve/retain/canonical/plan/stage，再 acquire Page；stream resolver failure 在 `started` 前结束，checkpoint 早于 Browser upload；FRESH/REBUILD 上传有效全历史附件，APPEND/RESTORE 当前-only；成功原子保存 ordered Message content + redacted AttachmentRecords/required File refs + Assistant clean checkpoint；upload failure/abort/final-save failure 保持 `in_flight` 并 discard Page。
-- ✅ Task 7 cross-protocol deterministic acceptance：Chat Completions / Responses 两套 HTTP 入口共享同一 Resolver/Conversation Engine；已覆盖 attachment sources、stream/error framing、same-key FIFO/different-key parallel 与 `unsupported_phase6_request`。Architecture guard 已锁定 `attachments/` 不依赖 Playwright/API/ChatGPT、`chatgpt/` 不依赖 persistence、Files route/Driver 不承载 File/Blob filesystem logic。
-- ✅ Task 8 Docker acceptance：fresh `linux/amd64` build + full smoke 已验证 migration 003、File directories permissions 与 `/v1/files` restart lifecycle，同时保持 Browser/noVNC/seccomp 既有容器回归。
-- ✅ standalone Phase 6 authenticated real E2E 已真实证明图片、TXT/PDF/DOCX/XLSX、APPEND/RESTORE 与附件 Streaming；❌ combined Phase 3/4/5/6 regression 尚未通过，因此 Phase 6 仍不关闭。
+- ✅ migration 003：logical File 与 content-addressed SHA-256 Blob 分离；相同 bytes 可共享 Blob 而保留独立 File identity。
+- ✅ `/v1/files` 五接口：multipart streaming create、list、retrieve、content、delete，支持 restart recovery。
+- ✅ DELETE 立即撤销公开访问；历史 Conversation Attachment 仍引用时可保留内部 File/Blob bytes 以支持 REBUILD/恢复，不承诺立即 secure erase。
+- ✅ Attachment Resolver：URL/Data URL/Base64/public `file_id` → Gateway-owned File；strict image signature/MIME、SSRF/DNS/redirect/pinned-address、32 MiB 单附件/64 MiB 请求/16 attachments、敏感 source redaction 与 request staging。
+- ✅ ordered multimodal canonical content/fingerprint；FRESH/REBUILD 重传完整有效附件，APPEND/RESTORE 只上传当前新增附件。
+- ✅ ChatGPT upload Driver：owned preview baseline、pending/ready/error、exact owned upload readiness、abort/timeout/error 语义，Send 晚于全部 owned attachments ready。
+- ✅ Conversation attachment lifecycle：resolve/lease/stage/checkpoint/upload/final Attachment → File → Blob linkage，stream/non-stream 共享 Phase 5 target-turn/Streaming 核心。
+- ✅ Chat Completions 支持 image URL/Data URL、`file.file_data`、`file.file_id`；Responses 支持 `input_image.image_url/file_id`、`input_file.file_data/file_id`。
+- ✅ authenticated real E2E 已证明 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、same-key APPEND、runtime restart RESTORE 与 attachment Streaming；最终 combined Phase 3/4/5/6 也已通过。
 
 ### 后续未实现能力
-- ❌ Tool Calling Prompt / Parser / Tool Result 执行闭环。
-- ❌ ChatGPT 图片生成。
-- ❌ NAS 实机部署、备份/恢复和生产运维成熟化。
+
+- ❌ Tool Calling Prompt / Parser / Tool Result 执行闭环（Phase 7）。
+- ❌ Structured Output execution。
+- ❌ ChatGPT 图片生成 / `POST /v1/images/generations`（Phase 8）。
+- ❌ NAS 实机部署、备份/恢复和生产运维成熟化（后续 Phase）。
 
 ## Architecture Facts（当前关键架构事实）
 
 - ChatGPT Web only；不使用私有 `/backend-api`。
 - OpenAI Compatible API only；默认模型只暴露 `chatgpt-web`。
-- `api/` 不实现浏览器 DOM 逻辑；`chatgpt/` 不理解 OpenAI SSE；`stream/` 不依赖 Playwright/API/Browser/ChatGPT/Persistence/SQLite。
-- SQLite 是 Conversation 恢复事实来源；Page 是可丢弃运行时缓存；same-key Queue 是单进程 Conversation 写序列化边界。
-- Streaming 只承诺 Stable Prefix；已经发送给客户端的 prefix 不允许撤回。DOM 重写穿过 committed prefix 时进入 `chatgpt_stream_diverged`，不发送 correction/backspace。
-- Streaming 成功 terminal 晚于 final SQLite clean commit；未知 post-checkpoint failure 保持 `in_flight` 并由下一请求 REBUILD 收敛。
-- Client abort 只能 best-effort Stop 当前严格归属的生成，不保存 partial Assistant。
+- `api/` 不实现浏览器 DOM 逻辑；`chatgpt/` 不理解 OpenAI SSE；`attachments/` 不依赖 Playwright/API/ChatGPT；`stream/` 不依赖 Playwright/API/Browser/ChatGPT/Persistence/SQLite。
+- SQLite 是 Conversation/File 恢复事实来源；Page 是可丢弃运行时缓存；same-key Queue 是单进程 Conversation 写序列化边界。
+- Browser upload 是 Conversation side effect；checkpoint 必须先成为 `in_flight`。未知 post-checkpoint failure 保持 `in_flight` 并由下一请求 REBUILD 收敛。
+- Streaming 只承诺 Stable Prefix，已经发送给客户端的 prefix 不撤回；成功 terminal 晚于 final SQLite clean commit。
 - Docker 是正式运行边界；Docker smoke 不能替代 authenticated ChatGPT E2E。
-
-详细架构见 [`architecture.md`](architecture.md)。
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-26：Task 9A 完成 real E2E/session recovery hardening：新增 `project:status`、standalone Phase 3、combined `E2E_CHATGPT_COMBINED=1` 二次确认、Phase 6 从 8 个 Fresh conversation 压为 4 个逻辑 group，并把单主会话/请求退避规则固化到 Agent/workflow/memory/testing；fresh verify 71 files / 491 tests 全绿，未访问真实 ChatGPT。
-- 2026-08-19：Phase 6 Task 8 Docker acceptance 完成：fresh `linux/amd64` build digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；full smoke 验证 migration 003、files/temp PUID/PGID writeability、`/v1/files` upload→restart→exact content→DELETE 及既有 normal/maintenance Browser/noVNC/seccomp 回归。
-- 2026-08-19：Phase 6 Task 7 完成：新增真实 Fastify + shared Conversation Engine 的双协议 attachment HTTP matrix，覆盖 Chat Completions/Responses 各 source、stream、FIFO/parallel 与 error boundary；修复 Responses array-input Fastify schema coercion，新增 `unsupported_phase6_request`，并将 Attachment descriptor 类型下沉到 `attachments/` 以满足 architecture guard。fresh `corepack pnpm verify` 68 files / 481 tests 全绿。
-- 2026-08-19：Phase 6 Task 6 完成实现：Conversation Engine 将 attachment resolve/retained history/canonical plan/staging 放入 same-key FIFO 并早于 Page acquire；checkpoint 保持在 Browser upload 前，FRESH/APPEND/RESTORE/REBUILD upload selection 真正接入 Driver；成功 clean aggregate 持久化 redacted source + required File refs，stream pre-start/post-start/final-save 失败语义均有集成测试。fresh `corepack pnpm verify` 67 files / 471 tests 全绿。
-- 2026-08-19：Phase 6 Task 5 完成实现：fresh authenticated DOM inspection 锁定 generic file input、file-tile ownership、pending/ready 与 role-alert error contract；Driver 支持 prepared staged paths、多文件 exact ownership、readiness timeout、abort 与 Send-before-ready 禁止。模型内容理解仍待 Task 9 real E2E。
-- 2026-08-18：Phase 6 Task 4 完成：canonical Conversation 支持 ordered multimodal content，同时保持 text-only 既有 shape；attachment fingerprint 排除 request-local identity，Planner 四种 mode 不变并得到 FRESH/REBUILD 全附件、APPEND/RESTORE 当前附件 upload selection；fresh `corepack pnpm verify` 64 files / 454 tests 全绿，下一步 authenticated upload DOM inspection。
-- 2026-08-18：Phase 6 Task 3 完成：Attachment Resolver 已支持 URL/Data URL/Base64/public `file_id` → Gateway-owned File，新增严格图片 signature/MIME 验证、SSRF/DNS/redirect/pinned-address 安全边界、16 附件/64 MiB 请求上限与 request-scoped staging；fresh `corepack pnpm verify` 63 files / 445 tests 全绿，下一步 multimodal Context。
-- 2026-08-18：Phase 6 Task 2 完成：五个 `/v1/files` endpoint 接通 exact `@fastify/multipart@10.1.0` streaming upload、public File pagination/retrieve/content/delete 和 runtime restart recovery；fresh `corepack pnpm verify` 59 files / 361 tests 全绿，下一步 Attachment Resolver/security/staging。
-- 2026-08-18：Phase 6 Task 1 完成：新增 migration 003，将 Phase 2 `files` 迁移为 logical File + content-addressed `file_blobs`，并实现原子 FileService、SHA-256 物理去重、public/private logical identity、lease/tombstone/deferred GC 与 orphan cleanup；full test 57 files / 342 tests 通过。
-- 2026-08-17：Phase 6 图片和文件输入设计完成。规格锁定 `/v1/files` 生命周期、逻辑 File/物理 SHA-256 Blob 分离、URL/Data URL/Base64/`file_id` 统一解析、SSRF/文件名/大小安全边界、ordered multimodal Context fingerprint、FRESH/REBUILD 全有效附件重传与 APPEND/RESTORE 当前附件上传、Browser upload ownership/readiness、DELETE 历史引用保留语义，以及 image + PDF/TXT/DOCX/XLSX authenticated real E2E 门槛；实现尚未开始。
-- 2026-08-17：Phase 5 authenticated real Streaming 验收在真实 DevSpace 完成。真实 DOM 暴露并通过 TDD 修复了 Fresh `/c/WEB:*` provisional route、APPEND 临时 Assistant placeholder、Markdown renderer 短尾回排、writing-block 多正文边界，以及 conversation-history rate-limit 通知 overlay；未扩展附件/Tool/Structured Output/image execution。
-- 2026-08-17：fresh `corepack pnpm verify` 通过 55 files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。authenticated `inspect:chatgpt`、standalone Phase 5 real E2E、combined Phase 3/4/5 real E2E 随后全部通过，Phase 5 正式关闭。
-- 2026-08-16：Phase 5 True Streaming 产品链实现完成：Stable Prefix、target turn handle/completion、Conversation streaming lifecycle、双 SSE Encoder、backpressure、abort/Stop、FRESH/APPEND/RESTORE/REBUILD Streaming 集成和真实 E2E harness 全部落地。
-- 2026-08-16：Phase 4 真实验收完成；combined real E2E 通过 Phase 3 regression、APPEND live DOM、restart RESTORE 与 divergence REBUILD，并修复全局 Stop control 滞留导致的 Completion 假超时。
+- 2026-08-26：最终 combined Phase 3/4/5/6 authenticated real E2E 退出码 0，全阶段断言通过；Phase 6 产品验收门槛关闭。
+- 2026-08-26：真实网页发现并修复 Markdown **38 code-point** 尾部回排（默认 holdback 16 → 64）与 Composer fill 后 Send 短暂未挂载竞态；fresh verify 72 files / 495 tests 全绿。
+- 2026-08-26：Task 9A 完成 real-E2E/session recovery hardening：`project:status`、standalone Phase 3、combined 二次 opt-in、四组 Phase 6 conversation budget 与请求退避规则。
+- 2026-08-21：standalone Phase 6 authenticated real E2E 已通过图片、TXT/PDF/DOCX/XLSX、APPEND/RESTORE 与 Streaming。
+- 2026-08-19：Phase 6 Task 8 fresh `linux/amd64` Docker build/smoke 完成，验证 migration 003 与 Files restart lifecycle。
 
 ## Next Steps（下一步）
 
-1. 只运行 standalone `test:e2e:chatgpt:phase3` 诊断当前 text challenge，不重跑 Phases 4–6。
-2. Phase 3 standalone 恢复后，带 `E2E_CHATGPT_COMBINED=1` 运行一次 combined Phase 3/4/5/6 最终候选回归。
-3. combined 通过后完成 Task 9/10 的 compatibility/testing/architecture/roadmap/state 最终回写、fresh verify、提交与 push。
+1. 完成 Task 10 staged inspection。
+2. 提交 Phase 6 最终文档/Project Memory 回写并 push `phase-6-attachments`。
+3. Git 收尾完成后将 `ACTIVE_PLAN` 置 `none`，进入 Phase 7 Tool Calling 设计。
 
-## Known Risks / Blockers（已知风险 / 阻塞）
+## Known Risks / Limits（已知风险 / 限制）
 
-- 当前 combined Phase 3/4/5/6 real E2E blocker 是 Phase 3 text challenge：ChatGPT 返回通用 acknowledgement 而不是请求中的 unique marker。standalone Phase 6 已通过；请求预算优化也已完成，因此下一次真实请求只能从 standalone Phase 3 开始。
-- ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
-- Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
+- ChatGPT DOM、Cloudflare、认证、上传格式支持与网页限流仍是外部变化面；后续 Phase 必须独立 real E2E，不能从 Phase 6 外推。
+- Stable Prefix 的 64-code-point holdback 只吸收当前 bounded tail rewrite；更深 rewrite 穿过 committed prefix 仍会 `chatgpt_stream_diverged`。
+- Remote URL image 产品路径已实现并有 deterministic SSRF/DNS/redirect/pinned-address coverage；本轮没有稳定公网 fixture，因此**未执行 live remote-fetch E2E**。
+- REBUILD historical attachments 通过 synthetic Context Envelope 重新附着，是明确兼容近似，不等价于原生 OpenAI item storage。
+- Files DELETE 不是立即 secure erase：历史 Attachment 引用可延长内部 bytes 生命周期。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。
-- Tool Calling、附件和图片能力仍必须各自经过后续 deterministic + real E2E，不能从 Phase 5 基础设施外推。

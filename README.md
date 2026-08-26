@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：Phase 4 Conversation + Context Sync 已完成，准备进入 Phase 5 Streaming 设计
+## 当前状态：Phase 6 图片和文件输入已完成，准备进入 Phase 7 Tool Calling 设计
 
-Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 完成 SQLite 结构化持久化，Phase 3 完成 Browser / Driver / Fresh text execution 并通过真实 authenticated ChatGPT Web E2E。Phase 4 的批准实现范围已经全部落地，并完成 deterministic、Docker 与真实 ChatGPT APPEND / RESTORE / REBUILD E2E 验收：
+Phase 1–5 已完成工具链、Docker、SQLite、Browser/Driver、Conversation Context Sync 与 True Streaming；Phase 6 进一步完成 Files 生命周期和真实 ChatGPT 图片/文件输入，并于 2026-08-26 通过最终 combined Phase 3/4/5/6 authenticated real E2E：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -30,13 +30,13 @@ Phase 1 已完成工具链、协议层和正式 Docker 运行边界，Phase 2 �
 - bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
 - Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
 - full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle。未提供 key 时每个请求仍建立并持久化独立 `conversation_key = NULL` Fresh Conversation，但不会跨请求猜测身份。
-- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入 Conversation/Browser/Driver 执行链，并分别编码 OpenAI-style 非流式文本响应；不会伪造 token usage。Streaming/附件/Tools/Structured Output/image execution 仍明确拒绝。
-- `corepack pnpm inspect:chatgpt`、`corepack pnpm test:e2e:chatgpt` 与 `corepack pnpm test:e2e:chatgpt:phase4` 提供显式真实网页诊断/E2E harness，要求独立测试 Browser Profile。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage。Phase 6 已支持图片/文件附件输入，Tools、Structured Output execution 与 image output 仍明确拒绝。
+- `corepack pnpm inspect:chatgpt`、各 Phase standalone E2E 与 combined `corepack pnpm test:e2e:chatgpt` 提供显式真实网页诊断/验收，要求独立测试 Browser Profile；combined 额外要求 `E2E_CHATGPT_COMBINED=1`。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
-**Phase 4 已完成真实验收。** 当前 `corepack pnpm verify` 基线为 43 个测试文件 / 274 个测试；显式 combined real E2E 已通过 Phase 3 authenticated/composer/Driver/Gateway 回归，以及 Phase 4 APPEND live user-turn、restart RESTORE 和 divergence REBUILD。验收期间真实发现 ChatGPT 全局 Stop control 可能在答案稳定后滞留，Completion Observer 已改为以本次 Assistant turn 自身的完成标记为主并保留稳定文本采样，避免假 `chatgpt_generation_timeout`。最终 fresh `linux/amd64` 镜像 `sha256:a7a9dd99cb3c…` 的 Docker smoke 已通过 migration 001+002、checkpoint columns、idle timeout、normal/maintenance 与 Profile/sandbox/seccomp/restart 边界。
+**Phase 6 已完成真实验收。** 2026-08-26 fresh `corepack pnpm verify` 通过 72 个测试文件 / 495 个测试；最终 combined real E2E 退出码 0，Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses/abort，以及 Phase 6 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、APPEND/RESTORE/Streaming 全部通过。验收过程中真实观测到 38-code-point Markdown renderer 尾部回排，因此 Streaming 默认 commit-tail holdback 从 16 提升为 64；同时 Driver 会在 Composer fill 后等待 Send control readiness，避免 Fresh/Page 复用竞态。
 
-尚未实现的核心能力包括真 Streaming、附件实际解析/上传、Tool Calling 执行闭环和图片生成。
+尚未实现的核心能力包括 Tool Calling 执行闭环、Structured Output execution 和 ChatGPT 图片生成。Remote URL image fetch 的 SSRF/DNS/redirect 链已确定性验证，但本轮没有使用公网 fixture 做 live remote-fetch E2E。
 
 ## V1 批准范围
 
@@ -131,9 +131,9 @@ ${DATA_PATH:-./data} → /data
 └── logs/
 ```
 
-启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 checksum migration。当前 migration history 包含 `001_initial` 与 `002_add_conversation_sync_checkpoint`；数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`，它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
+启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 checksum migration。当前 migration history 包含 `001_initial`、`002_add_conversation_sync_checkpoint` 与 `003_add_file_blob_lifecycle`；数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`，它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
 
-Docker smoke 已验证数据库由指定 `PUID/PGID` 非 root 进程创建、migration 只记录一次，并在同一 Bind Mount 下重启容器后继续可用。`/data/files/` 和 `/data/generated/` 目前只有 metadata Repository 边界，真实业务字节写入仍属于后续 Phase。
+Docker smoke 已验证数据库和 `/data/files/blobs`、`/data/temp` 由指定 `PUID/PGID` 非 root 进程读写，并在同一 Bind Mount 下重启容器后继续可用。`/v1/files` 的 metadata/content 可跨 Gateway restart 恢复；DELETE 会立即撤销公开访问，但历史 Conversation Attachment 若仍引用 File，内部 bytes 会保留以支持 REBUILD/恢复，不承诺立即 secure erase。
 
 ## noVNC 维护模式
 
@@ -214,6 +214,7 @@ CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm inspect:chatgpt
 
 E2E_CHATGPT=1 \
+E2E_CHATGPT_COMBINED=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt
@@ -221,7 +222,7 @@ corepack pnpm test:e2e:chatgpt
 E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
-corepack pnpm test:e2e:chatgpt:phase4
+corepack pnpm test:e2e:chatgpt:phase6
 ```
 
 测试 Profile 需要通过人工方式完成 ChatGPT 登录；工具不会自动填写账号密码、MFA 或 CAPTCHA。需要代理的环境通过 `CHATGPT_PROXY_SERVER` 显式配置；如果要用 noVNC 给隔离测试 Profile 登录，可在 maintenance overlay 中同时设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile`。如果一个已失效的隔离 Profile 在重新登录时反复陷入 challenge loop，不要继续重复验证或覆盖旧 Profile：保留旧目录作为证据，创建一个新的干净隔离 Profile，再用 maintenance Google Chrome Stable 登录并先运行 `inspect:chatgpt`。真实 E2E 只有人工登录完成并实际通过后才算验收。
@@ -250,10 +251,10 @@ OpenAI Compatible Client / Agent
        NormalizedRequest
               │
               ▼
-      Conversation Engine         ← Phase 4 已实现；四态 + FIFO + checkpoint + Page affinity/LRU
+      Conversation Engine         ← Phase 6 已实现；四态 + FIFO + checkpoint + multimodal attachments
               │
               ▼
-        ChatGPT Driver            ← openFresh/openConversation/sendText；Phase 4 real E2E 已验收
+        ChatGPT Driver            ← text/stream/upload readiness；Phase 6 real E2E 已验收
               │
               ▼
      Playwright Chromium
@@ -283,7 +284,7 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-当前 Phase 4 开发过程不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
+当前 Phase 6 收尾不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
 
 ## 开源协议
 

@@ -48,19 +48,19 @@
 
 状态：**完成**。规格见 [`docs/superpowers/specs/2026-08-16-phase-5-true-streaming-design.md`](superpowers/specs/2026-08-16-phase-5-true-streaming-design.md)；Phase 5 活动计划已完成，Project State 已推进到 Phase 6 设计。
 
-交付代码包含：目标 Assistant Turn Snapshot、约 200ms DOM polling、3-sample Stable Prefix + 16 Unicode code points commit-tail holdback、target-turn Completion Detector、Chat Completions / Responses 两套 SSE Encoder、raw SSE backpressure、same-key 全生命周期 FIFO、Client abort → pre-Send cancellation / best-effort Stop，以及 SQLite `in_flight` / clean 一致性。真实验收期间还固化了 `/c/WEB:*` provisional route、无正文 Assistant placeholder、唯一 `.markdown` authoritative content 与明确 conversation-history rate-limit 通知 overlay 的 Driver 边界；writing-block/editor 仍不属于 Phase 5。
+交付代码包含：目标 Assistant Turn Snapshot、约 200ms DOM polling、3-sample Stable Prefix + 当前默认 64 Unicode code points commit-tail holdback、target-turn Completion Detector、Chat Completions / Responses 两套 SSE Encoder、raw SSE backpressure、same-key 全生命周期 FIFO、Client abort → pre-Send cancellation / best-effort Stop，以及 SQLite `in_flight` / clean 一致性。真实验收期间还固化了 `/c/WEB:*` provisional route、无正文 Assistant placeholder、唯一 `.markdown` authoritative content 与明确 conversation-history rate-limit 通知 overlay 的 Driver 边界；writing-block/editor 仍不属于 Phase 5。
 
 验收：2026-08-17 fresh `corepack pnpm verify` 通过 55 test files / 332 tests；fresh `linux/amd64` Docker build digest `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` 与完整 smoke 通过。隔离已登录 Profile 上 `inspect:chatgpt` 返回 authenticated；standalone Phase 5 real E2E 真实通过长 Chat Completions、Markdown/code、Responses typed SSE 与 abort→Stop→`in_flight`→REBUILD，随后 combined Phase 3/4/5 real E2E 全绿。Phase 5 已正式关闭，下一步是 Phase 6 图片和文件输入设计。
 
 ## Phase 6：图片和文件输入
 
-状态：**实现中**。Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)，Active Plan 见 [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。
+状态：**完成**。Governing Spec 见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
 
-Task 1–8 已实现并通过：migration 003、logical File / SHA-256 physical Blob、`/v1/files` 五接口、Attachment Resolver/security/staging、ordered multimodal Context/四-mode selection、authenticated upload Driver、Conversation lifecycle、cross-protocol deterministic matrix/architecture guards，以及 fresh `linux/amd64` Docker build + Files restart lifecycle smoke。模型内容理解的 authenticated real E2E 仍未完成。
+交付：migration 003、logical File / SHA-256 physical Blob、`/v1/files` 五接口、Attachment Resolver/SSRF/security/staging、ordered multimodal Context 与四-mode upload selection、authenticated ChatGPT upload Driver/readiness、Conversation attachment lifecycle、跨协议 deterministic integration、fresh `linux/amd64` Docker Files lifecycle smoke，以及 Chat Completions / Responses 的 URL/Data URL/Base64/`file_id` 图片与文件输入。
 
-交付：`/v1/files` 生命周期、URL/Base64 图片、Base64 文件、`file_id`、SHA-256、ChatGPT upload readiness（上传就绪）检测。
+验收：standalone Phase 6 real E2E 已证明 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、same-key APPEND、runtime restart RESTORE 与 attachment Streaming；2026-08-26 最终 combined Phase 3/4/5/6 real E2E 退出码 0，全阶段断言通过。验收过程中还修复了 38-code-point Markdown 尾部回排与 Composer fill 后 Send readiness 竞态。Remote URL fetch 的 SSRF/DNS/redirect 逻辑由 deterministic tests 覆盖，本轮没有公网 fixture 的 live remote-fetch E2E。
 
-验收：fresh deterministic + Docker 通过后，authenticated real E2E 必须实际证明图片理解、PDF/TXT/DOCX/XLSX 代表性文档、附件上下文 APPEND/RESTORE 与至少一条附件 Streaming；未跑真实网页不得关闭 Phase 6。
+Phase 6 已关闭，下一步进入 Phase 7 Tool Calling 设计。
 
 ## Phase 7：Tool Calling
 

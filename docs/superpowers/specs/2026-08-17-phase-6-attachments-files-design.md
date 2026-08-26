@@ -1042,7 +1042,7 @@ Phase 5 的以下内容不变：
 
 - Assistant baseline ownership。
 - target turn observer。
-- Stable Prefix / 16-code-point tail holdback。
+- Stable Prefix / 64-code-point tail holdback（2026-08-26 real E2E 根据已观测 38-code-point Markdown 尾部回排收紧当前默认值）。
 - completion marker。
 - post-Send Stop behavior。
 - backpressure。
@@ -1450,4 +1450,4 @@ existing target Assistant + True Streaming
 final clean Conversation + Attachment/File linkage
 ```
 
-下一步是编写详细 Phase 6 implementation plan。规格批准前的“附件只是 descriptor”状态到此结束；**但代码能力仍未实现，Project State 必须继续明确区分“Phase 6 design complete”与“Phase 6 implementation complete”。**
+本段是规格批准时的设计结论。后续实现计划已执行完成；2026-08-26 deterministic、Docker、standalone authenticated E2E 与最终 combined Phase 3/4/5/6 real E2E 均满足本规格完成门槛，当前实现状态以 `docs/PROJECT_STATE.md` 为准。
