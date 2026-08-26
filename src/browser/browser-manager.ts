@@ -70,7 +70,9 @@ export async function createBrowserManager(
       try {
         await context.close();
       } catch (error) {
-        if (pagePoolError === undefined) {
+        const message = error instanceof Error ? error.message : String(error);
+        const alreadyClosed = /Target page, context or browser has been closed/i.test(message);
+        if (pagePoolError === undefined && !alreadyClosed) {
           throw new BrowserRuntimeError(
             'browser_unavailable',
             'Failed to close browser context',

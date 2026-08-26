@@ -114,4 +114,33 @@ describe('BrowserManager', () => {
     expect(events).toEqual(['page-close', 'context-close']);
     expect(context.close).toHaveBeenCalledTimes(1);
   });
+
+  it('treats an already-closed Playwright context as successful cleanup', async () => {
+    const context = fakeContext();
+    vi.mocked(context.close).mockRejectedValueOnce(
+      new Error('Target page, context or browser has been closed'),
+    );
+    const manager = await createBrowserManager({
+      profileDir: tempProfile(),
+      maxActivePages: 4,
+      launchPersistentContext: async () => context,
+    });
+
+    await expect(manager.close()).resolves.toBeUndefined();
+  });
+
+  it('still surfaces unrelated context close failures', async () => {
+    const context = fakeContext();
+    vi.mocked(context.close).mockRejectedValueOnce(new Error('permission denied'));
+    const manager = await createBrowserManager({
+      profileDir: tempProfile(),
+      maxActivePages: 4,
+      launchPersistentContext: async () => context,
+    });
+
+    await expect(manager.close()).rejects.toMatchObject({
+      name: 'BrowserRuntimeError',
+      code: 'browser_unavailable',
+    });
+  });
 });

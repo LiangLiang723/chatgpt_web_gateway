@@ -13,20 +13,20 @@ STATUS=implementing-phase-6
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=implement-phase-6-task-9-authenticated-real-e2e
-UPDATED_AT=2026-08-19
+NEXT_TASK=optimize-real-e2e-session-budget-before-combined-retry
+UPDATED_AT=2026-08-26
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 6 — 图片和文件输入已进入实现阶段；公开附件能力仍未完成验收。
-- **当前状态：** `implementing-phase-6`。Active Plan Task 1–8 已完成：deterministic storage/API/Resolver/Context/Driver/Conversation/cross-protocol matrix 与 Docker File lifecycle acceptance 均通过；当前进入 Task 9 authenticated real Phase 6 E2E。
+- **当前状态：** `implementing-phase-6`。Active Plan Task 1–8 已完成；Task 9 的 fixture/harness、fresh authenticated inspect gate 与 standalone Phase 6 real E2E 已通过。combined Phase 3/4/5/6 regression 当前在既有 Phase 3 text challenge 处失败，因此先执行真实 E2E 会话/请求预算优化，再重试 combined。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
 - **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
-- **下一个可执行任务：** Task 9 — Authenticated Real Phase 6 E2E；fresh inspect attachment gate 后，真实证明 image understanding、PDF/TXT/DOCX/XLSX 内容 token、`file_id` + direct data/base64、APPEND/RESTORE attachment context 与至少一条 attachment true Streaming。
+- **下一个可执行任务：** 先优化 real E2E 的会话创建与重试纪律：Phase 6 standalone 从 8 个 Fresh conversation 压缩为少量分组会话，增加 standalone Phase 3 入口、`project:status` 恢复入口，并固化“standalone 先行 / combined 最终候选 / 同类真实失败最多立即复现一次”的规则；完成后再重试 Task 9 combined regression。
 - **最新完整确定性/Docker 证据：** 2026-08-19 Phase 6 Task 8 fresh `linux/amd64` Docker build 通过，本地镜像 digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；随后完整 `docker:smoke` 通过，覆盖 migration `001/002/003`、`/data/files/blobs`/`/data/temp` PUID/PGID writeability、容器 HTTP `/v1/files` upload/metadata/content、same Bind Mount restart exact-content recovery、DELETE 后 metadata/content 404，以及既有 normal/maintenance single owner、Chrome sandbox/seccomp/noVNC RFB 回归。
-- **Phase 6 最新确定性证据：** 2026-08-19 Task 7 改动后 fresh `corepack pnpm verify` 全绿：68 test files / 481 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。新增 HTTP matrix 覆盖 Chat Completions image URL/Data URL/file data/`file_id`、Responses `input_image` URL/Data URL/`file_id` + `input_file` data/`file_id`、双协议 stream、same-key FIFO/different-key parallel、pre-start `file_not_found`、post-start `chatgpt_upload_failed`、`unsupported_phase6_request`；同时修复 Responses array-input Fastify coercion 并收紧 attachments/api/chatgpt/filesystem architecture guards。Phase 6 Docker 与模型实际理解附件的 authenticated real E2E 尚未执行。
-- **真实网页证据：** 2026-08-19 复用隔离已登录 E2E Profile 与 `CHATGPT_PROXY_SERVER` 后，fresh `inspect:chatgpt` 为 `auth=authenticated` / `composer=unique`，实测 3 个 file input，其中唯一 generic input 为 `input[type=file]:not([accept])` 且支持 multiple；owned file tile 以 baseline count 归属，pending 时 `cursor-wait` + progress circles，ready 时同一 tile 上两者同时消失。`package.json` probe 在约 6 秒进入 ready；0-byte fixture 实测新 `role=alert` 且 `/backend-api/files` 返回 400，锁定 upload error 边界。该证据只证明 ChatGPT Web 当前 upload/readiness DOM，不证明模型已实际 ingest 文件内容；后者仍由 Task 9 E2E 验收。2026-08-17 Phase 3/4/5 combined real E2E 仍保持通过事实。
+- **Phase 6 最新确定性证据：** 2026-08-26 Task 9 checkpoint fresh `corepack pnpm verify` 全绿：69 test files / 488 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。此前 Task 8 fresh `linux/amd64` Docker build/smoke 已通过。
+- **真实网页证据：** 2026-08-21 fresh authenticated inspect gate 通过，standalone Phase 6 real E2E 真实返回 `imageDataUrl=true`、`imageFileId=true`、`txt=true`、`pdf=true`、`docx=true`、`xlsx=true`、`append=true`、`restore=true`、`streaming=true`，证明模型实际读取代表性图片/文档与附件上下文/Streaming。随后 combined Phase 3/4/5/6 regression 在 Phase 3 unique text challenge 处失败：ChatGPT 返回通用 acknowledgement 而非 marker；这属于当前 combined blocker，不能据此关闭 Phase 6。
 
 ## Implemented Now（当前已实现）
 
@@ -72,7 +72,7 @@ UPDATED_AT=2026-08-19
 - ✅ Task 6 Conversation attachment lifecycle：same-key queue 内先 resolve/retain/canonical/plan/stage，再 acquire Page；stream resolver failure 在 `started` 前结束，checkpoint 早于 Browser upload；FRESH/REBUILD 上传有效全历史附件，APPEND/RESTORE 当前-only；成功原子保存 ordered Message content + redacted AttachmentRecords/required File refs + Assistant clean checkpoint；upload failure/abort/final-save failure 保持 `in_flight` 并 discard Page。
 - ✅ Task 7 cross-protocol deterministic acceptance：Chat Completions / Responses 两套 HTTP 入口共享同一 Resolver/Conversation Engine；已覆盖 attachment sources、stream/error framing、same-key FIFO/different-key parallel 与 `unsupported_phase6_request`。Architecture guard 已锁定 `attachments/` 不依赖 Playwright/API/ChatGPT、`chatgpt/` 不依赖 persistence、Files route/Driver 不承载 File/Blob filesystem logic。
 - ✅ Task 8 Docker acceptance：fresh `linux/amd64` build + full smoke 已验证 migration 003、File directories permissions 与 `/v1/files` restart lifecycle，同时保持 Browser/noVNC/seccomp 既有容器回归。
-- ❌ 模型实际理解附件的 authenticated real E2E 尚未完成/验收。
+- ✅ standalone Phase 6 authenticated real E2E 已真实证明图片、TXT/PDF/DOCX/XLSX、APPEND/RESTORE 与附件 Streaming；❌ combined Phase 3/4/5/6 regression 尚未通过，因此 Phase 6 仍不关闭。
 
 ### 后续未实现能力
 - ❌ Tool Calling Prompt / Parser / Tool Result 执行闭环。
@@ -110,13 +110,13 @@ UPDATED_AT=2026-08-19
 
 ## Next Steps（下一步）
 
-1. 执行 Active Plan Task 9：重新运行 authenticated `inspect:chatgpt` readiness gate，并建立/运行 standalone Phase 6 real E2E。
-2. 通过 standalone 后运行 combined Phase 3/4/5/6 real E2E；任何网页能力失败必须记录真实 blocker，不以 deterministic/Docker 结果替代。
-3. 实现完成后运行 fresh deterministic、Docker 与独立登录 Profile authenticated real Phase 6 E2E；只有 image + PDF/TXT/DOCX/XLSX 等真实上传通过后才关闭 Phase 6。
+1. 固化真实 E2E 会话/请求预算：减少 Phase 6 Fresh conversation 数量、增加 standalone Phase 3、增加 `project:status`，并把真实失败退避规则写入 Agent/workflow/testing。
+2. 只在上述优化通过确定性验证后单独重跑 Phase 3；Phase 3 standalone 恢复后再运行一次 combined Phase 3/4/5/6 最终候选回归。
+3. combined 通过后完成 Task 9/10 的 compatibility/testing/architecture/roadmap/state 最终回写、fresh verify、提交与 push。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
 
-- Phase 6 当前没有已知实现 blocker；Task 5 已于 2026-08-19 通过 authenticated `inspect:chatgpt` 实测并锁定当前 attachment input/file-tile/readiness/error contract。该 DOM 仍可能未来变化，Task 9 前会再次 fresh inspect gate。
+- 当前 combined Phase 3/4/5/6 real E2E blocker 是 Phase 3 text challenge：ChatGPT 返回通用 acknowledgement 而不是请求中的 unique marker。standalone Phase 6 已通过，所以不要用重复运行整套 combined 来诊断 Phase 3；先做 standalone 隔离和请求预算优化。
 - ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
 - Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。

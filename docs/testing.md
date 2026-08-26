@@ -64,6 +64,11 @@ E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt:phase5
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:phase6
 ```
 
 `CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。
@@ -89,7 +94,9 @@ Phase 4 提供 standalone `test:e2e:chatgpt:phase4`，而主 `test:e2e:chatgpt` 
 11. ChatGPT 图片生成。
 12. Page 回收后重新打开原 Conversation URL。
 
-Phase 6 Task 5 已于 2026-08-19 完成 authenticated DOM inspection：当前网页有唯一 generic `input[type=file]:not([accept])`，owned file tile 用 baseline count 归属；pending 时 tile 内存在 `cursor-wait` / progress circles，ready 时两者同时消失；0-byte fixture 会新增 `role=alert` 并被映射为 upload failure。`inspect:chatgpt` 可通过 `CHATGPT_ATTACHMENT_PROBE_PATH` 运行受控、不点击 Send 的 readiness probe，并在完成后 reload Composer。该证据只证明 upload/readiness DOM contract，不代表模型已读取内容。最终仍须新增 standalone Phase 6 real E2E，真实证明图片理解、PDF/TXT/DOCX/XLSX 唯一 fixture token、`/v1/files` `file_id` 与 direct data/base64 输入、same-key 附件 APPEND/RESTORE，以及至少一条附件 `stream=true`；文件名/preview 出现本身不算内容上传成功。完整设计见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+Phase 6 Task 5 已于 2026-08-19 完成 authenticated DOM inspection：当前网页有唯一 generic `input[type=file]:not([accept])`，owned file tile 用 baseline count 归属；pending 时 tile 内存在 `cursor-wait` / progress circles，ready 时两者同时消失；0-byte fixture 会新增 `role=alert` 并被映射为 upload failure。`inspect:chatgpt` 可通过 `CHATGPT_ATTACHMENT_PROBE_PATH` 运行受控、不点击 Send 的 readiness probe，并在完成后 reload Composer。
+
+2026-08-21 standalone Phase 6 real E2E 已进一步真实通过：Data URL image、image `file_id`、TXT、PDF、DOCX、XLSX、same-key APPEND、runtime restart RESTORE 和 attachment Streaming 均返回成功证据，并要求最终 Conversation 保持 clean 的 Attachment → File → Blob linkage。该 standalone 结果证明模型实际 ingest 代表性附件，而不只是 preview 出现。combined Phase 3/4/5/6 regression 随后在既有 Phase 3 text challenge 处失败，因此 Phase 6 仍保持开放，不能把 standalone 成功替代 combined regression。完整设计见 [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
 
 ## DOM 诊断
 

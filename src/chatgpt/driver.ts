@@ -4,7 +4,7 @@ import { TextStreamAbortedError } from '../stream/errors.js';
 import type { AssistantSnapshot } from '../stream/types.js';
 import { probeAuth } from './auth.js';
 import {
-  waitForAssistantCompletion,
+  waitForAssistantFinalSnapshot,
   type WaitForAssistantCompletionOptions,
 } from './completion.js';
 import { parseSafeChatGptConversationUrl } from './conversation-url.js';
@@ -61,6 +61,7 @@ export interface CreateChatGptDriverOptions {
   inspectUnique?: typeof inspectUnique;
   resolveUnique?: typeof resolveUnique;
   waitForAssistantCompletion?: (options: WaitForAssistantCompletionOptions) => Promise<string>;
+  waitForAssistantFinalSnapshot?: (options: WaitForAssistantCompletionOptions) => Promise<string>;
   navigationTimeoutMs?: number;
   stopPollIntervalMs?: number;
   stopTimeoutMs?: number;
@@ -77,7 +78,10 @@ export function createChatGptDriver(
   const inspectCollectionSelector = options.inspectCollection ?? inspectCollection;
   const inspectUniqueSelector = options.inspectUnique ?? inspectUnique;
   const resolveUniqueSelector = options.resolveUnique ?? resolveUnique;
-  const waitForCompletion = options.waitForAssistantCompletion ?? waitForAssistantCompletion;
+  const waitForFinalSnapshot =
+    options.waitForAssistantFinalSnapshot ??
+    options.waitForAssistantCompletion ??
+    waitForAssistantFinalSnapshot;
   const navigationTimeoutMs = options.navigationTimeoutMs ?? 60_000;
   const stopPollIntervalMs = options.stopPollIntervalMs ?? 100;
   const stopTimeoutMs = options.stopTimeoutMs ?? 5_000;
@@ -443,7 +447,7 @@ export function createChatGptDriver(
     async sendText(page, request) {
       try {
         const turn = await startText(page, request);
-        const text = await waitForCompletion({
+        const text = await waitForFinalSnapshot({
           observe: async () => {
             const observation = await turn.observe();
             return {

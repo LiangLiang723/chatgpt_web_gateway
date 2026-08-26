@@ -578,15 +578,15 @@ Commit: `🐳 验证 Phase 6 文件持久化容器边界`
 - Adds `corepack pnpm test:e2e:chatgpt:phase6`.
 - Combined `test:e2e:chatgpt` runs Phase 3 regression, Phase 4, Phase 5, then Phase 6.
 
-- [ ] **Step 1: Write harness assertions and fixture builders**
+- [x] **Step 1: Write harness assertions and fixture builders**
 
 Create deterministic tiny PNG/JPEG marker images and PDF/TXT/DOCX/XLSX fixtures with unique tokens using existing dev/runtime libraries or minimal ZIP/XML fixture bytes without adding production parsing dependencies. Harness must test one direct image data path, one image `file_id`, one document `file_id`, one direct Base64 document, same-key APPEND, runtime restart RESTORE, and one attachment `stream=true` path.
 
-- [ ] **Step 2: Run fresh authenticated inspect gate again**
+- [x] **Step 2: Run fresh authenticated inspect gate again**
 
 Run with explicit isolated `CHATGPT_PROFILE_DIR` and proxy. Require authenticated composer + attachment readiness diagnostics. If this fails, record real blocker and do not claim Phase 6 acceptance.
 
-- [ ] **Step 3: Run standalone Phase 6 E2E**
+- [x] **Step 3: Run standalone Phase 6 E2E**
 
 Run: `E2E_CHATGPT=1 ... corepack pnpm test:e2e:chatgpt:phase6`
 Expected evidence:
@@ -597,10 +597,12 @@ Expected evidence:
 - stream meaningful delta occurs before target completion and final delta concat equals DOM/SQLite;
 - final Conversation is clean with Attachment → File → Blob linkage.
 
-- [ ] **Step 4: Run combined Phase 3/4/5/6 E2E**
+- [!] **Step 4: Run combined Phase 3/4/5/6 E2E**
 
 Run: `E2E_CHATGPT=1 ... corepack pnpm test:e2e:chatgpt`
 Expected: all earlier phase regressions plus Phase 6 PASS.
+
+2026-08-21 execution evidence: fresh authenticated attachment inspection passed, and standalone Phase 6 real E2E returned `imageDataUrl=true`, `imageFileId=true`, `txt=true`, `pdf=true`, `docx=true`, `xlsx=true`, `append=true`, `restore=true`, and `streaming=true`. Real E2E exposed two implementation defects that were fixed with deterministic regressions: non-stream `sendText()` must wait for the final target-turn snapshot without applying Stable Prefix divergence semantics, and BrowserManager cleanup must tolerate Playwright's explicit already-closed context error. The combined Phase 3/4/5/6 run then failed in the existing Phase 3 text challenge because ChatGPT returned a generic acknowledgement instead of the unique challenge marker. Step 4 therefore remains blocked; do not repeatedly rerun the full combined suite while diagnosing that external regression.
 
 - [ ] **Step 5: Record any real remote URL coverage explicitly and commit**
 
