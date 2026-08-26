@@ -20,12 +20,21 @@ const requiredFiles = [
   'docs/git-commit-convention.md',
   'docs/roadmap.md',
   'docs/superpowers/README.md',
+  'scripts/project-status.mjs',
 ];
 
 const errors = [];
 for (const relative of requiredFiles) {
   if (!fs.existsSync(path.join(root, relative))) {
     errors.push(`missing required file: ${relative}`);
+  }
+}
+
+const packageJsonPath = path.join(root, 'package.json');
+if (fs.existsSync(packageJsonPath)) {
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  if (packageJson.scripts?.['project:status'] !== 'node scripts/project-status.mjs') {
+    errors.push('package.json must expose project:status as node scripts/project-status.mjs');
   }
 }
 

@@ -51,9 +51,15 @@ CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm inspect:chatgpt
 
 E2E_CHATGPT=1 \
+E2E_CHATGPT_COMBINED=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:phase3
 
 E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
@@ -71,11 +77,23 @@ CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt:phase6
 ```
 
-`CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。
+`CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。combined `test:e2e:chatgpt` 额外要求 `E2E_CHATGPT_COMBINED=1`，避免调试单一 Phase 时误跑整套真实网页回归。
+
+### 真实 E2E 请求预算与退避
+
+真实 ChatGPT E2E 是昂贵且会创建网页 Conversation 的外部验收，不作为普通调试循环：
+
+1. deterministic/unit/integration 失败时不得访问真实 ChatGPT；先在本地收敛。
+2. 真实网页问题先运行最窄 standalone Phase；禁止用 combined suite 定位一个已知单 Phase 失败。
+3. combined Phase 3/4/5/6 只在 standalone 相关 Phase 已通过、代码达到最终候选时运行，并要求额外 `E2E_CHATGPT_COMBINED=1`。
+4. 同一种真实网页失败最多允许立即复现一次；第二次仍失败后停止重复真实请求，转为 deterministic、DOM inspection、network diagnostics 或代码路径分析，直到形成新的可验证假设。
+5. 出现 HTTP 429、ChatGPT history access restriction、平台“请求过于频繁”或同类频率保护时，立即停止全部 real E2E；不得通过新建平行 ChatGPT 会话、换测试入口或连续重试绕过限制，等外部限制解除后再从 standalone 恢复。
+6. 不为了验证 E2E harness 的治理/节流改动本身而访问真实 ChatGPT；此类改动用 gate、scenario grouping、typecheck 和 deterministic tests 验证。
+7. Phase 6 standalone 当前预算固定为四个逻辑 ChatGPT Conversation group：images、documents、memory/restore、streaming。图片两个场景共用 images；TXT/PDF/DOCX/XLSX 共用 documents；每个 turn 仍使用唯一 token 并验证累计 AttachmentRecords，避免会话复用掩盖当前附件未上传。
 
 2026-08-15 Phase 3 已实际运行真实命令并通过最终验收。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用，显式 `CHATGPT_PROXY_SERVER` 恢复网络；Xvfb + full Playwright Chromium 可进入 ChatGPT 网页。隔离 Profile 通过 maintenance Google Chrome Stable 人工登录后，真实 `inspect:chatgpt` 得到 `auth=authenticated`、`composer=unique`；完整 `test:e2e:chatgpt` 随后同时得到 `driverChallenge=true` 与 `gatewayChallenge=true`。
 
-Phase 4 提供 standalone `test:e2e:chatgpt:phase4`，而主 `test:e2e:chatgpt` 先跑 Phase 3 regression 再跑完整 Phase 4。Phase 4 harness 真实走 Gateway HTTP，验证 full-history APPEND 后 live ChatGPT user turn 只含新 marker、不含第一轮 token；随后 close/recreate runtime，以 single-user incremental 请求验证 RESTORE；最后提交修改后的 full history 强制 REBUILD，并要求 local key/UUID 不变而 ChatGPT URL 改变。Harness 会把显式隔离源 Profile 复制到临时 Profile 并排除 Chromium `Singleton*` marker，避免测试污染/锁死人工登录基准 Profile；复制行为有确定性单测。2026-08-16 新的干净隔离 Profile 通过 maintenance Google Chrome Stable 登录后，`inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`；combined E2E 最终真实返回 Phase 3 `driverChallenge=true` / `gatewayChallenge=true` 与 Phase 4 `append=true` / `restore=true` / `rebuild=true`，Phase 4 real E2E 验收完成。
+Phase 3/4/5/6 均提供 standalone 入口；主 `test:e2e:chatgpt` 只用于最终候选 combined regression，并按 Phase 3 → 4 → 5 → 6 顺序运行。Phase 4 harness 真实走 Gateway HTTP，验证 full-history APPEND 后 live ChatGPT user turn 只含新 marker、不含第一轮 token；随后 close/recreate runtime，以 single-user incremental 请求验证 RESTORE；最后提交修改后的 full history 强制 REBUILD，并要求 local key/UUID 不变而 ChatGPT URL 改变。Harness 会把显式隔离源 Profile 复制到临时 Profile 并排除 Chromium `Singleton*` marker，避免测试污染/锁死人工登录基准 Profile；复制行为有确定性单测。2026-08-16 新的干净隔离 Profile 通过 maintenance Google Chrome Stable 登录后，`inspect:chatgpt` 返回 `auth=authenticated` / `composer=unique`；combined E2E 最终真实返回 Phase 3 `driverChallenge=true` / `gatewayChallenge=true` 与 Phase 4 `append=true` / `restore=true` / `rebuild=true`，Phase 4 real E2E 验收完成。
 
 隔离 E2E Profile 可通过 maintenance overlay 人工登录：设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile` 后，maintenance Google Chrome Stable 使用该测试 Profile；normal headless runtime 仍固定使用 `${DATA_DIR}/browser-profile/`。真实调试证明 Chrome for Testing 在 `auth.openai.com` Turnstile 会反复 challenge，而固定 Google Chrome Stable 能通过人工验证；maintenance 因此不使用产品 Playwright 浏览器。若一个**已失效**的隔离 Profile 在重新认证时再次陷入 challenge loop，不要把“曾经用 Stable Chrome 成功”理解为该旧 Profile 必然可恢复：保留旧 Profile，不继续重复验证，创建一个新的干净隔离 Profile，用 Stable Chrome 登录后先跑 `inspect:chatgpt`，确认 `auth=authenticated` 再运行 real E2E。
 

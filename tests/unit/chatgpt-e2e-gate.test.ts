@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseRealE2EEnvironment } from '../e2e/environment.js';
+import { parseRealE2EEnvironment, requireCombinedRealE2E } from '../e2e/environment.js';
 
 describe('real ChatGPT E2E environment gate', () => {
   it('requires the explicit E2E enable flag', () => {
@@ -46,5 +46,12 @@ describe('real ChatGPT E2E environment gate', () => {
       diagnosticsDir: resolve('./chatgpt-diagnostics'),
       proxyServer: 'http://proxy.example:7890',
     });
+  });
+
+  it('requires an additional explicit opt-in for the expensive combined regression', () => {
+    expect(() => requireCombinedRealE2E({ E2E_CHATGPT: '1' })).toThrow(/E2E_CHATGPT_COMBINED=1/);
+    expect(() =>
+      requireCombinedRealE2E({ E2E_CHATGPT: '1', E2E_CHATGPT_COMBINED: '1' }),
+    ).not.toThrow();
   });
 });

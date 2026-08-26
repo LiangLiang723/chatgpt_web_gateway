@@ -11,16 +11,18 @@
 - **外科手术式改动：** 每处改动都应直接服务当前任务，不顺手翻新无关代码。
 - **目标驱动：** 开始前明确什么算成功；行为变化优先通过失败测试 → 最小实现 → 绿测试 → 更大范围验证完成闭环。
 - **事实优先于计划：** 计划与现实冲突时先修正文档/计划，再继续实现，不为旧计划强行写错代码。
+- **单主会话：** 同一长期仓库任务优先复用一个主开发会话，不为了“继续”主动创建平行会话；聊天历史不是恢复来源，换会话或中断后必须从仓库状态恢复。
 
 ## 2. 任务开始
 
 按顺序恢复上下文：
 
-1. 查看 `git status --short --branch`，确认当前工作树和已有改动。
-2. 阅读本文件与 `docs/PROJECT_STATE.md`。
-3. 阅读 `PROJECT_STATE` 指向的 Governing Spec（主设计规格）和 Active Plan（活动计划）；没有活动计划时，按任务复杂度判断是否需要先建立 spec（设计规格）/plan（实施计划）。
-4. 阅读任务相关的专项文档、源码和测试。
-5. 修改前搜索已有实现、引用和测试，不只凭文件名或记忆判断行为。
+1. 如果工具链可用，先运行 `corepack pnpm project:status` 获取 branch / HEAD / dirty files / Phase / Active Plan / NEXT_TASK / 首个未解决步骤摘要。
+2. 查看 `git status --short --branch`，确认当前工作树和已有改动；摘要不能替代真实 Git 状态。
+3. 阅读本文件与 `docs/PROJECT_STATE.md`。
+4. 阅读 `PROJECT_STATE` 指向的 Governing Spec（主设计规格）和 Active Plan（活动计划）；没有活动计划时，按任务复杂度判断是否需要先建立 spec（设计规格）/plan（实施计划）。
+5. 阅读任务相关的专项文档、源码和测试。
+6. 修改前搜索已有实现、引用和测试，不只凭文件名或记忆判断行为。
 
 长任务和 spec/plan 规则见 [`docs/development-workflow.md`](docs/development-workflow.md)。
 
@@ -44,7 +46,7 @@
 - 优先使用仓库已有脚本和工具链，不随意更换包管理器、升级依赖或添加生产依赖。
 - 在相关检查通过前，不声称任务完成；验证证据必须来自当前改动后的新鲜运行结果。
 - 先跑最小相关检查，再按影响范围扩大到类型检查、Lint（代码检查）、测试、构建和仓库治理检查。
-- 真实 ChatGPT E2E（端到端）测试必须显式运行；没运行时不得声称当前网页 Selector（选择器）、登录、上传、Streaming（流式输出）或图片生成已经真实验证。
+- 真实 ChatGPT E2E（端到端）测试必须显式运行；没运行时不得声称当前网页 Selector（选择器）、登录、上传、Streaming（流式输出）或图片生成已经真实验证。调试真实网页失败时优先使用最窄 standalone Phase；combined E2E 只用于最终候选回归，具体请求预算与退避规则见 `docs/testing.md`。
 - 详细验收门槛见 [`docs/testing.md`](docs/testing.md)。
 
 ## 5. Git 与安全

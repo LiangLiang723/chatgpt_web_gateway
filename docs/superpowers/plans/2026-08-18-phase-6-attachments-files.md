@@ -612,6 +612,51 @@ Commit: `🧪 增加 Phase 6 真实附件端到端验收`
 
 ---
 
+### Task 9A: Real E2E Session Budget and Recovery Hardening
+
+**Files:**
+- Create: `scripts/project-status.mjs`
+- Create: `scripts/test-chatgpt-phase3-e2e.ts`
+- Create: `tests/e2e/phase6-scenarios.ts`
+- Create/Modify: deterministic unit tests for project status, E2E gates, and Phase 6 scenario grouping.
+- Modify: `package.json`
+- Modify: `scripts/test-chatgpt-e2e.ts`
+- Modify: `tests/e2e/environment.ts`
+- Modify: `tests/e2e/chatgpt-phase6.e2e.ts`
+- Modify: `AGENTS.md`, `docs/development-workflow.md`, `docs/project-memory-protocol.md`, `docs/testing.md`.
+
+**Interfaces:**
+- Adds `corepack pnpm project:status` as the single repository recovery summary.
+- Adds `corepack pnpm test:e2e:chatgpt:phase3` so Phase 3 regressions can be diagnosed without running Phases 4–6.
+- Combined `test:e2e:chatgpt` requires both `E2E_CHATGPT=1` and `E2E_CHATGPT_COMBINED=1`.
+- Phase 6 standalone keeps all existing assertions while using exactly four logical ChatGPT conversation groups: images, documents, memory/restore, streaming.
+
+- [x] **Step 1: RED/GREEN project status helper**
+
+Add a deterministic test that runs `node scripts/project-status.mjs --json` and requires branch, HEAD, dirty-file count, `PHASE`, `STATUS`, `ACTIVE_PLAN`, `NEXT_TASK`, and the first pending/blocked Active Plan step. Implement the helper by reading `docs/PROJECT_STATE.md`, reading the referenced plan, and invoking read-only Git commands; it must not modify the repository.
+
+- [x] **Step 2: RED/GREEN standalone Phase 3 and combined guard**
+
+Extend the E2E environment gate tests so `E2E_CHATGPT_COMBINED=1` is mandatory only for the combined runner. Add `scripts/test-chatgpt-phase3-e2e.ts` that clones the explicit isolated profile before invoking `runPhase3ChatGptE2E`, then cleans the clone in `finally`. Add the package script without changing the existing explicit `E2E_CHATGPT=1` requirement for standalone phases.
+
+- [x] **Step 3: RED/GREEN Phase 6 conversation budget**
+
+Add a pure scenario grouping helper and unit test requiring exactly four groups. Refactor the standalone Phase 6 harness so Data URL + `file_id` images share the image key, TXT/PDF/DOCX/XLSX share the document key, APPEND/RESTORE keep their existing memory key, and Streaming remains isolated. Keep unique per-turn fixture tokens and current Attachment persistence assertions so conversation reuse cannot hide a missing current upload.
+
+- [x] **Step 4: Persist single-session and real-E2E retry discipline**
+
+Update Agent/workflow/memory/testing docs with these stable rules: reuse one main development chat for a long-running repository task; repository state, not chat history, is the recovery source; deterministic failures never trigger real E2E; diagnose with the narrow standalone phase first; combined E2E is final-candidate-only; an identical real-web failure may be immediately reproduced once, then investigation must switch to deterministic/DOM/network evidence; any 429/history-access restriction/platform frequency protection stops real E2E attempts until the external restriction clears.
+
+- [x] **Step 5: Deterministic acceptance and commit**
+
+Run `corepack pnpm project:status`, focused unit tests, `corepack pnpm verify`, and `git diff --check`. Do not run real ChatGPT merely to validate this governance optimization. Commit separately from Phase 6 product code as `🛠️ 收紧真实 E2E 会话与恢复流程`.
+
+2026-08-26 execution evidence: `project:status` JSON/unit coverage, standalone Phase 3 wiring, combined second opt-in gate, and four-group Phase 6 conversation budget all passed deterministic tests; direct CLI gate probes failed fast without browser/network as expected. Fresh `corepack pnpm verify` passed 71 test files / 491 tests plus format/lint/typecheck/build/governance, and `git diff --check` was clean. No real ChatGPT request was made to validate this governance optimization.
+
+After Task 9A is complete, diagnose the current Phase 3 blocker with `test:e2e:chatgpt:phase3`; only after standalone Phase 3 passes should Task 9 Step 4 combined regression be retried.
+
+---
+
 ### Task 10: Final Documentation, Project Memory, and Branch Completion
 
 **Files:**

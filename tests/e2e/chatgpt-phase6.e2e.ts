@@ -26,6 +26,7 @@ import {
   buildTextFixture,
   buildXlsxFixture,
 } from './phase6-fixtures.js';
+import { createPhase6ConversationKeys } from './phase6-scenarios.js';
 
 export interface RunPhase6ChatGptE2EOptions {
   profileDir: string;
@@ -330,6 +331,7 @@ export async function runPhase6ChatGptE2E(
   let runtime: GatewayRuntime | undefined;
   let baseUrl: string | undefined;
   const calls: DriverCall[] = [];
+  const conversationKeys = createPhase6ConversationKeys(randomUUID());
 
   try {
     runtime = await createRuntime({
@@ -341,7 +343,6 @@ export async function runPhase6ChatGptE2E(
     baseUrl = await runtime.app.listen({ host: '127.0.0.1', port: 0 });
 
     const imageDataToken = imageToken();
-    const imageDataKey = `phase6-image-data-${randomUUID()}`;
     const imageDataResponse = await postJson(
       baseUrl,
       '/v1/chat/completions',
@@ -366,11 +367,11 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      imageDataKey,
+      conversationKeys.images,
     );
     await assertHttpOk(imageDataResponse, 'Data URL image request');
     assertContainsToken(chatText(await imageDataResponse.json()), imageDataToken, 'Data URL image');
-    assertAttachmentPersistence(runtime, imageDataKey);
+    assertAttachmentPersistence(runtime, conversationKeys.images, 1);
 
     const imageFileToken = imageToken();
     const imageFileId = await uploadPublicFile({
@@ -379,7 +380,6 @@ export async function runPhase6ChatGptE2E(
       mimeType: 'image/png',
       bytes: buildPngTokenFixture(imageFileToken),
     });
-    const imageFileKey = `phase6-image-file-${randomUUID()}`;
     const imageFileResponse = await postJson(
       baseUrl,
       '/v1/responses',
@@ -396,7 +396,7 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      imageFileKey,
+      conversationKeys.images,
     );
     await assertHttpOk(imageFileResponse, 'image file_id request');
     assertContainsToken(
@@ -404,10 +404,9 @@ export async function runPhase6ChatGptE2E(
       imageFileToken,
       'image file_id',
     );
-    assertAttachmentPersistence(runtime, imageFileKey);
+    assertAttachmentPersistence(runtime, conversationKeys.images, 2);
 
     const txtToken = uniqueToken('P6TXT');
-    const txtKey = `phase6-txt-${randomUUID()}`;
     const txtResponse = await postJson(
       baseUrl,
       '/v1/chat/completions',
@@ -433,11 +432,11 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      txtKey,
+      conversationKeys.documents,
     );
     await assertHttpOk(txtResponse, 'TXT request');
     assertContainsToken(chatText(await txtResponse.json()), txtToken, 'TXT direct Base64');
-    assertAttachmentPersistence(runtime, txtKey);
+    assertAttachmentPersistence(runtime, conversationKeys.documents, 1);
 
     const pdfToken = uniqueToken('P6PDF');
     const pdfId = await uploadPublicFile({
@@ -446,7 +445,6 @@ export async function runPhase6ChatGptE2E(
       mimeType: 'application/pdf',
       bytes: buildPdfFixture(pdfToken),
     });
-    const pdfKey = `phase6-pdf-${randomUUID()}`;
     const pdfResponse = await postJson(
       baseUrl,
       '/v1/responses',
@@ -466,11 +464,11 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      pdfKey,
+      conversationKeys.documents,
     );
     await assertHttpOk(pdfResponse, 'PDF request');
     assertContainsToken(responsesText(await pdfResponse.json()), pdfToken, 'PDF file_id');
-    assertAttachmentPersistence(runtime, pdfKey);
+    assertAttachmentPersistence(runtime, conversationKeys.documents, 2);
 
     const docxToken = uniqueToken('P6DOCX');
     const docxId = await uploadPublicFile({
@@ -479,7 +477,6 @@ export async function runPhase6ChatGptE2E(
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       bytes: buildDocxFixture(docxToken),
     });
-    const docxKey = `phase6-docx-${randomUUID()}`;
     const docxResponse = await postJson(
       baseUrl,
       '/v1/chat/completions',
@@ -496,11 +493,11 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      docxKey,
+      conversationKeys.documents,
     );
     await assertHttpOk(docxResponse, 'DOCX request');
     assertContainsToken(chatText(await docxResponse.json()), docxToken, 'DOCX file_id');
-    assertAttachmentPersistence(runtime, docxKey);
+    assertAttachmentPersistence(runtime, conversationKeys.documents, 3);
 
     const xlsxToken = uniqueToken('P6XLSX');
     const xlsxId = await uploadPublicFile({
@@ -509,7 +506,6 @@ export async function runPhase6ChatGptE2E(
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       bytes: buildXlsxFixture(xlsxToken),
     });
-    const xlsxKey = `phase6-xlsx-${randomUUID()}`;
     const xlsxResponse = await postJson(
       baseUrl,
       '/v1/responses',
@@ -532,14 +528,14 @@ export async function runPhase6ChatGptE2E(
           },
         ],
       },
-      xlsxKey,
+      conversationKeys.documents,
     );
     await assertHttpOk(xlsxResponse, 'XLSX request');
-    assertContainsToken(responsesText(await xlsxResponse.json()), xlsxToken, 'XLSX direct Base64');
-    assertAttachmentPersistence(runtime, xlsxKey);
+    assertContainsToken(responsesText(await xlsxResponse.json()), xlsxToken, 'XLSX file_id');
+    assertAttachmentPersistence(runtime, conversationKeys.documents, 4);
 
     const memoryToken = uniqueToken('P6MEM');
-    const memoryKey = `phase6-memory-${randomUUID()}`;
+    const memoryKey = conversationKeys.memory;
     const beforeMemoryCalls = calls.length;
     const memoryFirst = await postJson(
       baseUrl,
@@ -637,7 +633,7 @@ export async function runPhase6ChatGptE2E(
     assertAttachmentPersistence(runtime, memoryKey);
 
     const streamToken = uniqueToken('P6STREAM');
-    const streamKey = `phase6-stream-${randomUUID()}`;
+    const streamKey = conversationKeys.streaming;
     const streamResponse = await postJson(
       baseUrl,
       '/v1/chat/completions',

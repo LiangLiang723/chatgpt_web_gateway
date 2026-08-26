@@ -4,6 +4,12 @@
 
 让不同会话、不同 Agent（智能体）和不同开发工具都能仅通过仓库恢复项目上下文，而不是依赖聊天历史。
 
+## 会话独立恢复
+
+项目记忆必须允许在**不读取任何旧聊天记录**的情况下恢复。长期任务优先复用一个主开发会话；如果必须换会话，先运行 `corepack pnpm project:status` 获取 Git / Machine State / Active Plan 摘要，再按 `AGENTS.md` 的恢复顺序读取真实文件。该摘要只是入口，不能替代 `git status`、`PROJECT_STATE.md` 或 Active Plan 本身。
+
+对话记录不可访问、平台频率保护或工具限制如果改变了当前下一动作，必须像其他 blocker 一样写回 `PROJECT_STATE.md` / Active Plan；不要通过创建多个平行会话绕过外部限制。
+
 ## 文档职责
 
 | 文件 | 只负责什么 |
@@ -39,6 +45,7 @@
 | Plan 步骤完成、取消、阻塞或事实变化 | 当前 plan |
 | 新的重要设计决定 | 对应 spec；必要时同步 architecture/state |
 | 用户纠正了稳定的 Agent 工作方式 | 先检查 `AGENTS.md` 是否已有规则，再决定收紧规则或把细节放专项文档/检查脚本 |
+| 平台限制 / 外部 blocker 改变当前下一动作 | `PROJECT_STATE.md` + 当前 plan；已验证 checkpoint 优先独立提交 |
 
 ## `PROJECT_STATE.md` 的硬规则
 

@@ -13,7 +13,7 @@ STATUS=implementing-phase-6
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
 ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=optimize-real-e2e-session-budget-before-combined-retry
+NEXT_TASK=diagnose-phase-3-standalone-before-combined-retry
 UPDATED_AT=2026-08-26
 ```
 
@@ -23,9 +23,9 @@ UPDATED_AT=2026-08-26
 - **当前状态：** `implementing-phase-6`。Active Plan Task 1–8 已完成；Task 9 的 fixture/harness、fresh authenticated inspect gate 与 standalone Phase 6 real E2E 已通过。combined Phase 3/4/5/6 regression 当前在既有 Phase 3 text challenge 处失败，因此先执行真实 E2E 会话/请求预算优化，再重试 combined。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。该设计锁定 Files API、Blob/File 分离、Attachment Resolver、安全 URL 获取、multimodal Context Sync、ChatGPT upload readiness 与真实 E2E 验收边界。
 - **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。按 10 个可独立验收 Task 执行，计划状态必须随真实进展回写。
-- **下一个可执行任务：** 先优化 real E2E 的会话创建与重试纪律：Phase 6 standalone 从 8 个 Fresh conversation 压缩为少量分组会话，增加 standalone Phase 3 入口、`project:status` 恢复入口，并固化“standalone 先行 / combined 最终候选 / 同类真实失败最多立即复现一次”的规则；完成后再重试 Task 9 combined regression。
+- **下一个可执行任务：** 使用新增 `test:e2e:chatgpt:phase3` 单独诊断当前 Phase 3 text challenge；只有 standalone Phase 3 恢复后才允许带 `E2E_CHATGPT_COMBINED=1` 重试 Task 9 combined regression。
 - **最新完整确定性/Docker 证据：** 2026-08-19 Phase 6 Task 8 fresh `linux/amd64` Docker build 通过，本地镜像 digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；随后完整 `docker:smoke` 通过，覆盖 migration `001/002/003`、`/data/files/blobs`/`/data/temp` PUID/PGID writeability、容器 HTTP `/v1/files` upload/metadata/content、same Bind Mount restart exact-content recovery、DELETE 后 metadata/content 404，以及既有 normal/maintenance single owner、Chrome sandbox/seccomp/noVNC RFB 回归。
-- **Phase 6 最新确定性证据：** 2026-08-26 Task 9 checkpoint fresh `corepack pnpm verify` 全绿：69 test files / 488 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。此前 Task 8 fresh `linux/amd64` Docker build/smoke 已通过。
+- **Phase 6 最新确定性证据：** 2026-08-26 Task 9A real-E2E/session recovery hardening 后 fresh `corepack pnpm verify` 全绿：71 test files / 491 tests，Prettier、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。新增 `project:status`、standalone Phase 3、combined 二次 opt-in 与 Phase 6 四 conversation group 预算均有 deterministic coverage；本次优化没有访问真实 ChatGPT。此前 Task 8 fresh `linux/amd64` Docker build/smoke 已通过。
 - **真实网页证据：** 2026-08-21 fresh authenticated inspect gate 通过，standalone Phase 6 real E2E 真实返回 `imageDataUrl=true`、`imageFileId=true`、`txt=true`、`pdf=true`、`docx=true`、`xlsx=true`、`append=true`、`restore=true`、`streaming=true`，证明模型实际读取代表性图片/文档与附件上下文/Streaming。随后 combined Phase 3/4/5/6 regression 在 Phase 3 unique text challenge 处失败：ChatGPT 返回通用 acknowledgement 而非 marker；这属于当前 combined blocker，不能据此关闭 Phase 6。
 
 ## Implemented Now（当前已实现）
@@ -38,6 +38,7 @@ UPDATED_AT=2026-08-26
 - ✅ Node 24 `node:sqlite` 单连接持久化、checksum migrations、Conversation aggregate / File metadata 持久化和 restart 恢复。
 - ✅ BrowserManager、bounded Page Pool、Conversation Page affinity、idle timeout、LRU idle eviction 与 Browser Profile single-owner 边界。
 - ✅ Selector Registry、Auth Probe、显式 `inspect:chatgpt` / real E2E safety gate 与可选 `CHATGPT_PROXY_SERVER`。
+- ✅ `corepack pnpm project:status` 提供 branch/HEAD/dirty/Phase/Active Plan/NEXT_TASK 恢复摘要；真实 E2E 采用 standalone-first、combined 二次 opt-in、同类失败一次复现后退避与 Phase 6 四 conversation group 请求预算。
 
 ### API / Conversation
 
@@ -94,6 +95,7 @@ UPDATED_AT=2026-08-26
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-26：Task 9A 完成 real E2E/session recovery hardening：新增 `project:status`、standalone Phase 3、combined `E2E_CHATGPT_COMBINED=1` 二次确认、Phase 6 从 8 个 Fresh conversation 压为 4 个逻辑 group，并把单主会话/请求退避规则固化到 Agent/workflow/memory/testing；fresh verify 71 files / 491 tests 全绿，未访问真实 ChatGPT。
 - 2026-08-19：Phase 6 Task 8 Docker acceptance 完成：fresh `linux/amd64` build digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`；full smoke 验证 migration 003、files/temp PUID/PGID writeability、`/v1/files` upload→restart→exact content→DELETE 及既有 normal/maintenance Browser/noVNC/seccomp 回归。
 - 2026-08-19：Phase 6 Task 7 完成：新增真实 Fastify + shared Conversation Engine 的双协议 attachment HTTP matrix，覆盖 Chat Completions/Responses 各 source、stream、FIFO/parallel 与 error boundary；修复 Responses array-input Fastify schema coercion，新增 `unsupported_phase6_request`，并将 Attachment descriptor 类型下沉到 `attachments/` 以满足 architecture guard。fresh `corepack pnpm verify` 68 files / 481 tests 全绿。
 - 2026-08-19：Phase 6 Task 6 完成实现：Conversation Engine 将 attachment resolve/retained history/canonical plan/staging 放入 same-key FIFO 并早于 Page acquire；checkpoint 保持在 Browser upload 前，FRESH/APPEND/RESTORE/REBUILD upload selection 真正接入 Driver；成功 clean aggregate 持久化 redacted source + required File refs，stream pre-start/post-start/final-save 失败语义均有集成测试。fresh `corepack pnpm verify` 67 files / 471 tests 全绿。
@@ -110,13 +112,13 @@ UPDATED_AT=2026-08-26
 
 ## Next Steps（下一步）
 
-1. 固化真实 E2E 会话/请求预算：减少 Phase 6 Fresh conversation 数量、增加 standalone Phase 3、增加 `project:status`，并把真实失败退避规则写入 Agent/workflow/testing。
-2. 只在上述优化通过确定性验证后单独重跑 Phase 3；Phase 3 standalone 恢复后再运行一次 combined Phase 3/4/5/6 最终候选回归。
+1. 只运行 standalone `test:e2e:chatgpt:phase3` 诊断当前 text challenge，不重跑 Phases 4–6。
+2. Phase 3 standalone 恢复后，带 `E2E_CHATGPT_COMBINED=1` 运行一次 combined Phase 3/4/5/6 最终候选回归。
 3. combined 通过后完成 Task 9/10 的 compatibility/testing/architecture/roadmap/state 最终回写、fresh verify、提交与 push。
 
 ## Known Risks / Blockers（已知风险 / 阻塞）
 
-- 当前 combined Phase 3/4/5/6 real E2E blocker 是 Phase 3 text challenge：ChatGPT 返回通用 acknowledgement 而不是请求中的 unique marker。standalone Phase 6 已通过，所以不要用重复运行整套 combined 来诊断 Phase 3；先做 standalone 隔离和请求预算优化。
+- 当前 combined Phase 3/4/5/6 real E2E blocker 是 Phase 3 text challenge：ChatGPT 返回通用 acknowledgement 而不是请求中的 unique marker。standalone Phase 6 已通过；请求预算优化也已完成，因此下一次真实请求只能从 standalone Phase 3 开始。
 - ChatGPT DOM、Cloudflare、认证和网页限流提示仍属于外部变化面；后续 Phase 不能从本次 Phase 5 通过外推其真实网页能力。
 - Stable Prefix 选择“不撤回”语义：16-code-point tail holdback 只吸收 bounded renderer 尾部回排；如果 DOM 重写穿过已发 prefix，请求仍会失败并保持 `in_flight`，下一 keyed request REBUILD。
 - 当前 Docker 验收矩阵仍只有 `linux/amd64`，未验证 ARM64。
