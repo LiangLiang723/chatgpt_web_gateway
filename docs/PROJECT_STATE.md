@@ -8,20 +8,20 @@
 
 ```text
 PROJECT_STATE_SCHEMA=1
-PHASE=phase-6-complete
-STATUS=ready-for-phase-7-design
+PHASE=phase-7-design
+STATUS=ready-for-phase-7-plan
 RELEASE_VERSION=V0.0.1
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
+GOVERNING_SPEC=docs/superpowers/specs/2026-08-26-phase-7-tool-calling-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=write-phase-7-tool-calling-spec
+NEXT_TASK=write-phase-7-tool-calling-plan
 UPDATED_AT=2026-08-26
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 6 — 图片和文件输入已完成并关闭。
-- **当前状态：** `ready-for-phase-7-design`。Phase 6 Active Plan 全部步骤完成，最终验收回写已提交并推送；下一任务是编写 Phase 7 Tool Calling Governing Spec，再建立实施计划。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
+- **当前阶段：** Phase 7 — Tool Calling 设计已建立，产品实现尚未开始。
+- **当前状态：** `ready-for-phase-7-plan`。Phase 7 Governing Spec 已锁定 canonical tools/fingerprint、私有 Tool Protocol、Prompt/Parser、Tool Result、Context Sync、Streaming detection buffer、公共编码与真实网页验收边界；下一任务是建立实施计划。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-26-phase-7-tool-calling-design.md`](superpowers/specs/2026-08-26-phase-7-tool-calling-design.md)。
 - **Active Plan：** `none`。已完成的 Phase 6 计划保留在 [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md) 作为历史事实。
 - **最新 deterministic 证据：** 2026-08-26 real-web 修复后 fresh `corepack pnpm verify` 通过 **72 test files / 495 tests**；format、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。
 - **最新 Docker 证据：** Phase 6 Task 8 fresh `linux/amd64` build digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`，full `docker:smoke` 通过 migration `001/002/003`、Files restart lifecycle、PUID/PGID writeability 与既有 Browser/noVNC/seccomp 回归。
@@ -79,6 +79,7 @@ UPDATED_AT=2026-08-26
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-26：建立 Phase 7 Tool Calling Governing Spec，锁定私有 Tool Protocol、严格 Parser、tool fingerprint / REBUILD、Tool Result continuation、tool-aware Streaming 与两套 OpenAI-compatible 输出边界。
 - 2026-08-26：最终 combined Phase 3/4/5/6 authenticated real E2E 退出码 0，全阶段断言通过；Phase 6 产品验收门槛关闭。
 - 2026-08-26：真实网页发现并修复 Markdown **38 code-point** 尾部回排（默认 holdback 16 → 64）与 Composer fill 后 Send 短暂未挂载竞态；fresh verify 72 files / 495 tests 全绿。
 - 2026-08-26：Task 9A 完成 real-E2E/session recovery hardening：`project:status`、standalone Phase 3、combined 二次 opt-in、四组 Phase 6 conversation budget 与请求退避规则。
@@ -87,9 +88,9 @@ UPDATED_AT=2026-08-26
 
 ## Next Steps（下一步）
 
-1. 编写 Phase 7 Tool Calling Governing Spec，先锁定 Prompt/Parser/Tool Result、Streaming 检测缓冲与失败语义。
-2. 设计批准后建立 Phase 7 implementation plan，再开始产品代码修改。
-3. Phase 7 的真实网页能力必须重新独立验收，不能从 Phase 6 成功外推。
+1. 根据 Phase 7 Governing Spec 建立 implementation plan，拆成可独立红/绿验证和 checkpoint commit 的 Task。
+2. 按计划实现 Tool canonicalization / Prompt / Parser / Context Sync / Persistence / Encoders / Streaming，再扩展 Fastify integration 与 E2E harness。
+3. Phase 7 的真实网页能力必须 standalone + combined 独立验收，不能从 Phase 6 成功外推。
 
 ## Known Risks / Limits（已知风险 / 限制）
 
