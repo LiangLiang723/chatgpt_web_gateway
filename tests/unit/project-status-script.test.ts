@@ -29,11 +29,15 @@ describe('project status script', () => {
     expect(body.dirtyCount).toEqual(expect.any(Number));
     expect(body.phase).toEqual(expect.any(String));
     expect(body.status).toEqual(expect.any(String));
-    expect(body.activePlan).toMatch(/^docs\/superpowers\/plans\//);
+    expect(body.activePlan).toMatch(/^(?:none|docs\/superpowers\/plans\/)/);
     expect(body.nextTask).toMatch(/\S/);
-    expect(body.planStep).toMatchObject({
-      status: expect.stringMatching(/^(pending|blocked)$/),
-      text: expect.stringMatching(/\S/),
-    });
+    if (body.activePlan === 'none') {
+      expect(body.planStep).toBeNull();
+    } else if (body.planStep !== null) {
+      expect(body.planStep).toMatchObject({
+        status: expect.stringMatching(/^(pending|blocked)$/),
+        text: expect.stringMatching(/\S/),
+      });
+    }
   });
 });

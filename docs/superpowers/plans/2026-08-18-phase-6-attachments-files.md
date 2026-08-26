@@ -691,11 +691,13 @@ Expected: no output.
 
 Run: `git status --short --branch` and inspect `git diff`/`git diff --staged` before commit.
 
-- [ ] **Step 4: Commit final writeback**
+- [x] **Step 4: Commit final writeback**
 
 Commit: `📝 完成 Phase 6 附件验收回写`
 
-- [ ] **Step 5: Push feature branch**
+- [x] **Step 5: Push feature branch**
 
 Run: `git push`
 Expected: `phase-6-attachments` updates on `origin` without force push.
+
+2026-08-26 outcome: final acceptance writeback committed as `3c4fab9` (`📝 完成 Phase 6 附件验收回写`) after fresh 72-file / 495-test verify, then `git push` advanced `origin/phase-6-attachments` from `add1356` to `3c4fab9` without force. Phase 6 plan is complete; Project State can clear `ACTIVE_PLAN` and move to Phase 7 design preparation.

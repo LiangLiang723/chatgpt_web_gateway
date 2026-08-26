@@ -9,20 +9,20 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-6-complete
-STATUS=phase-6-finalizing
+STATUS=ready-for-phase-7-design
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md
-NEXT_TASK=commit-phase-6-final-writeback
+ACTIVE_PLAN=none
+NEXT_TASK=write-phase-7-tool-calling-spec
 UPDATED_AT=2026-08-26
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 6 — 图片和文件输入的产品能力与真实网页验收已经完成；当前只剩 Task 10 branch/documentation 收尾。
-- **当前状态：** `phase-6-finalizing`。Task 1–9 已完成，Task 10 的事实回写与 fresh final verify 已通过；下一步是 staged inspection、提交和 push，这些 Git 收尾完成后进入 Phase 7 Tool Calling 设计。
+- **当前阶段：** Phase 6 — 图片和文件输入已完成并关闭。
+- **当前状态：** `ready-for-phase-7-design`。Phase 6 Active Plan 全部步骤完成，最终验收回写已提交并推送；下一任务是编写 Phase 7 Tool Calling Governing Spec，再建立实施计划。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-17-phase-6-attachments-files-design.md`](superpowers/specs/2026-08-17-phase-6-attachments-files-design.md)。
-- **Active Plan：** [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md)。
+- **Active Plan：** `none`。已完成的 Phase 6 计划保留在 [`docs/superpowers/plans/2026-08-18-phase-6-attachments-files.md`](superpowers/plans/2026-08-18-phase-6-attachments-files.md) 作为历史事实。
 - **最新 deterministic 证据：** 2026-08-26 real-web 修复后 fresh `corepack pnpm verify` 通过 **72 test files / 495 tests**；format、ESLint、TypeScript、build、Project Memory、Docs、Architecture、Version 全通过，`git diff --check` 无输出。
 - **最新 Docker 证据：** Phase 6 Task 8 fresh `linux/amd64` build digest `sha256:4726ee0cd39e641941385887ec44346aceb6641a190689fa188ec87764426558`，full `docker:smoke` 通过 migration `001/002/003`、Files restart lifecycle、PUID/PGID writeability 与既有 Browser/noVNC/seccomp 回归。
 - **最新真实网页证据：** 2026-08-26 最终 combined Phase 3/4/5/6 real E2E 单进程退出码 **0**。结果为 Phase 3 `gatewayChallenge=true`；Phase 4 `append/restore/rebuild=true`；Phase 5 `chatCompletions/markdown/responses/abort=true`；Phase 6 `imageDataUrl/imageFileId/txt/pdf/docx/xlsx/append/restore/streaming=true`。
@@ -87,9 +87,9 @@ UPDATED_AT=2026-08-26
 
 ## Next Steps（下一步）
 
-1. 完成 Task 10 staged inspection。
-2. 提交 Phase 6 最终文档/Project Memory 回写并 push `phase-6-attachments`。
-3. Git 收尾完成后将 `ACTIVE_PLAN` 置 `none`，进入 Phase 7 Tool Calling 设计。
+1. 编写 Phase 7 Tool Calling Governing Spec，先锁定 Prompt/Parser/Tool Result、Streaming 检测缓冲与失败语义。
+2. 设计批准后建立 Phase 7 implementation plan，再开始产品代码修改。
+3. Phase 7 的真实网页能力必须重新独立验收，不能从 Phase 6 成功外推。
 
 ## Known Risks / Limits（已知风险 / 限制）
 
