@@ -8,8 +8,8 @@
 |---|---:|---:|
 | `GET /health` | ✅ | ✅ |
 | `GET /v1/models` | ✅ | ✅ |
-| `POST /v1/chat/completions` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 |
-| `POST /v1/responses` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 |
+| `POST /v1/chat/completions` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 + Phase 7 function Tools |
+| `POST /v1/responses` | ✅ | ✅ 文本 + Phase 6 图片/文件输入 + Phase 7 function Tools |
 | `POST /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `GET /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `GET /v1/files/:id` | ✅ | ✅ Phase 6 local Files lifecycle |
@@ -17,6 +17,19 @@
 | `DELETE /v1/files/:id` | ✅ | ✅ Phase 6 local Files lifecycle |
 | `POST /v1/images/generations` | ✅ | ❌ Phase 8 |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ | ❌ |
+
+## Current Phase 7 Tool Calling（当前 Phase 7 工具调用）
+
+Phase 7 function Tool Calling 代码已实现，并于 2026-08-27 通过 fresh deterministic `verify`（78 test files / 537 tests）与 fresh `linux/amd64` Docker build/full smoke。authenticated real ChatGPT E2E 尚未完成：fresh `inspect:chatgpt` 被现有 LAN proxy `192.168.3.163:7890` connection refused 阻塞，DevSpace 直连 `chatgpt.com:443` 仍超时，因此本节描述的是**已实现且本地/Docker 验证通过的协议行为**，不是已关闭的真实网页验收结论。
+
+- Chat Completions 与 Responses 都支持 function tool declarations、`tool_choice=auto|none|required|function`、assistant Tool Call history 与 Tool Result continuation。
+- Gateway 不执行客户端函数；模型需要工具时只返回 Tool Call，客户端执行后通过 `role=tool` / `function_call_output` 回传结果。
+- Tool definitions 递归稳定 canonicalize；object keys 排序、tool list 按 name 排序，SHA-256 fingerprint 不包含每轮 `tool_choice`。仅调整声明顺序不会 REBUILD；schema/name/description/parameters 变化会 `REBUILD(reason='tools_changed')`。
+- ChatGPT Web 侧使用固定 private sentinel protocol；strict Parser 不修复 Markdown fence、损坏 JSON、未知函数或 policy 违规。Gateway-owned `call_<32 hex>` ID 持久化到 SQLite，并在 RESTORE/full-history replay 中保持稳定。
+- Context Prompt/Append Prompt 已升级到 version 2；FRESH/REBUILD 携带完整 tool definitions + protocol，APPEND/RESTORE 只携带当前 `tool_policy` 与 `pending`。Tool Result 会从已持久化 call 解析 function name，output 作为不可信 data field 注入。
+- text streaming 仍使用 Phase 5 Stable Prefix；存在 tools 时先经过纯 `ToolDetectionBuffer`。普通 text 一旦分类后继续真流式；private Tool Protocol 完整缓冲到 generation completed 后 strict parse，随后一次或少量 function-call argument chunks 对外发送，绝不把 private marker/JSON 作为公共 `content`。
+- Chat Completions non-stream 返回 `content:null` + `tool_calls[]` + `finish_reason='tool_calls'`；stream 返回 role chunk → `delta.tool_calls` → `finish_reason='tool_calls'` → `[DONE]`。
+- Responses non-stream 返回 completed `function_call` items；stream 使用 `response.output_item.added`、`response.function_call_arguments.delta/done`、`response.output_item.done`，最终一个 `response.completed`。
 
 ## Current Phase 6 Files and Attachments（当前 Phase 6 Files 与附件输入）
 
@@ -68,9 +81,9 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 | `stream=true` | ✅ | ✅ 文本与 Phase 6 附件请求均复用真实 DOM Streaming |
 | `image_url` URL/Base64 | ✅ | ✅ Phase 6；URL 安全获取 + Data URL，authenticated E2E 覆盖 Data URL |
 | file / `file_id` / Base64 file | ✅ | ✅ Phase 6 |
-| `tools` / tool messages | ✅ | ❌ Phase 7 |
-| `tool_choice` 非默认策略 | ✅ | ❌ Phase 7 |
-| `response_format=json_object/json_schema` | 🟡 | ❌ Phase 5 execution 仍拒绝 |
+| `tools` / assistant `tool_calls` / `role=tool` | ✅ | ✅ Phase 7 function Tools；deterministic + Docker 已通过，real E2E 待网络恢复 |
+| `tool_choice` 非默认策略 | ✅ | ✅ `auto|none|required|function` |
+| `response_format=json_object/json_schema` | 🟡 | ❌ Phase 7 execution 仍拒绝 |
 | `temperature/top_p/penalties/seed` | 🟡 | 接收并按既有诊断策略忽略 |
 | `max_tokens/max_completion_tokens` | 🟡 | 接收但不承诺精确限制 |
 | `logprobs` / `logit_bias` | ❌ | 稳定 unsupported error |
@@ -87,9 +100,10 @@ Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conver
 - `input_image.image_url`（URL/Data URL）与 `input_image.file_id`。
 - `input_file.file_data` 与 `input_file.file_id`。
 - `stream=false`。
-- `stream=true` typed SSE，包括 attachment Streaming。
+- `stream=true` typed SSE，包括 attachment Streaming 与 function-call events。
+- function `tools` / `tool_choice`、`function_call` history 与 `function_call_output` continuation。
 
-`input_file.file_url`、tools 与 Structured Output execution 仍不支持。
+`input_file.file_url` 与 Structured Output execution 仍不支持；built-in/MCP/custom/freeform tools 不在 Phase 7 范围。
 
 ## Stable Error Boundary（稳定错误边界）
 
@@ -115,8 +129,13 @@ Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conver
 | `attachment_fetch_failed` | 400 | client-supplied remote image URL 无法安全获取 |
 | `chatgpt_upload_failed` | 502 | ChatGPT 明确拒绝或附件上传失败 |
 | `chatgpt_upload_timeout` | 504 | 本请求 owned attachment 未在规定时间 ready |
-| `unsupported_phase6_request` | 501 | Tools/Structured/Image output/`input_file.file_url` 等 Phase 6 外能力 |
-| `unsupported_phase5_request` | 501 | 仅保留旧 Phase 5 execution error 类型；当前公开执行链使用 Phase 6 capability gate |
+| `chatgpt_tool_required` | 502 | 当前 policy 要求 Tool Call，但 ChatGPT 返回普通文本 |
+| `chatgpt_tool_protocol_invalid` | 502 | private sentinel/envelope/JSON framing 无效 |
+| `chatgpt_tool_unknown` | 502 | ChatGPT 请求当前不存在的 function |
+| `chatgpt_tool_forbidden` | 502 | ChatGPT 违反 `none` 或 forced function policy |
+| `unsupported_phase7_request` | 501 | Structured Output/image output/`input_file.file_url` 等 Phase 7 外能力 |
+| `unsupported_phase6_request` | 501 | 仅保留旧 Phase 6 execution error 类型；当前公开 Conversation Engine 使用 Phase 7 capability gate |
+| `unsupported_phase5_request` | 501 | 仅保留旧 Phase 5 execution error 类型 |
 | `invalid_conversation_request` | 400 | 当前 Conversation 请求形状无效 |
 
 SSE 已开始后 HTTP status 已固定为 200；相同稳定错误改用协议流内 error framing，并且不发送成功 terminal。

@@ -60,13 +60,17 @@
 
 验收：standalone Phase 6 real E2E 已证明 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、same-key APPEND、runtime restart RESTORE 与 attachment Streaming；2026-08-26 最终 combined Phase 3/4/5/6 real E2E 退出码 0，全阶段断言通过。验收过程中还修复了 38-code-point Markdown 尾部回排与 Composer fill 后 Send readiness 竞态。Remote URL fetch 的 SSRF/DNS/redirect 逻辑由 deterministic tests 覆盖，本轮没有公网 fixture 的 live remote-fetch E2E。
 
-Phase 6 已关闭，下一步进入 Phase 7 Tool Calling 设计。
+Phase 6 已关闭；当前处于 Phase 7 Tool Calling implementation acceptance。
 
 ## Phase 7：Tool Calling
 
-交付：Tool Schema canonicalization（规范化）、fingerprint、Prompt、检测 buffer、Parser、`tool_calls` 输出、Tool Result 回传。
+状态：**实现候选完成，真实网页验收被外部网络阻塞，尚未关闭。** Governing Spec 见 [`docs/superpowers/specs/2026-08-26-phase-7-tool-calling-design.md`](superpowers/specs/2026-08-26-phase-7-tool-calling-design.md)。
 
-验收：完成“模型 → 工具 → 工具结果 → 最终回答”闭环。
+交付代码已包含 Tool Schema canonicalization/fingerprint、Context/Append Prompt v2、固定 private protocol、strict Parser、Tool Detection Buffer、first-class Tool Call/Tool Result Context Sync、Gateway-owned persisted call IDs、`tools_changed` REBUILD、Chat Completions / Responses non-stream + stream function-call encoding，以及 standalone/combined Phase 7 E2E harness。
+
+本地/Docker 证据：2026-08-27 fresh `corepack pnpm verify` 为 **78 test files / 537 tests**；fresh `linux/amd64` image ID `sha256:7a74ac01608619baf130b765ba2b82b54f1262b971f2ac3fc1f97d7bcc882499`，full `docker:smoke` 通过。
+
+剩余验收：恢复可用 ChatGPT network/proxy 后先 fresh `inspect:chatgpt`，再运行 standalone Phase 7；standalone 通过后才运行 combined Phase 3→7。2026-08-27 inspect 已实际尝试，但既有 `192.168.3.163:7890` proxy connection refused，DevSpace 直连 `chatgpt.com:443` 仍 timeout，因此没有继续发送 standalone/combined 真实请求。
 
 ## Phase 8：ChatGPT 图片生成
 

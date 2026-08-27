@@ -1,7 +1,7 @@
 # Phase 7 Tool Calling Design（工具调用设计）
 
 **Date:** 2026-08-26
-**Status:** Approved Phase design derived from the approved V1 architecture and current Phase 6 implementation baseline
+**Status:** Approved design; implementation candidate completed on 2026-08-27, authenticated real ChatGPT acceptance blocked before DOM/Auth inspection by unavailable network proxy
 
 ## 1. Goal（目标）
 
@@ -597,7 +597,18 @@ NEXT_TASK=write-phase-8-image-generation-spec
 
 实际字段以验收时真实项目状态为准。
 
-## 19. Acceptance criteria（验收标准）
+## 19. Current implementation evidence（当前实现证据）
+
+截至 2026-08-27，§4–§15 与 §17 的产品实现和 deterministic/Docker 验证已经落地：
+
+- fresh `corepack pnpm verify`：**78/78 test files、537/537 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。
+- fresh `linux/amd64` Docker image ID：`sha256:7a74ac01608619baf130b765ba2b82b54f1262b971f2ac3fc1f97d7bcc882499`；full `docker:smoke` 通过。
+- standalone `test:e2e:chatgpt:phase7` 与 combined Phase 3→7 harness 已实现并通过 deterministic/type coverage。
+- authenticated real acceptance **尚未完成**：fresh `inspect:chatgpt` 使用既有隔离 re-auth Profile 与 `http://192.168.3.163:7890` 时在网页加载前失败为 `ERR_PROXY_CONNECTION_FAILED`；TCP 诊断确认该 proxy connection refused，最新 DevSpace direct `chatgpt.com:443` 复查为 network unreachable。按 `docs/testing.md` 的 real-E2E 退避规则，没有继续 standalone/combined 请求。
+
+因此本 spec 的设计与实现候选已经成立，但 Phase 7 仍保持 active，不能把下面依赖真实网页的 acceptance criteria 8/9 声称为通过。
+
+## 20. Acceptance criteria（验收标准）
 
 Phase 7 只有同时满足以下条件才能关闭：
 

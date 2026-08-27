@@ -183,7 +183,7 @@ Chat Completions 与 Responses 使用独立 Encoder，但共享同一 internal s
 
 ## Tool Calling（工具调用）
 
-V1 使用 Gateway 自己的 Prompt + Parser：
+Phase 7 function Tool Calling 已实现为 Gateway-owned private protocol；截至 2026-08-27 deterministic `verify` 与 Docker build/smoke 已通过，authenticated real ChatGPT E2E 因 LAN proxy connection refused 尚未完成。执行链如下：
 
 ```text
 OpenAI Tool Schema
@@ -201,7 +201,15 @@ Tool Parser
 OpenAI tool_calls
 ```
 
-存在 tools 时，先缓冲足够前缀判断普通文本还是工具调用，防止内部 JSON（结构化数据）泄漏到普通 content 流。
+`src/tools/` 保持纯逻辑边界：`canonicalize.ts` 负责 stable tool definitions/fingerprint 与 tool-choice validation；`prompt.ts`/`protocol.ts` 定义固定 private sentinel 和 JSON-safe tool context/policy；`parser.ts` 在 generation 完成后严格解析，不自动修复模型输出；`detection-buffer.ts` 只做 streaming prefix classification，不依赖 API、Playwright、Persistence 或 SQLite。
+
+Canonical Conversation first-class 表达 assistant Tool Call 与 tool-result message。Planner 的 pending turn 可以是 exactly one user 或 one-or-more consecutive tool results；stored/current tool fingerprint 不同会保守 `REBUILD(reason='tools_changed')`。FRESH/REBUILD Context Prompt v2 注入完整 tool definitions/protocol/history/pending；APPEND/RESTORE 只发送当前 `tool_policy` + `pending`，避免重复完整 schema。Tool Result 的 function name 从已持久化 `externalCallId` 解析，客户端 output 仅作为 untrusted data field。
+
+严格 Parser 成功后由 Conversation Engine 生成 Gateway-owned `call_<32 hex>` ID，再构造 final aggregate；assistant Tool Call 使用 `messages.role='assistant'` + `tool_calls` table，客户端结果使用 `messages.role='tool'` + `tool_call_id`。最终 clean aggregate 原子保存完成后，route/stream encoder 才允许输出成功 terminal；parser failure 保持 checkpoint `in_flight`，下一次 keyed request 通过 REBUILD 收敛。
+
+存在 tools 时，DOM Stable Prefix 先进入 `ToolDetectionBuffer`。如果前缀仍可能成为 sentinel 就继续缓冲；一旦明确普通文本，立刻 flush 并恢复 Phase 5 true text streaming；一旦确认 TOOL，private marker/payload 全程留在内部直到 generation completed，再 strict parse 并输出协议级 tool-call event。若 TEXT 已开始后又出现 private sentinel，立即 `chatgpt_tool_protocol_invalid`，不得把内部 JSON 泄漏到公共 content。
+
+两套 API 共享 internal `text | tool_calls` execution result/event union。Chat Completions 映射为 `content:null` / `delta.tool_calls` / `finish_reason='tool_calls'`；Responses 映射为 `function_call` items 与 `response.function_call_arguments.*` typed SSE。`stream/` 自己定义纯 `StreamToolCall` 结构，不反向依赖 `api/`，保持现有可执行架构约束。
 
 ## Attachments（附件）
 

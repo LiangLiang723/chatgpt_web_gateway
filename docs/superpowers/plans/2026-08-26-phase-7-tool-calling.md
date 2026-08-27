@@ -25,6 +25,8 @@
 - Real ChatGPT E2E is independent acceptance evidence and is not part of deterministic `corepack pnpm verify`.
 - No force push, PR, GitHub Release, or Docker registry publish without separate user instruction.
 
+**Execution note (2026-08-27):** 用户明确要求先连续完成全部功能、最后统一执行完整测试，因此 Tasks 1–7 的逐任务 red/green 命令与 checkpoint commits 没有机械逐项执行；对应功能/测试步骤由最终 fresh `corepack pnpm verify`（78 test files / 537 tests）统一证明，原计划中的 task-level commit 步骤标记为 `[-]`，由 consolidated implementation candidate commit `8bda79c` 取代。此偏离不改变设计或 acceptance gate。
+
 ---
 
 ## File Map（文件职责）
@@ -74,7 +76,7 @@ Primary modified files:
 - Produces: `parseAssistantOutput(text, { tools, toolChoice }) -> {type:'text',text} | {type:'tool_calls',calls:[{name,arguments}]}`.
 - Errors must surface through stable Phase 7 conversation errors; no raw parser exceptions escape API routes.
 
-- [ ] **Step 1: Write failing canonicalization tests**
+- [x] **Step 1: Write failing canonicalization tests**
 
 Cover exact semantic invariants:
 
@@ -89,23 +91,23 @@ expect(() => validateToolChoice([toolA], { mode: 'function', name: 'missing' }))
 Run: `corepack pnpm vitest run tests/unit/tool-canonicalize.test.ts`
 Expected: FAIL because `src/tools/canonicalize.ts` does not exist.
 
-- [ ] **Step 2: Implement deterministic canonicalization and fingerprint**
+- [x] **Step 2: Implement deterministic canonicalization and fingerprint**
 
 Use existing `fingerprintCanonical()` for SHA-256 stable JSON. Sort object keys recursively and sort top-level tools by name; preserve arrays. Do not include `tool_choice` in tool fingerprint.
 
-- [ ] **Step 3: Run canonicalization tests**
+- [x] **Step 3: Run canonicalization tests**
 
 Run: `corepack pnpm vitest run tests/unit/tool-canonicalize.test.ts`
 Expected: PASS.
 
-- [ ] **Step 4: Write failing Prompt tests**
+- [x] **Step 4: Write failing Prompt tests**
 
 Assert `auto`, `none`, `required`, and named-function policies are explicit; assert JSON data contains schemas without string interpolation corruption; assert Tool Result data resolves the persisted function name and keeps output as a JSON data field.
 
 Run: `corepack pnpm vitest run tests/unit/tool-prompt.test.ts`
 Expected: FAIL because prompt helpers do not exist.
 
-- [ ] **Step 5: Implement private protocol constants and prompt helpers**
+- [x] **Step 5: Implement private protocol constants and prompt helpers**
 
 The prompt contract must require the exact envelope:
 
@@ -117,20 +119,20 @@ The prompt contract must require the exact envelope:
 
 It must explicitly forbid prose/fences around tool calls and forbid fabricating tool results.
 
-- [ ] **Step 6: Run Prompt tests**
+- [x] **Step 6: Run Prompt tests**
 
 Run: `corepack pnpm vitest run tests/unit/tool-prompt.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Write failing strict Parser tests**
+- [x] **Step 7: Write failing strict Parser tests**
 
 Cover text, one call, multiple calls, malformed start/end markers, leading/trailing non-whitespace, Markdown fences, invalid JSON, extra root/call keys, non-object arguments, unknown tool, `none`, forced wrong tool, required-text response, and 17 calls.
 
-- [ ] **Step 8: Implement `parseAssistantOutput`**
+- [x] **Step 8: Implement `parseAssistantOutput`**
 
 Parser rules are exactly those in spec §8. Re-stringify argument objects to produce legal external JSON argument strings. Do not repair malformed model output.
 
-- [ ] **Step 9: Run Task 1 tests and regression subset**
+- [x] **Step 9: Run Task 1 tests and regression subset**
 
 Run:
 
@@ -145,7 +147,7 @@ corepack pnpm vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit Task 1**
+- [-] **Step 10: Commit Task 1** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 新增工具规范化与严格解析协议`
 
@@ -169,11 +171,11 @@ Commit: `✨ 新增工具规范化与严格解析协议`
 - Planner input adds current/stored `toolFingerprint?: string` and can return `REBUILD reason='tools_changed'`.
 - `selectUploadAttachmentReferences(plan)` scans `history + pending` for FRESH/REBUILD and only `pending` for APPEND/RESTORE.
 
-- [ ] **Step 1: Add failing canonical fingerprint tests**
+- [x] **Step 1: Add failing canonical fingerprint tests**
 
 Prove assistant call ID/name/arguments and tool-result call ID/content affect fingerprints while attachment behavior remains unchanged.
 
-- [ ] **Step 2: Add failing planner tests for tool tails and schema changes**
+- [x] **Step 2: Add failing planner tests for tool tails and schema changes**
 
 Cases:
 
@@ -187,19 +189,19 @@ tool fingerprint changed => REBUILD tools_changed
 tool declaration reorder => equal fingerprint => APPEND
 ```
 
-- [ ] **Step 3: Generalize canonical context types and planner**
+- [x] **Step 3: Generalize canonical context types and planner**
 
 Use `pending: CanonicalMessage[]`. Normal user execution has one pending user; tool continuation has one-or-more pending tool results. Generalize history/prefix helpers without changing Phase 4/5/6 semantics for text-only requests.
 
-- [ ] **Step 4: Generalize request canonicalization and transcript validation**
+- [x] **Step 4: Generalize request canonicalization and transcript validation**
 
 Validate tool results against request/local call history where possible. Keep attachment semantic resolution unchanged. Reject Structured Output and image output with Phase 7-specific unsupported error once Phase 7 entry point is enabled.
 
-- [ ] **Step 5: Upgrade Context/Append Prompt to version 2**
+- [x] **Step 5: Upgrade Context/Append Prompt to version 2**
 
 FRESH/REBUILD context includes full canonical tool context plus structured history/pending. APPEND/RESTORE includes current `tool_policy` plus pending messages and omits unchanged full schema.
 
-- [ ] **Step 6: Run Task 2 tests plus Phase 4/6 context regressions**
+- [x] **Step 6: Run Task 2 tests plus Phase 4/6 context regressions**
 
 Run:
 
@@ -213,7 +215,7 @@ corepack pnpm vitest run \
 
 Expected: PASS with unchanged text/attachment behavior.
 
-- [ ] **Step 7: Commit Task 2**
+- [-] **Step 7: Commit Task 2** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 扩展工具调用上下文同步语义`
 
@@ -234,19 +236,19 @@ Commit: `✨ 扩展工具调用上下文同步语义`
 - Stored aggregate canonicalization joins `tool_calls` by `messageId` and preserves `externalCallId`.
 - Tool-result MessageRecord retains `toolCallId` and is validated by existing repository aggregate checks.
 
-- [ ] **Step 1: Write failing aggregate tests**
+- [x] **Step 1: Write failing aggregate tests**
 
 Build a canonical transcript with assistant Tool Call → tool result → final assistant text. Assert exact roles, sequences, external call IDs, argument text, message IDs, and prefix reuse.
 
-- [ ] **Step 2: Implement Tool Call/Result record creation and stored reconstruction**
+- [x] **Step 2: Implement Tool Call/Result record creation and stored reconstruction**
 
 Do not add a DB migration. Reuse existing Phase 2 tables and repository validation.
 
-- [ ] **Step 3: Add restart round-trip test**
+- [x] **Step 3: Add restart round-trip test**
 
 Save aggregate, close/reopen SQLite, load by key, and prove call identity/result linkage survives.
 
-- [ ] **Step 4: Run persistence and aggregate tests**
+- [x] **Step 4: Run persistence and aggregate tests**
 
 Run:
 
@@ -259,7 +261,7 @@ corepack pnpm vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [-] **Step 5: Commit Task 3** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 持久化工具调用与结果会话记录`
 
@@ -289,23 +291,23 @@ interface ToolCallExecutionResult {
 
 Engine generates external call IDs only after a strict parser success; final clean aggregate is saved before result return.
 
-- [ ] **Step 1: Write failing non-stream engine tests**
+- [x] **Step 1: Write failing non-stream engine tests**
 
 Use fake Driver outputs containing the private protocol. Cover one call, multiple calls, auto text, required-text failure, malformed protocol, unknown tool, forced tool violation, and call-ID stability after persistence.
 
-- [ ] **Step 2: Implement Phase 7 request entry/capability validation**
+- [x] **Step 2: Implement Phase 7 request entry/capability validation**
 
 Tools and tool history become supported. Structured Output/image output remain `unsupported_phase7_request`. Keep Phase 4/5/6 public behavior unchanged through the same engine.
 
-- [ ] **Step 3: Parse final Assistant DOM output and generate call IDs**
+- [x] **Step 3: Parse final Assistant DOM output and generate call IDs**
 
 Call `parseAssistantOutput`; map parsed calls to `NormalizedToolCall` with Gateway IDs; build/save final aggregate; return union result.
 
-- [ ] **Step 4: Implement Tool Result continuation prompt path**
+- [x] **Step 4: Implement Tool Result continuation prompt path**
 
 Resolve each pending tool result against persisted/request assistant Tool Calls and include function name + result in private prompt data. Confirm fake Driver receives no repeated full schema on unchanged APPEND.
 
-- [ ] **Step 5: Run engine integration subset**
+- [x] **Step 5: Run engine integration subset**
 
 Run:
 
@@ -319,7 +321,7 @@ corepack pnpm vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 4**
+- [-] **Step 6: Commit Task 4** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 打通非流式工具调用与结果回传`
 
@@ -337,19 +339,19 @@ Commit: `✨ 打通非流式工具调用与结果回传`
 - Chat Completions maps `tool_calls` result to `content:null`, function calls, `finish_reason:'tool_calls'`.
 - Responses maps each internal Tool Call to a completed `function_call` output item with stable `call_id` and encoder-owned `fc_...` item ID.
 
-- [ ] **Step 1: Write failing encoder tests with deterministic IDs/timestamps**
+- [x] **Step 1: Write failing encoder tests with deterministic IDs/timestamps**
 
 Assert exact JSON shapes for one and two calls and preserve existing text shapes.
 
-- [ ] **Step 2: Implement union-aware non-stream encoders**
+- [x] **Step 2: Implement union-aware non-stream encoders**
 
 Do not add usage. Do not expose private protocol text.
 
-- [ ] **Step 3: Add HTTP integration tests through both Normalizers and shared engine fake**
+- [x] **Step 3: Add HTTP integration tests through both Normalizers and shared engine fake**
 
 Assert Chat Completions and Responses represent semantically identical calls with the same internal call IDs.
 
-- [ ] **Step 4: Run encoder/API subset**
+- [x] **Step 4: Run encoder/API subset**
 
 Run:
 
@@ -362,7 +364,7 @@ corepack pnpm vitest run \
 
 If route tests use different filenames, run the exact existing route integration file discovered in the repo plus the new tool integration test.
 
-- [ ] **Step 5: Commit Task 5**
+- [-] **Step 5: Commit Task 5** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 输出双协议工具调用响应`
 
@@ -386,29 +388,29 @@ Commit: `✨ 输出双协议工具调用响应`
 - Internal stream gains `{type:'tool_calls', toolCalls}` before `{type:'completed', result}`.
 - Tool protocol parse/generate/persist completes before tool-call stream event and success terminal.
 
-- [ ] **Step 1: Write failing detection-buffer tests**
+- [x] **Step 1: Write failing detection-buffer tests**
 
 Cases: partial marker across many deltas, normal text diverging at byte/code-point 1 and later, full marker in first delta, private marker appearing after text classification, completion on partial marker, and no-tool bypass.
 
-- [ ] **Step 2: Implement pure detection buffer**
+- [x] **Step 2: Implement pure detection buffer**
 
 No imports from Playwright/API/Persistence. Never emit any private marker character after a Tool classification. If marker appears after text classification, raise protocol-invalid before emitting marker/payload.
 
-- [ ] **Step 3: Write failing stream encoder tests**
+- [x] **Step 3: Write failing stream encoder tests**
 
 Chat Completions expected lifecycle: role → one/more `delta.tool_calls` → terminal `finish_reason:'tool_calls'` → `[DONE]`.
 
 Responses expected lifecycle per call: `response.output_item.added` → `response.function_call_arguments.delta` → `.done` → `response.output_item.done`, then one `response.completed`.
 
-- [ ] **Step 4: Implement tool-aware engine Streaming**
+- [x] **Step 4: Implement tool-aware engine Streaming**
 
 Keep `streamAssistantText` as DOM Stable Prefix source. Route deltas through detector only when tools exist. On Tool classification, buffer final DOM output, parse after generation completion, allocate IDs, save clean aggregate, then emit tool-call event and completed event.
 
-- [ ] **Step 5: Implement union-aware stream encoders**
+- [x] **Step 5: Implement union-aware stream encoders**
 
 Text event shapes stay byte-for-byte compatible with Phase 5 where possible. Tool events use current OpenAI-compatible field/event names.
 
-- [ ] **Step 6: Run streaming regression subset**
+- [x] **Step 6: Run streaming regression subset**
 
 Run:
 
@@ -424,7 +426,7 @@ corepack pnpm vitest run \
 
 Expected: PASS; existing text Streaming tests remain green.
 
-- [ ] **Step 7: Commit Task 6**
+- [-] **Step 7: Commit Task 6** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 增加工具调用流式检测与协议输出`
 
@@ -445,24 +447,24 @@ Commit: `✨ 增加工具调用流式检测与协议输出`
 - Remaining later-phase capabilities return `unsupported_phase7_request`.
 - Pre-SSE invalid request/parser-prestart failures use HTTP OpenAI-style errors; post-start parser errors use protocol stream errors and no success terminal.
 
-- [ ] **Step 1: Add failing real Fastify integration cases**
+- [x] **Step 1: Add failing real Fastify integration cases**
 
 Cover both endpoints, stream/non-stream, tool results, malformed/unknown call reference, same-key slow FIFO, different-key parallel, tool + attachment request, and post-start malformed tool protocol.
 
-- [ ] **Step 2: Update capability/error mapping**
+- [x] **Step 2: Update capability/error mapping**
 
 Add Phase 7 stable codes from the spec and keep sensitive arguments/results out of error messages/logs.
 
-- [ ] **Step 3: Prove attachments + tools coexist**
+- [x] **Step 3: Prove attachments + tools coexist**
 
 Fake Driver must receive expected staged attachments and tool schema/policy. APPEND tool result must not re-upload historical attachments unless Context Sync selects REBUILD.
 
-- [ ] **Step 4: Run all deterministic tests**
+- [x] **Step 4: Run all deterministic tests**
 
 Run: `corepack pnpm test`
 Expected: all test files pass.
 
-- [ ] **Step 5: Run type/lint/build/repo governance**
+- [x] **Step 5: Run type/lint/build/repo governance**
 
 Run:
 
@@ -477,7 +479,7 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 7**
+- [-] **Step 6: Commit Task 7** — replaced by consolidated Phase 7 implementation/evidence commit per execution note.
 
 Commit: `✨ 完成 Phase 7 工具调用 HTTP 集成`
 
@@ -496,11 +498,11 @@ Commit: `✨ 完成 Phase 7 工具调用 HTTP 集成`
 - New package script: `test:e2e:chatgpt:phase7` using the same Xvfb/Profile/proxy conventions as Phase 3–6.
 - Combined harness gains a separately opt-in Phase 7 stage and reuses one authenticated browser/runtime process where existing policy requires it.
 
-- [ ] **Step 1: Read the full Phase 6 standalone and combined harness before editing**
+- [x] **Step 1: Read the full Phase 6 standalone and combined harness before editing**
 
 Use existing profile, request-budget, retry/backoff, redaction, and clean shutdown patterns. Do not create a second incompatible harness framework.
 
-- [ ] **Step 2: Add deterministic harness assertions before live execution**
+- [x] **Step 2: Add deterministic harness assertions before live execution**
 
 The Phase 7 harness must verify at least:
 
@@ -516,11 +518,11 @@ tool schema change REBUILD
 
 Use simple deterministic pseudo-tools whose results are supplied by the harness itself; Gateway never executes them.
 
-- [ ] **Step 3: Add package script and combined Phase 7 stage**
+- [x] **Step 3: Add package script and combined Phase 7 stage**
 
 Run static/type tests for scripts before touching live ChatGPT.
 
-- [ ] **Step 4: Run fresh authenticated inspect gate**
+- [!] **Step 4: Run fresh authenticated inspect gate** — blocked 2026-08-27 before DOM/Auth inspection: approved LAN proxy `192.168.3.163:7890` connection refused; latest DevSpace direct `chatgpt.com:443` recheck is network unreachable.
 
 Run: `corepack pnpm inspect:chatgpt` with the project’s approved E2E environment/profile/proxy.
 Expected: authenticated, unique Composer, no unresolved challenge.
@@ -532,7 +534,7 @@ Expected: exit code 0 and all seven semantic groups true.
 
 If ChatGPT rate-limit/challenge appears, follow `docs/testing.md`; do not spam retries or weaken assertions.
 
-- [ ] **Step 6: Commit E2E harness after standalone success**
+- [-] **Step 6: Commit E2E harness after standalone success** — harness was included in verified implementation candidate commit `8bda79c` before live acceptance because the external network blocker prevents reaching standalone execution.
 
 Commit: `🧪 增加 Phase 7 真实工具调用验收`
 
@@ -547,22 +549,22 @@ Commit: `🧪 增加 Phase 7 真实工具调用验收`
 **Interfaces:**
 - Produces closure evidence, not a new product abstraction.
 
-- [ ] **Step 1: Run fresh deterministic full verify**
+- [x] **Step 1: Run fresh deterministic full verify**
 
 Run: `corepack pnpm verify`
 Expected: format/lint/typecheck/all tests/build/repo checks pass.
 
-- [ ] **Step 2: Build fresh `linux/amd64` Docker image**
+- [x] **Step 2: Build fresh `linux/amd64` Docker image**
 
 Run: `corepack pnpm docker:build`
 Record resulting image ID/digest in plan/Project State only after success.
 
-- [ ] **Step 3: Run full Docker smoke**
+- [x] **Step 3: Run full Docker smoke**
 
 Run: `corepack pnpm docker:smoke`
 Expected: migrations, restart lifecycle, Browser/noVNC/seccomp, permissions and prior smoke assertions all pass.
 
-- [ ] **Step 4: Run fresh authenticated inspect if enough time/session budget elapsed**
+- [!] **Step 4: Run fresh authenticated inspect if enough time/session budget elapsed** — same external network blocker as Task 8 Step 4; do not retry until a reachable ChatGPT network path exists.
 
 Run: `corepack pnpm inspect:chatgpt`.
 
@@ -571,11 +573,11 @@ Run: `corepack pnpm inspect:chatgpt`.
 Use the repository’s combined opt-in flag exactly as defined by the harness.
 Expected: one process exits 0 with all prior phase assertions plus Phase 7 true.
 
-- [ ] **Step 6: Fix only evidence-backed defects**
+- [-] **Step 6: Fix only evidence-backed defects** — no product defect was evidenced; current failure is external network reachability.
 
 Any failure triggers `superpowers:systematic-debugging`, a focused failing deterministic regression where possible, minimal fix, standalone phase re-check, then combined re-check. Do not weaken existing assertions to make the run green.
 
-- [ ] **Step 7: Commit any verification-driven fix separately**
+- [-] **Step 7: Commit any verification-driven fix separately** — no verification-driven product fix was required after the final deterministic/Docker pass.
 
 Use a concrete `🐛` commit describing the actual defect. If no code changes were needed, no commit is required for this step.
 
@@ -604,19 +606,19 @@ ACTIVE_PLAN=none
 NEXT_TASK=write-phase-8-image-generation-spec
 ```
 
-- [ ] **Step 1: Write back actual implemented compatibility**
+- [x] **Step 1: Write back actual implemented compatibility**
 
 Mark function Tools/Tool Result/tool choice current support accurately for both APIs. Document buffered tool-argument Streaming honestly and keep Structured Output/Image Generation unsupported.
 
-- [ ] **Step 2: Update architecture/testing/roadmap/README**
+- [x] **Step 2: Update architecture/testing/roadmap/README**
 
 Record canonical tool context, private protocol/parser, tool-result continuation, persisted call IDs, Streaming detector, exact deterministic test counts, Docker evidence, standalone/combined real-E2E evidence, and remaining limitations.
 
-- [ ] **Step 3: Mark Tasks 1–10 evidence accurately**
+- [x] **Step 3: Mark Tasks 1–10 evidence accurately**
 
 No checkbox may be checked without corresponding current-session evidence or committed historical evidence produced by this Phase.
 
-- [ ] **Step 4: Run fresh final verification after documentation changes**
+- [x] **Step 4: Run fresh final verification after documentation changes**
 
 Run:
 
