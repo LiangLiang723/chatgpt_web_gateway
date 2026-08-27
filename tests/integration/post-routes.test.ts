@@ -19,6 +19,15 @@ function textResult(text = 'backend answer'): NormalizedExecutionResult {
   };
 }
 
+function toolResult(): NormalizedExecutionResult {
+  return {
+    type: 'tool_calls',
+    toolCalls: [{ id: 'call_gateway_test', name: 'get_weather', arguments: '{"city":"Xiamen"}' }],
+    conversationUrl: 'https://chatgpt.com/c/test',
+    completedAt: 1_786_720_001_234,
+  };
+}
+
 function createApp(execute?: NormalizedExecutionHandler) {
   const app = buildServer({
     config: loadConfig({ GATEWAY_API_KEY: 'test-key' }),
@@ -151,6 +160,114 @@ describe('POST routes', () => {
     });
   });
 
+  it('normalizes Chat Completions tools and encodes function tool_calls', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = createApp(async (request) => {
+      received.push(request);
+      return toolResult();
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: auth,
+      payload: {
+        model: 'chatgpt-web',
+        messages: [{ role: 'user', content: 'Weather?' }],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'get_weather',
+              description: 'Get weather',
+              parameters: { type: 'object', properties: { city: { type: 'string' } } },
+            },
+          },
+        ],
+        tool_choice: 'required',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_gateway_test',
+                type: 'function',
+                function: { name: 'get_weather', arguments: '{"city":"Xiamen"}' },
+              },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+    });
+    expect(received[0]).toMatchObject({
+      tools: [{ type: 'function', name: 'get_weather' }],
+      toolChoice: { mode: 'required' },
+    });
+  });
+
+  it('normalizes Responses function_call_output and encodes function_call items', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = createApp(async (request) => {
+      received.push(request);
+      return toolResult();
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      headers: { ...auth, 'x-conversation-key': 'response-tools' },
+      payload: {
+        model: 'chatgpt-web',
+        input: [
+          {
+            type: 'function_call_output',
+            call_id: 'call_previous',
+            output: '{"condition":"sunny"}',
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            name: 'get_weather',
+            description: 'Get weather',
+            parameters: { type: 'object' },
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      output: [
+        {
+          type: 'function_call',
+          call_id: 'call_gateway_test',
+          name: 'get_weather',
+          arguments: '{"city":"Xiamen"}',
+          status: 'completed',
+        },
+      ],
+    });
+    expect(received[0]).toMatchObject({
+      conversationKey: 'response-tools',
+      messages: [
+        {
+          role: 'tool',
+          toolCallId: 'call_previous',
+          content: [{ type: 'text', text: '{"condition":"sunny"}' }],
+        },
+      ],
+    });
+  });
+
   it('returns stable unsupported-parameter errors from the normalizer', async () => {
     const app = createApp(async () => textResult());
 
@@ -182,6 +299,11 @@ describe('POST routes', () => {
     ['chatgpt_generation_timeout', 504, 'server_error'],
     ['chatgpt_response_missing', 502, 'server_error'],
     ['conversation_restore_failed', 502, 'server_error'],
+    ['chatgpt_tool_required', 502, 'server_error'],
+    ['chatgpt_tool_protocol_invalid', 502, 'server_error'],
+    ['chatgpt_tool_unknown', 502, 'server_error'],
+    ['chatgpt_tool_forbidden', 502, 'server_error'],
+    ['unsupported_phase7_request', 501, 'server_error'],
     ['unsupported_phase4_request', 501, 'server_error'],
     ['invalid_conversation_request', 400, 'invalid_request_error'],
     ['conversation_sync_not_implemented', 501, 'server_error'],

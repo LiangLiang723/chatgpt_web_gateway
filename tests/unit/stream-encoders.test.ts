@@ -134,7 +134,7 @@ describe('Responses streaming encoder', () => {
       code: 'chatgpt_stream_diverged',
       message: 'stream diverged',
       param: null,
-      sequence_number: 5,
+      sequence_number: 3,
     });
   });
 });

@@ -7,6 +7,9 @@ export type Phase5ExecutionErrorCode =
 export type Phase6ExecutionErrorCode =
   'unsupported_phase6_request' | 'invalid_conversation_request';
 
+export type Phase7ExecutionErrorCode =
+  'unsupported_phase7_request' | 'invalid_conversation_request';
+
 export class Phase4ExecutionError extends Error {
   constructor(
     readonly code: Phase4ExecutionErrorCode,
@@ -34,5 +37,15 @@ export class Phase6ExecutionError extends Error {
   ) {
     super(message);
     this.name = 'Phase6ExecutionError';
+  }
+}
+
+export class Phase7ExecutionError extends Error {
+  constructor(
+    readonly code: Phase7ExecutionErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'Phase7ExecutionError';
   }
 }

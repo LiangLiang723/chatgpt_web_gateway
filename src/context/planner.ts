@@ -1,5 +1,9 @@
 import { fingerprintCanonical } from './fingerprint.js';
-import { fingerprintCanonicalMessage } from './multimodal.js';
+import {
+  fingerprintCanonicalMessage,
+  isCanonicalAssistantToolCallMessage,
+  isCanonicalToolResultMessage,
+} from './multimodal.js';
 import type {
   CanonicalConversationRequest,
   CanonicalMessage,
@@ -8,16 +12,35 @@ import type {
   RebuildReason,
 } from './types.js';
 
-function currentUser(request: CanonicalConversationRequest): CanonicalMessage {
-  const message = request.messages.at(-1);
-  if (!message || message.role !== 'user') {
-    throw new Error('Canonical Conversation request must end with a user message');
+export class ContextSyncPlanningError extends Error {
+  readonly code = 'invalid_conversation_request';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContextSyncPlanningError';
   }
-  return message;
+}
+
+function pendingStart(request: CanonicalConversationRequest): number {
+  const last = request.messages.at(-1);
+  if (!last) throw new ContextSyncPlanningError('Conversation request must contain a pending turn');
+  if (last.role === 'user') return request.messages.length - 1;
+  if (last.role !== 'tool') {
+    throw new ContextSyncPlanningError(
+      'Conversation request must end with a user or tool-result turn',
+    );
+  }
+  let start = request.messages.length - 1;
+  while (start > 0 && request.messages[start - 1]?.role === 'tool') start -= 1;
+  return start;
+}
+
+function pendingTurn(request: CanonicalConversationRequest): CanonicalMessage[] {
+  return request.messages.slice(pendingStart(request));
 }
 
 function requestHistory(request: CanonicalConversationRequest): CanonicalMessage[] {
-  return request.messages.slice(0, -1);
+  return request.messages.slice(0, pendingStart(request));
 }
 
 function sameCanonical(left: unknown, right: unknown): boolean {
@@ -42,12 +65,52 @@ function confirmedPrefix(stored: CanonicalStoredConversation): CanonicalMessage[
   return stored.messages.slice(0, stored.sync.syncedMessageCount);
 }
 
+function validatePending(
+  pending: readonly CanonicalMessage[],
+  prior: readonly CanonicalMessage[],
+): void {
+  if (pending.length === 1 && pending[0]?.role === 'user') return;
+  if (pending.length === 0 || pending.some((message) => message.role !== 'tool')) {
+    throw new ContextSyncPlanningError(
+      'Pending turn must contain exactly one user message or one or more tool results',
+    );
+  }
+
+  const knownCalls = new Set<string>();
+  const completedCalls = new Set<string>();
+  for (const message of prior) {
+    if (isCanonicalAssistantToolCallMessage(message)) {
+      for (const call of message.toolCalls) knownCalls.add(call.externalCallId);
+    } else if (isCanonicalToolResultMessage(message)) {
+      completedCalls.add(message.toolCallId);
+    }
+  }
+
+  const seen = new Set<string>();
+  for (const message of pending) {
+    if (!isCanonicalToolResultMessage(message)) continue;
+    if (seen.has(message.toolCallId)) {
+      throw new ContextSyncPlanningError(
+        'A tool call cannot receive duplicate results in one turn',
+      );
+    }
+    seen.add(message.toolCallId);
+    if (!knownCalls.has(message.toolCallId)) {
+      throw new ContextSyncPlanningError('Tool result references an unknown tool call');
+    }
+    if (completedCalls.has(message.toolCallId)) {
+      throw new ContextSyncPlanningError(
+        'Tool result references a tool call that already has a result',
+      );
+    }
+  }
+}
+
 function fresh(request: CanonicalConversationRequest): ContextSyncPlan {
-  return {
-    mode: 'FRESH',
-    history: requestHistory(request),
-    currentUser: currentUser(request),
-  };
+  const history = requestHistory(request);
+  const pending = pendingTurn(request);
+  validatePending(pending, history);
+  return { mode: 'FRESH', history, pending };
 }
 
 function rebuild(
@@ -55,22 +118,20 @@ function rebuild(
   storedHistory: CanonicalMessage[],
   request: CanonicalConversationRequest,
 ): ContextSyncPlan {
-  return {
-    mode: 'REBUILD',
-    reason,
-    history: request.mode === 'full' ? requestHistory(request) : storedHistory,
-    currentUser: currentUser(request),
-  };
+  const pending = pendingTurn(request);
+  const history = request.mode === 'full' ? requestHistory(request) : storedHistory;
+  validatePending(pending, history);
+  return { mode: 'REBUILD', reason, history, pending };
 }
 
 function appendOrRestore(
   request: CanonicalConversationRequest,
+  prior: readonly CanonicalMessage[],
   hasAffinityPage: boolean,
 ): ContextSyncPlan {
-  return {
-    mode: hasAffinityPage ? 'APPEND' : 'RESTORE',
-    currentUser: currentUser(request),
-  };
+  const pending = pendingTurn(request);
+  validatePending(pending, prior);
+  return { mode: hasAffinityPage ? 'APPEND' : 'RESTORE', pending };
 }
 
 export function planContextSync(input: {
@@ -93,9 +154,12 @@ export function planContextSync(input: {
   if (!sameCanonical(stored.instructions, request.instructions)) {
     return rebuild('instructions_changed', stored.messages, request);
   }
+  if (stored.toolFingerprint !== request.toolFingerprint) {
+    return rebuild('tools_changed', stored.messages, request);
+  }
 
   if (request.mode === 'incremental') {
-    return appendOrRestore(request, hasAffinityPage);
+    return appendOrRestore(request, stored.messages, hasAffinityPage);
   }
 
   if (!hasPrefix(request.messages, stored.messages)) {
@@ -103,9 +167,13 @@ export function planContextSync(input: {
   }
 
   const unsynced = request.messages.slice(stored.messages.length);
-  if (unsynced.length !== 1 || unsynced[0]?.role !== 'user') {
+  const pending = pendingTurn(request);
+  if (
+    unsynced.length !== pending.length ||
+    !unsynced.every((message, index) => sameMessage(message, pending[index] as CanonicalMessage))
+  ) {
     return rebuild('multiple_unsynced_turns', stored.messages, request);
   }
 
-  return appendOrRestore(request, hasAffinityPage);
+  return appendOrRestore(request, stored.messages, hasAffinityPage);
 }

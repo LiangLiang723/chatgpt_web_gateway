@@ -570,7 +570,7 @@ describe('Phase 6 cross-protocol attachment HTTP matrix', () => {
     expect((await second).status).toBe(200);
   });
 
-  it('returns unsupported_phase6_request for Tools/Structured capabilities while attachment execution is enabled', async () => {
+  it('allows Phase 7 Tools while Structured Output remains unsupported with attachment execution enabled', async () => {
     const context = setup();
     const base = await listen(context);
 
@@ -585,8 +585,8 @@ describe('Phase 6 cross-protocol attachment HTTP matrix', () => {
         },
       ],
     });
-    expect(tools.status).toBe(501);
-    expect(await tools.json()).toMatchObject({ error: { code: 'unsupported_phase6_request' } });
+    expect(tools.status).toBe(200);
+    expect(await tools.json()).toMatchObject({ choices: [{ finish_reason: 'stop' }] });
 
     const structured = await postJson(base, '/v1/responses', {
       ...responsesBody([{ type: 'input_text', text: 'structured' }]),
@@ -594,7 +594,7 @@ describe('Phase 6 cross-protocol attachment HTTP matrix', () => {
     });
     expect(structured.status).toBe(501);
     expect(await structured.json()).toMatchObject({
-      error: { code: 'unsupported_phase6_request' },
+      error: { code: 'unsupported_phase7_request' },
     });
   });
 });

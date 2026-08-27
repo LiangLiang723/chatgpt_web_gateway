@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { planContextSync } from '../../src/context/planner.js';
 import type {
+  CanonicalAssistantToolCallMessage,
   CanonicalConversationRequest,
+  CanonicalMessage,
   CanonicalStoredConversation,
   CanonicalTextMessage,
+  CanonicalToolResultMessage,
   ContextSyncPlan,
 } from '../../src/context/types.js';
 
@@ -13,9 +16,19 @@ const a1: CanonicalTextMessage = { role: 'assistant', text: 'a1' };
 const u2: CanonicalTextMessage = { role: 'user', text: 'u2' };
 const a2: CanonicalTextMessage = { role: 'assistant', text: 'a2' };
 const u3: CanonicalTextMessage = { role: 'user', text: 'u3' };
+const call1: CanonicalAssistantToolCallMessage = {
+  role: 'assistant',
+  text: '',
+  toolCalls: [{ externalCallId: 'call_1', name: 'weather', arguments: '{"city":"Tokyo"}' }],
+};
+const result1: CanonicalToolResultMessage = {
+  role: 'tool',
+  toolCallId: 'call_1',
+  text: '{"temp":31}',
+};
 
 function request(
-  messages: CanonicalTextMessage[],
+  messages: CanonicalMessage[],
   options: Partial<CanonicalConversationRequest> = {},
 ): CanonicalConversationRequest {
   return {
@@ -45,29 +58,92 @@ describe('planContextSync', () => {
     expect(planContextSync({ request: request([u1, a1, u2]), hasAffinityPage: false })).toEqual({
       mode: 'FRESH',
       history: [u1, a1],
-      currentUser: u2,
+      pending: [u2],
     });
   });
 
-  it('APPENDs a single-user incremental request on a clean affinity Conversation', () => {
+  it('APPENDs or RESTOREs a single-user incremental request', () => {
     expect(
       planContextSync({ stored: stored(), request: request([u2]), hasAffinityPage: true }),
-    ).toEqual({ mode: 'APPEND', currentUser: u2 });
-  });
-
-  it('RESTOREs a single-user incremental request when the Page affinity is gone', () => {
+    ).toEqual({ mode: 'APPEND', pending: [u2] });
     expect(
       planContextSync({ stored: stored(), request: request([u2]), hasAffinityPage: false }),
-    ).toEqual({ mode: 'RESTORE', currentUser: u2 });
+    ).toEqual({ mode: 'RESTORE', pending: [u2] });
   });
 
   it('APPENDs or RESTOREs a full-history request with exactly one unsynced user', () => {
     expect(
       planContextSync({ stored: stored(), request: request([u1, a1, u2]), hasAffinityPage: true }),
-    ).toEqual({ mode: 'APPEND', currentUser: u2 });
+    ).toEqual({ mode: 'APPEND', pending: [u2] });
     expect(
       planContextSync({ stored: stored(), request: request([u1, a1, u2]), hasAffinityPage: false }),
-    ).toEqual({ mode: 'RESTORE', currentUser: u2 });
+    ).toEqual({ mode: 'RESTORE', pending: [u2] });
+  });
+
+  it('APPENDs or RESTOREs one or more tool results against persisted calls', () => {
+    const storedTool = stored({
+      messages: [u1, call1],
+      sync: { status: 'clean', syncedMessageCount: 2 },
+      toolFingerprint: 'tools-a',
+    });
+    expect(
+      planContextSync({
+        stored: storedTool,
+        request: request([result1], { toolFingerprint: 'tools-a' }),
+        hasAffinityPage: true,
+      }),
+    ).toEqual({ mode: 'APPEND', pending: [result1] });
+    expect(
+      planContextSync({
+        stored: storedTool,
+        request: request([u1, call1, result1], { toolFingerprint: 'tools-a' }),
+        hasAffinityPage: false,
+      }),
+    ).toEqual({ mode: 'RESTORE', pending: [result1] });
+  });
+
+  it('rejects unknown and duplicate tool results', () => {
+    const storedTool = stored({
+      messages: [u1, call1],
+      sync: { status: 'clean', syncedMessageCount: 2 },
+    });
+    expect(() =>
+      planContextSync({
+        stored: storedTool,
+        request: request([{ role: 'tool', toolCallId: 'call_missing', text: 'x' }]),
+        hasAffinityPage: true,
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_conversation_request' }));
+    expect(() =>
+      planContextSync({
+        stored: storedTool,
+        request: request([result1, result1]),
+        hasAffinityPage: true,
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_conversation_request' }));
+  });
+
+  it('REBUILDs tool definition changes but not an equal fingerprint', () => {
+    const withTools = stored({ toolFingerprint: 'same' });
+    expect(
+      planContextSync({
+        stored: withTools,
+        request: request([u2], { toolFingerprint: 'same' }),
+        hasAffinityPage: true,
+      }),
+    ).toEqual({ mode: 'APPEND', pending: [u2] });
+    expect(
+      planContextSync({
+        stored: withTools,
+        request: request([u2], { toolFingerprint: 'changed' }),
+        hasAffinityPage: true,
+      }),
+    ).toEqual({
+      mode: 'REBUILD',
+      reason: 'tools_changed',
+      history: [u1, a1],
+      pending: [u2],
+    });
   });
 
   it('REBUILDs an uncertain incremental checkpoint from only the confirmed prefix', () => {
@@ -84,7 +160,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'checkpoint_uncertain',
       history: [u1, a1],
-      currentUser: u3,
+      pending: [u3],
     });
   });
 
@@ -102,7 +178,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'checkpoint_mismatch',
       history: [u1, a1],
-      currentUser: u3,
+      pending: [u3],
     });
   });
 
@@ -119,7 +195,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'instructions_changed',
       history: [u1, a1],
-      currentUser: u2,
+      pending: [u2],
     });
   });
 
@@ -135,7 +211,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'history_diverged',
       history: [u1, editedA1],
-      currentUser: u2,
+      pending: [u2],
     });
   });
 
@@ -150,7 +226,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'multiple_unsynced_turns',
       history: [u1, a1, u2, a2],
-      currentUser: u3,
+      pending: [u3],
     });
   });
 
@@ -164,7 +240,7 @@ describe('planContextSync', () => {
       mode: 'REBUILD',
       reason: 'conversation_url_missing',
       history: [u1, a1],
-      currentUser: u2,
+      pending: [u2],
     });
   });
 
@@ -182,7 +258,7 @@ describe('planContextSync', () => {
       expectMode(plan, 'REBUILD');
       if (plan.mode === 'REBUILD') {
         expect(plan.history).toEqual([u1, a1]);
-        expect(plan.currentUser).toEqual(u2);
+        expect(plan.pending).toEqual([u2]);
       }
     }
   });

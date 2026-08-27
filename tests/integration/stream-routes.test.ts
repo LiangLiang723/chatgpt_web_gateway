@@ -17,6 +17,13 @@ const result = {
   completedAt: 1_786_720_001_234,
 };
 
+const toolResult = {
+  type: 'tool_calls' as const,
+  toolCalls: [{ id: 'call_stream_test', name: 'get_weather', arguments: '{"city":"Xiamen"}' }],
+  conversationUrl: 'https://chatgpt.com/c/stream-tools',
+  completedAt: 1_786_720_001_234,
+};
+
 function appWith(options: {
   execute?: NormalizedExecutionHandler;
   stream?: NormalizedStreamingExecutionHandler;
@@ -112,6 +119,75 @@ describe('Streaming HTTP routes', () => {
     expect(body).not.toContain('data: [DONE]');
   });
 
+  it('encodes Chat Completions tool calls in-stream with tool_calls terminal and no private protocol leak', async () => {
+    const app = appWith({
+      execute: async () => toolResult,
+      stream: async (_request, { sink }) => {
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'tool_calls', toolCalls: toolResult.toolCalls });
+        await sink({ type: 'completed', result: toolResult });
+        return toolResult;
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        stream: true,
+        messages: [{ role: 'user', content: 'Weather?' }],
+        tools: [
+          {
+            type: 'function',
+            function: { name: 'get_weather', parameters: { type: 'object' } },
+          },
+        ],
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('"tool_calls"');
+    expect(body).toContain('"id":"call_stream_test"');
+    expect(body).toContain('"finish_reason":"tool_calls"');
+    expect(body).toContain('data: [DONE]\n\n');
+    expect(body).not.toContain('CHATGPT_WEB_GATEWAY_TOOL_CALLS');
+  });
+
+  it('encodes Responses function-call stream events and one completed response', async () => {
+    const app = appWith({
+      execute: async () => toolResult,
+      stream: async (_request, { sink }) => {
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'tool_calls', toolCalls: toolResult.toolCalls });
+        await sink({ type: 'completed', result: toolResult });
+        return toolResult;
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/responses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        stream: true,
+        input: 'Weather?',
+        tools: [{ type: 'function', name: 'get_weather', parameters: { type: 'object' } }],
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('event: response.function_call_arguments.delta');
+    expect(body).toContain('event: response.function_call_arguments.done');
+    expect(body).toContain('event: response.output_item.done');
+    expect(body.match(/event: response.completed/g) ?? []).toHaveLength(1);
+    expect(body).not.toContain('CHATGPT_WEB_GATEWAY_TOOL_CALLS');
+  });
+
   it('keeps stream=false on the existing non-stream execution path', async () => {
     let streamCalls = 0;
     const app = appWith({
@@ -163,6 +239,41 @@ describe('Streaming HTTP routes', () => {
     expect(body).toMatchObject({
       error: { code: 'browser_maintenance_mode', type: 'server_error' },
     });
+  });
+
+  it('encodes a post-start tool parser error in-stream without a success terminator', async () => {
+    const app = appWith({
+      execute: async () => result,
+      stream: async (_request, { sink }) => {
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        throw Object.assign(new Error('bad private protocol'), {
+          code: 'chatgpt_tool_protocol_invalid',
+        });
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        stream: true,
+        messages: [{ role: 'user', content: 'Use tool' }],
+        tools: [
+          {
+            type: 'function',
+            function: { name: 'get_weather', parameters: { type: 'object' } },
+          },
+        ],
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('"code":"chatgpt_tool_protocol_invalid"');
+    expect(body).not.toContain('"finish_reason":"tool_calls"');
+    expect(body).not.toContain('data: [DONE]');
   });
 
   it('encodes a post-start Chat Completions error in-stream without a success terminator', async () => {

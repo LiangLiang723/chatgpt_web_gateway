@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildFinalConversationAggregate } from '../../src/conversations/aggregate-builder.js';
-import type { CanonicalTextMessage } from '../../src/context/types.js';
+import type { CanonicalMessage, CanonicalTextMessage } from '../../src/context/types.js';
 import type {
   ConversationAggregate,
   ConversationRecord,
@@ -162,5 +162,60 @@ describe('buildFinalConversationAggregate', () => {
     expectNewUuid(result.messages[5]!.id);
     expect(result.messages[4]!.content).toEqual([{ type: 'text', text: 'u3' }]);
     expect(result.messages[5]!.content).toEqual([{ type: 'text', text: 'a3' }]);
+  });
+
+  it('persists assistant tool calls and linked tool results while reusing the canonical prefix', () => {
+    const callId = 'call_11111111111111111111111111111111';
+    const toolHistory: CanonicalMessage[] = [
+      { role: 'user', text: 'weather?' },
+      {
+        role: 'assistant',
+        text: '',
+        toolCalls: [
+          {
+            externalCallId: callId,
+            name: 'get_weather',
+            arguments: '{"city":"Xiamen"}',
+          },
+        ],
+      },
+      { role: 'tool', toolCallId: callId, text: '{"condition":"sunny"}' },
+    ];
+    const first = buildFinalConversationAggregate({
+      conversation: conversation({ sync: { status: 'in_flight', syncedMessageCount: 0 } }),
+      authoritativeMessages: toolHistory.slice(0, 1),
+      assistantResult: {
+        type: 'tool_calls',
+        toolCalls: [{ id: callId, name: 'get_weather', arguments: '{"city":"Xiamen"}' }],
+      },
+      conversationUrl: 'https://chatgpt.com/c/tools',
+      completedAt: 1300,
+    });
+    expect(first.messages.map((record) => record.role)).toEqual(['user', 'assistant']);
+    expect(first.messages[1]!.content).toEqual([]);
+    expect(first.toolCalls).toHaveLength(1);
+    expect(first.toolCalls[0]).toMatchObject({
+      messageId: first.messages[1]!.id,
+      externalCallId: callId,
+      name: 'get_weather',
+      argumentsText: '{"city":"Xiamen"}',
+    });
+
+    const second = buildFinalConversationAggregate({
+      stored: first,
+      storedCanonicalMessages: toolHistory.slice(0, 2),
+      conversation: { ...first.conversation, sync: { status: 'in_flight', syncedMessageCount: 2 } },
+      authoritativeMessages: toolHistory,
+      assistantResult: { type: 'text', text: 'Sunny.' },
+      conversationUrl: 'https://chatgpt.com/c/tools',
+      completedAt: 1400,
+    });
+    expect(second.messages.slice(0, 2).map((record) => record.id)).toEqual(
+      first.messages.map((record) => record.id),
+    );
+    expect(second.toolCalls[0]!.id).toBe(first.toolCalls[0]!.id);
+    expect(second.messages[2]).toMatchObject({ role: 'tool', toolCallId: callId });
+    expect(second.messages[3]).toMatchObject({ role: 'assistant' });
+    expect(second.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 4 });
   });
 });

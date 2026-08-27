@@ -1,7 +1,12 @@
 import type { Page } from 'playwright';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { NormalizedMessage, NormalizedRequest } from '../../src/api/normalized.js';
+import type {
+  NormalizedMessage,
+  NormalizedRequest,
+  NormalizedTool,
+  NormalizedToolChoice,
+} from '../../src/api/normalized.js';
 import type {
   ChatGptTextDriver,
   ChatGptTextRequest,
@@ -49,14 +54,16 @@ function request(options: {
   messages: NormalizedMessage[];
   conversationKey?: string;
   system?: string;
+  tools?: NormalizedTool[];
+  toolChoice?: NormalizedToolChoice;
 }): NormalizedRequest {
   return {
     requestId: `req-${options.messages.length}-${options.conversationKey ?? 'none'}`,
     ...(options.conversationKey === undefined ? {} : { conversationKey: options.conversationKey }),
     instructions: [{ role: 'system', content: options.system ?? 'system-v1' }],
     messages: options.messages,
-    tools: [],
-    toolChoice: { mode: 'auto' },
+    tools: options.tools ?? [],
+    toolChoice: options.toolChoice ?? { mode: 'auto' },
     attachments: [],
     output: { mode: 'text', stream: false },
     diagnostics: { ignoredParameters: [] },

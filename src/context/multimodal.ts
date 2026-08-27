@@ -1,8 +1,10 @@
 import { fingerprintCanonical } from './fingerprint.js';
 import type {
+  CanonicalAssistantToolCallMessage,
   CanonicalContentPart,
   CanonicalMessage,
   CanonicalMultimodalMessage,
+  CanonicalToolResultMessage,
   ContextSyncPlan,
 } from './types.js';
 
@@ -15,7 +17,49 @@ export interface ResolvedAttachmentSemantic {
 
 export type ResolvedAttachmentSemanticMap = ReadonlyMap<string, ResolvedAttachmentSemantic>;
 
+export function isCanonicalToolResultMessage(
+  message: CanonicalMessage,
+): message is CanonicalToolResultMessage {
+  return message.role === 'tool';
+}
+
+export function isCanonicalAssistantToolCallMessage(
+  message: CanonicalMessage,
+): message is CanonicalAssistantToolCallMessage {
+  return message.role === 'assistant' && 'toolCalls' in message;
+}
+
+export function isCanonicalTextMessage(
+  message: CanonicalMessage,
+): message is Extract<CanonicalMessage, { role: 'user' | 'assistant'; text: string }> {
+  return message.role !== 'tool' && !('toolCalls' in message) && 'text' in message;
+}
+
+function isCanonicalMultimodalMessage(
+  message: CanonicalMessage,
+): message is CanonicalMultimodalMessage {
+  return 'content' in message;
+}
+
 export function fingerprintCanonicalMessage(message: CanonicalMessage): string {
+  if (isCanonicalToolResultMessage(message)) {
+    return fingerprintCanonical({
+      role: message.role,
+      toolCallId: message.toolCallId,
+      text: message.text,
+    });
+  }
+  if (isCanonicalAssistantToolCallMessage(message)) {
+    return fingerprintCanonical({
+      role: message.role,
+      text: message.text,
+      toolCalls: message.toolCalls.map((call) => ({
+        externalCallId: call.externalCallId,
+        name: call.name,
+        arguments: call.arguments,
+      })),
+    });
+  }
   if (isCanonicalTextMessage(message)) return fingerprintCanonical(message);
   return fingerprintCanonical({
     role: message.role,
@@ -33,22 +77,17 @@ export function fingerprintCanonicalMessage(message: CanonicalMessage): string {
   });
 }
 
-export function isCanonicalTextMessage(
-  message: CanonicalMessage,
-): message is Extract<CanonicalMessage, { text: string }> {
-  return 'text' in message;
-}
-
 export function hasMeaningfulCanonicalUserContent(message: CanonicalMessage): boolean {
   if (message.role !== 'user') return false;
   if (isCanonicalTextMessage(message)) return message.text.trim().length > 0;
+  if (!isCanonicalMultimodalMessage(message)) return false;
   return message.content.some(
     (part) => part.type === 'attachment' || (part.type === 'text' && part.text.trim().length > 0),
   );
 }
 
 export function attachmentReferences(message: CanonicalMessage): string[] {
-  if (isCanonicalTextMessage(message)) return [];
+  if (!isCanonicalMultimodalMessage(message)) return [];
   return message.content
     .filter(
       (part): part is Extract<CanonicalContentPart, { type: 'attachment' }> =>
@@ -60,8 +99,8 @@ export function attachmentReferences(message: CanonicalMessage): string[] {
 export function selectUploadAttachmentReferences(plan: ContextSyncPlan): string[] {
   const messages =
     plan.mode === 'FRESH' || plan.mode === 'REBUILD'
-      ? [...plan.history, plan.currentUser]
-      : [plan.currentUser];
+      ? [...plan.history, ...plan.pending]
+      : [...plan.pending];
   const references: string[] = [];
   const seen = new Set<string>();
   for (const message of messages) {
@@ -77,7 +116,28 @@ export function selectUploadAttachmentReferences(plan: ContextSyncPlan): string[
 export function serializeCanonicalMessage(
   message: CanonicalMessage,
   uploadFilenameByReference: ReadonlyMap<string, string> = new Map(),
+  toolNameByCallId: ReadonlyMap<string, string> = new Map(),
 ): unknown {
+  if (isCanonicalToolResultMessage(message)) {
+    const name = toolNameByCallId.get(message.toolCallId);
+    return {
+      role: 'tool',
+      tool_call_id: message.toolCallId,
+      ...(name === undefined ? {} : { name }),
+      output: message.text,
+    };
+  }
+  if (isCanonicalAssistantToolCallMessage(message)) {
+    return {
+      role: 'assistant',
+      ...(message.text.length === 0 ? {} : { text: message.text }),
+      tool_calls: message.toolCalls.map((call) => ({
+        tool_call_id: call.externalCallId,
+        name: call.name,
+        arguments: call.arguments,
+      })),
+    };
+  }
   if (isCanonicalTextMessage(message)) return { role: message.role, text: message.text };
   return {
     role: message.role,
@@ -89,6 +149,7 @@ export function serializeCanonicalCurrentUser(
   message: CanonicalMessage,
   uploadFilenameByReference: ReadonlyMap<string, string> = new Map(),
 ): unknown {
+  if (message.role !== 'user') return serializeCanonicalMessage(message, uploadFilenameByReference);
   if (isCanonicalTextMessage(message)) return { text: message.text };
   return { content: serializeCanonicalContent(message, uploadFilenameByReference) };
 }

@@ -135,6 +135,31 @@ const executionErrorMap = {
     type: 'server_error',
     message: 'Gateway file storage failed',
   },
+  unsupported_phase7_request: {
+    statusCode: 501,
+    type: 'server_error',
+    message: 'This request requires a capability not implemented in Phase 7',
+  },
+  chatgpt_tool_required: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT did not produce a required tool call',
+  },
+  chatgpt_tool_protocol_invalid: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT produced an invalid private tool protocol response',
+  },
+  chatgpt_tool_unknown: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT requested an unknown tool',
+  },
+  chatgpt_tool_forbidden: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT violated the current tool choice policy',
+  },
   unsupported_phase6_request: {
     statusCode: 501,
     type: 'server_error',

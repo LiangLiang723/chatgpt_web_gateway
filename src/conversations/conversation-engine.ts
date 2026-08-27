@@ -3,10 +3,10 @@ import { randomUUID as defaultRandomUuid } from 'node:crypto';
 import type {
   ConversationExecutionEngine,
   NormalizedExecutionHandler,
+  NormalizedExecutionResult,
   StreamingExecutionOptions,
-  TextExecutionResult,
 } from '../api/execution.js';
-import type { NormalizedRequest } from '../api/normalized.js';
+import type { NormalizedRequest, NormalizedToolCall } from '../api/normalized.js';
 import {
   storedAttachmentReference,
   type ResolvedAttachment,
@@ -22,6 +22,7 @@ import type {
 import { ChatGptDriverError } from '../chatgpt/errors.js';
 import { canonicalizeInstructions, canonicalizeText } from '../context/canonicalize.js';
 import {
+  isCanonicalAssistantToolCallMessage,
   selectUploadAttachmentReferences,
   type ResolvedAttachmentSemanticMap,
 } from '../context/multimodal.js';
@@ -41,18 +42,22 @@ import type {
 } from '../persistence/types.js';
 import { TextStreamAbortedError } from '../stream/errors.js';
 import { streamAssistantText } from '../stream/text-stream.js';
+import { fingerprintTools } from '../tools/canonicalize.js';
+import { ToolDetectionBuffer } from '../tools/detection-buffer.js';
+import { parseAssistantOutput } from '../tools/parser.js';
 import type { StreamClock } from '../stream/types.js';
 
 import {
   buildFinalConversationAggregate,
+  type AssistantAggregateResult,
   type PersistenceAttachmentBinding,
 } from './aggregate-builder.js';
 import type { ConversationPageRegistry, ConversationPageSession } from './page-registry.js';
 import { buildAppendPrompt, buildContextPrompt } from './prompts.js';
 import type { ConversationQueue } from './conversation-queue.js';
 import {
-  toCanonicalConversationRequest,
-  toCanonicalStreamingConversationRequest,
+  toCanonicalPhase7ConversationRequest,
+  toCanonicalPhase7StreamingConversationRequest,
 } from './request-context.js';
 
 export interface ConversationAttachmentResolver {
@@ -98,8 +103,33 @@ function canonicalStoredMessage(options: {
   retained: ReadonlyMap<string, ResolvedAttachment>;
 }): CanonicalMessage {
   const { aggregate, record, retained } = options;
+  if (record.role === 'tool') {
+    if (!record.toolCallId || record.content.some((part) => part.type !== 'text')) {
+      throw new Error('Stored Tool Result is invalid');
+    }
+    return {
+      role: 'tool',
+      toolCallId: record.toolCallId,
+      text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
+    };
+  }
   if (record.role !== 'user' && record.role !== 'assistant') {
     throw new Error('Stored Conversation contains an unsupported history role');
+  }
+  const calls = aggregate.toolCalls.filter((call) => call.messageId === record.id);
+  if (calls.length > 0) {
+    if (record.role !== 'assistant' || record.content.some((part) => part.type !== 'text')) {
+      throw new Error('Stored Tool Call message is invalid');
+    }
+    return {
+      role: 'assistant',
+      text: canonicalizeText(record.content.map((part) => (part.type === 'text' ? part.text : ''))),
+      toolCalls: calls.map((call) => ({
+        externalCallId: call.externalCallId,
+        name: call.name,
+        arguments: call.argumentsText,
+      })),
+    };
   }
   if (record.content.every((part) => part.type === 'text')) {
     return {
@@ -154,6 +184,9 @@ function canonicalStoredConversation(
     messages: aggregate.messages.map((record) =>
       canonicalStoredMessage({ aggregate, record, retained }),
     ),
+    ...(aggregate.conversation.toolFingerprint === undefined
+      ? {}
+      : { toolFingerprint: aggregate.conversation.toolFingerprint }),
     conversationUrl: aggregate.conversation.chatgptConversationUrl,
     sync: {
       status: aggregate.conversation.sync.status,
@@ -175,8 +208,11 @@ function createInFlightConversation(options: {
         ? {}
         : { conversationKey: options.conversationKey }),
       instructions: options.request.instructions,
-      tools: [],
-      toolChoice: { mode: 'auto' },
+      tools: options.request.tools,
+      toolChoice: options.request.toolChoice,
+      ...(fingerprintTools(options.request.tools) === undefined
+        ? {}
+        : { toolFingerprint: fingerprintTools(options.request.tools) }),
       sync: { status: 'in_flight', syncedMessageCount: 0, startedAt: options.startedAt },
       createdAt: options.startedAt,
       updatedAt: options.startedAt,
@@ -194,12 +230,16 @@ function finalConversationRecord(options: {
   initial: ConversationAggregate;
   request: NormalizedRequest;
 }): ConversationRecord {
-  return {
+  const result: ConversationRecord = {
     ...(options.existing?.conversation ?? options.initial.conversation),
     instructions: options.request.instructions,
-    tools: [],
-    toolChoice: { mode: 'auto' },
+    tools: options.request.tools,
+    toolChoice: options.request.toolChoice,
   };
+  const fingerprint = fingerprintTools(options.request.tools);
+  if (fingerprint === undefined) delete result.toolFingerprint;
+  else result.toolFingerprint = fingerprint;
+  return result;
 }
 
 function contextHistory(options: {
@@ -211,7 +251,7 @@ function contextHistory(options: {
     return options.plan.history;
   }
   if (options.canonicalRequest.mode === 'full') {
-    return options.canonicalRequest.messages.slice(0, -1);
+    return options.canonicalRequest.messages.slice(0, -options.plan.pending.length);
   }
   return options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
 }
@@ -222,11 +262,11 @@ function authoritativeMessages(options: {
   stored?: CanonicalStoredConversation;
 }): CanonicalMessage[] {
   if (options.plan.mode === 'FRESH' || options.plan.mode === 'REBUILD') {
-    return [...options.plan.history, options.plan.currentUser];
+    return [...options.plan.history, ...options.plan.pending];
   }
   if (options.canonicalRequest.mode === 'full') return options.canonicalRequest.messages;
   const confirmed = options.stored?.messages.slice(0, options.stored.sync.syncedMessageCount) ?? [];
-  return [...confirmed, options.plan.currentUser];
+  return [...confirmed, ...options.plan.pending];
 }
 
 async function preparePage(options: {
@@ -254,23 +294,41 @@ async function preparePage(options: {
   return 'context';
 }
 
+function toolNameMap(messages: readonly CanonicalMessage[]): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const message of messages) {
+    if (!isCanonicalAssistantToolCallMessage(message)) continue;
+    for (const call of message.toolCalls) result.set(call.externalCallId, call.name);
+  }
+  return result;
+}
+
 function buildPrompt(options: {
   promptMode: 'context' | 'append';
+  request: NormalizedRequest;
   canonicalRequest: CanonicalConversationRequest;
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
   uploadFilenameByReference?: ReadonlyMap<string, string>;
 }): string {
+  const history = contextHistory({
+    canonicalRequest: options.canonicalRequest,
+    plan: options.plan,
+    ...(options.stored === undefined ? {} : { stored: options.stored }),
+  });
+  const names = toolNameMap([...history, ...options.plan.pending]);
   return options.promptMode === 'append'
-    ? buildAppendPrompt(options.plan.currentUser, options.uploadFilenameByReference)
+    ? buildAppendPrompt(options.plan.pending, options.uploadFilenameByReference, {
+        toolChoice: options.request.toolChoice,
+        toolNameByCallId: names,
+      })
     : buildContextPrompt({
         instructions: options.canonicalRequest.instructions,
-        history: contextHistory({
-          canonicalRequest: options.canonicalRequest,
-          plan: options.plan,
-          ...(options.stored === undefined ? {} : { stored: options.stored }),
-        }),
-        currentUser: options.plan.currentUser,
+        tools: options.request.tools,
+        toolChoice: options.request.toolChoice,
+        history,
+        pending: options.plan.pending,
+        toolNameByCallId: names,
         ...(options.uploadFilenameByReference === undefined
           ? {}
           : { uploadFilenameByReference: options.uploadFilenameByReference }),
@@ -348,8 +406,8 @@ async function prepareConversationContext(options: {
   const resolver = options.engine.attachmentResolver;
   if (resolver === undefined) {
     const canonicalRequest = options.streaming
-      ? toCanonicalStreamingConversationRequest(options.request)
-      : toCanonicalConversationRequest(options.request);
+      ? toCanonicalPhase7StreamingConversationRequest(options.request)
+      : toCanonicalPhase7ConversationRequest(options.request);
     const stored =
       options.existing === undefined ? undefined : canonicalStoredConversation(options.existing);
     const plan = planContextSync({
@@ -389,8 +447,11 @@ async function prepareConversationContext(options: {
       retained = await resolver.retainStored(options.existing.attachments);
     }
     const canonicalRequest = options.streaming
-      ? toCanonicalStreamingConversationRequest(options.request, semanticMap(current.resolved))
-      : toCanonicalConversationRequest(options.request, semanticMap(current.resolved));
+      ? toCanonicalPhase7StreamingConversationRequest(
+          options.request,
+          semanticMap(current.resolved),
+        )
+      : toCanonicalPhase7ConversationRequest(options.request, semanticMap(current.resolved));
     const stored =
       options.existing === undefined
         ? undefined
@@ -457,6 +518,24 @@ function startCheckpoint(options: {
   return initial;
 }
 
+function parseAssistantResult(options: {
+  text: string;
+  request: NormalizedRequest;
+  randomUuid: () => string;
+}): AssistantAggregateResult {
+  const parsed = parseAssistantOutput(options.text, {
+    tools: options.request.tools,
+    toolChoice: options.request.toolChoice,
+  });
+  if (parsed.type === 'text') return parsed;
+  const toolCalls: NormalizedToolCall[] = parsed.calls.map((call) => ({
+    id: `call_${options.randomUuid().replaceAll('-', '')}`,
+    name: call.name,
+    arguments: call.arguments,
+  }));
+  return { type: 'tool_calls', toolCalls };
+}
+
 function buildFinalResult(options: {
   engine: CreateConversationEngineOptions;
   existing?: ConversationAggregate;
@@ -466,10 +545,10 @@ function buildFinalResult(options: {
   plan: ContextSyncPlan;
   stored?: CanonicalStoredConversation;
   persistenceBindings?: ReadonlyMap<string, PersistenceAttachmentBinding>;
-  assistantText: string;
+  assistantResult: AssistantAggregateResult;
   conversationUrl: string;
   completedAt: number;
-}): TextExecutionResult {
+}): NormalizedExecutionResult {
   const finalAggregate = buildFinalConversationAggregate({
     ...(options.existing === undefined ? {} : { stored: options.existing }),
     conversation: finalConversationRecord({
@@ -486,14 +565,22 @@ function buildFinalResult(options: {
     ...(options.persistenceBindings === undefined
       ? {}
       : { attachmentBindings: options.persistenceBindings }),
-    assistantText: options.assistantText,
+    assistantResult: options.assistantResult,
     conversationUrl: options.conversationUrl,
     completedAt: options.completedAt,
   });
   options.engine.conversationStore.save(finalAggregate);
+  if (options.assistantResult.type === 'text') {
+    return {
+      type: 'text',
+      text: options.assistantResult.text,
+      conversationUrl: options.conversationUrl,
+      completedAt: options.completedAt,
+    };
+  }
   return {
-    type: 'text',
-    text: options.assistantText,
+    type: 'tool_calls',
+    toolCalls: options.assistantResult.toolCalls,
     conversationUrl: options.conversationUrl,
     completedAt: options.completedAt,
   };
@@ -506,7 +593,7 @@ async function executeConversation(options: {
   existing?: ConversationAggregate;
   now: () => number;
   randomUuid: () => string;
-}): Promise<TextExecutionResult> {
+}): Promise<NormalizedExecutionResult> {
   const existing = options.existing;
   const conversationId = existing?.conversation.id ?? options.randomUuid();
   const context = await prepareConversationContext({
@@ -540,6 +627,7 @@ async function executeConversation(options: {
     });
     const prompt = buildPrompt({
       promptMode,
+      request: options.request,
       canonicalRequest: context.canonicalRequest,
       plan: context.plan,
       stored: context.stored,
@@ -550,6 +638,11 @@ async function executeConversation(options: {
       ...(context.preparedUploads.length === 0 ? {} : { attachments: context.preparedUploads }),
     });
     const completedAt = options.now();
+    const assistantResult = parseAssistantResult({
+      text: result.text,
+      request: options.request,
+      randomUuid: options.randomUuid,
+    });
     const finalResult = buildFinalResult({
       engine: options.engine,
       existing,
@@ -559,7 +652,7 @@ async function executeConversation(options: {
       plan: context.plan,
       stored: context.stored,
       persistenceBindings: context.persistenceBindings,
-      assistantText: result.text,
+      assistantResult,
       conversationUrl: result.conversationUrl,
       completedAt,
     });
@@ -602,7 +695,7 @@ async function streamConversation(options: {
   existing?: ConversationAggregate;
   now: () => number;
   randomUuid: () => string;
-}): Promise<TextExecutionResult> {
+}): Promise<NormalizedExecutionResult> {
   const existing = options.existing;
   const conversationId = existing?.conversation.id ?? options.randomUuid();
   const context = await prepareConversationContext({
@@ -642,6 +735,7 @@ async function streamConversation(options: {
     });
     const prompt = buildPrompt({
       promptMode,
+      request: options.request,
       canonicalRequest: context.canonicalRequest,
       plan: context.plan,
       stored: context.stored,
@@ -652,10 +746,13 @@ async function streamConversation(options: {
       signal: options.streamOptions.signal,
       ...(context.preparedUploads.length === 0 ? {} : { attachments: context.preparedUploads }),
     });
+    const detector = new ToolDetectionBuffer(options.request.tools.length > 0);
     const assistantText = await streamAssistantText({
       observe: turn.observe,
       onDelta: async (delta) => {
-        await options.streamOptions.sink({ type: 'text.delta', delta });
+        for (const safeDelta of detector.push(delta)) {
+          await options.streamOptions.sink({ type: 'text.delta', delta: safeDelta });
+        }
       },
       signal: options.streamOptions.signal,
       ...(options.engine.streamClock === undefined ? {} : { clock: options.engine.streamClock }),
@@ -669,8 +766,16 @@ async function streamConversation(options: {
         ? {}
         : { timeoutMs: options.engine.streamTimeoutMs }),
     });
+    for (const safeDelta of detector.finish()) {
+      await options.streamOptions.sink({ type: 'text.delta', delta: safeDelta });
+    }
     const conversationUrl = await turn.conversationUrl();
     const completedAt = options.now();
+    const assistantResult = parseAssistantResult({
+      text: assistantText,
+      request: options.request,
+      randomUuid: options.randomUuid,
+    });
     const finalResult = buildFinalResult({
       engine: options.engine,
       existing,
@@ -680,13 +785,16 @@ async function streamConversation(options: {
       plan: context.plan,
       stored: context.stored,
       persistenceBindings: context.persistenceBindings,
-      assistantText,
+      assistantResult,
       conversationUrl,
       completedAt,
     });
     await session.complete();
     completed = true;
     try {
+      if (finalResult.type === 'tool_calls') {
+        await options.streamOptions.sink({ type: 'tool_calls', toolCalls: finalResult.toolCalls });
+      }
       await options.streamOptions.sink({ type: 'completed', result: finalResult });
     } catch (error) {
       if (!isStreamAborted(error)) throw error;

@@ -268,6 +268,8 @@ describe('Conversation true Streaming', () => {
       },
     });
 
+    expect(result.type).toBe('text');
+    if (result.type !== 'text') throw new Error('Expected text streaming result');
     expect(result.text).toBe('Hello!');
     expect(events[0]).toEqual({ type: 'started' });
     expect(events.at(-1)).toEqual({ type: 'completed' });

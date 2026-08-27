@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { TextStreamEvent } from '../../stream/events.js';
+import type { ExecutionStreamEvent } from '../../stream/events.js';
 
 export interface EncodedSseFrame {
   event?: string;
@@ -36,7 +36,7 @@ export function createChatCompletionsStreamEncoder(
   });
 
   return {
-    encode(event: TextStreamEvent): EncodedSseFrame[] {
+    encode(event: ExecutionStreamEvent): EncodedSseFrame[] {
       if (event.type === 'started') {
         return [
           chunk({
@@ -55,11 +55,27 @@ export function createChatCompletionsStreamEncoder(
           }),
         ];
       }
+      if (event.type === 'tool_calls') {
+        return [
+          chunk({
+            index: 0,
+            delta: {
+              tool_calls: event.toolCalls.map((call, index) => ({
+                index,
+                id: call.id,
+                type: 'function',
+                function: { name: call.name, arguments: call.arguments },
+              })),
+            },
+            finish_reason: null,
+          }),
+        ];
+      }
       return [
         chunk({
           index: 0,
           delta: {},
-          finish_reason: 'stop',
+          finish_reason: event.result.type === 'tool_calls' ? 'tool_calls' : 'stop',
         }),
         { data: '[DONE]' },
       ];
