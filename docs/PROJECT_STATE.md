@@ -9,20 +9,20 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-10-complete
-STATUS=v1-acceptance-complete-git-pending
+STATUS=v1-acceptance-complete
 RELEASE_VERSION=V0.0.1
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-27-phase-9-production-maturity.md
-NEXT_TASK=commit-and-push-v1-acceptance
+ACTIVE_PLAN=none
+NEXT_TASK=handle-next-explicit-release-or-maintenance-request
 UPDATED_AT=2026-08-29
 ```
 
 ## Snapshot（快照）
 
-- **当前阶段：** Phase 1–10 的 V1 实现与 acceptance 已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；当前只剩把本轮完整工作树做 staged/secret 检查、commit 并正常 push feature branch。
-- **当前状态：** `v1-acceptance-complete-git-pending`。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 三个最终真实网页缺陷都已从源头修复并有 deterministic/live 证据。最终 authenticated Phase 7 standalone 八项语义结果全部为 `true`；紧邻 Phase 6 standalone 九项全部为 `true`；随后 reduced combined Phase 3→8 退出码 0。
-- **Governing Spec：** [`docs/superpowers/specs/2026-08-27-phase-9-production-maturity-design.md`](superpowers/specs/2026-08-27-phase-9-production-maturity-design.md)。Phase 7/8 相关设计分别见各自 spec。
-- **Active Plan：** [`docs/superpowers/plans/2026-08-27-phase-9-production-maturity.md`](superpowers/plans/2026-08-27-phase-9-production-maturity.md)。Phase 7/8 plan 保留各自未关闭的 authenticated acceptance 事实；最终统一验证会一起收口。
+- **当前阶段：** Phase 1–10 的 V1 实现、验收与 feature-branch Git 收口已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；主 acceptance checkpoint `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
+- **当前状态：** `v1-acceptance-complete`。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 三个最终真实网页缺陷都已从源头修复并有 deterministic/live 证据。最终 authenticated Phase 7 standalone 八项语义结果全部为 `true`；紧邻 Phase 6 standalone 九项全部为 `true`；随后 reduced combined Phase 3→8 退出码 0。公开版本仍为 `V0.0.1`，没有创建 Git Tag、GitHub Release 或 Docker registry 发布物。
+- **Governing Spec：** [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)。Phase 7/8/9 的专项设计与已关闭实施计划继续保留为历史事实来源。
+- **Active Plan：** `none`。Phase 9 plan 已完成并关闭；Phase 7/8/9 specs/plans 保留验收证据与设计历史。
 - **最新 deterministic/Docker 基线：** final RESTORE-hydration/Auth candidate fresh `corepack pnpm verify` 通过 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image 为 `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa`，full `docker:smoke` PASS。构建代理仅显式使用 `http://192.168.3.83:7890`，未写入仓库/镜像默认配置。
 - **最新真实网页事实：** fresh inspect 为 `auth=authenticated` / Composer unique。Phase 7 standalone 返回 `singleTool/resultContinuation/policyRebuild/multipleTools/streamTool/streamText/restore/schemaRebuild=true`；紧邻 Phase 6 standalone 返回 image Data URL/file_id、XLSX/TXT/PDF/DOCX、Streaming、APPEND、RESTORE 九项全 `true`；reduced combined 随后 Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses、Phase 7 八项、Phase 8 `url/base64/persistence/restart` 全部通过，并按治理报告 Phase 5 `abort=not_run_in_combined`、Phase 6 `attachmentMatrix=not_run_in_combined`。
 
@@ -65,7 +65,7 @@ UPDATED_AT=2026-08-29
 - ✅ 最终 bytes 经 PNG/JPEG/WebP/GIF signature sniff，`${DATA_DIR}/generated` 同目录 temp → rename 原子写入，`generated_images` SQLite record + SHA-256 integrity；DB insert 失败删除刚写文件。
 - ✅ authenticated `GET /v1/images/:id/content`；可选安全 `PUBLIC_BASE_URL` 只改变 URL base，不绕过 Bearer auth。
 - ✅ standalone Phase 8 URL/Base64/persistence/restart E2E harness 已编写；combined harness 已扩展到 Phase 3→8。
-- ✅ Phase 8 authenticated standalone 已完整通过：`url=true`、`base64=true`、`persistence=true`、`restart=true`。真实验收先后暴露并关闭 image-only Assistant ownership 与 duplicate generated-asset DOM copy 两个问题；最终 bytes/SQLite/磁盘 SHA-256/restart read 均已证明。combined 仍需在最新 PagePool lifecycle 修复后统一回归。
+- ✅ Phase 8 authenticated standalone 已完整通过：`url=true`、`base64=true`、`persistence=true`、`restart=true`。真实验收先后暴露并关闭 image-only Assistant ownership 与 duplicate generated-asset DOM copy 两个问题；最终 bytes/SQLite/磁盘 SHA-256/restart read 均已证明，并已在最新 PagePool lifecycle 修复后的 reduced combined Phase 3→8 中再次通过。
 
 ### Phase 9 Production Maturity
 
@@ -82,7 +82,7 @@ UPDATED_AT=2026-08-29
 3. ✅ latest authenticated standalone Phase 5 已通过 `chatCompletions/markdown/responses/abort=true`；final adjacent Phase 6 four-group harness 九项完整 PASS；Phase 8 standalone `url/base64/persistence/restart=true` 已通过。
 4. ✅ final Phase 7 standalone 八项语义结果全部 `true`，包含 policy-change REBUILD 与 same-policy restart RESTORE。
 5. ✅ reduced combined Phase 3→8 退出码 0；Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按治理由相邻 standalone 证据承担。
-6. ⏳ Git closure pending：完成 staged diff/secret 检查后 commit 并正常 push `phase-7-tool-calling`；不创建 Release/Docker registry publish。
+6. ✅ Git closure：staged diff / `git diff --check` / secret scan 均通过；主 acceptance commit `e0d804c`（`✨ 完成 V1 兼容能力与生产成熟化`）已正常 push `origin/phase-7-tool-calling`。未创建 Git Tag、GitHub Release 或 Docker registry publish。
 
 ## Architecture Facts（当前关键边界）
 
@@ -96,7 +96,7 @@ UPDATED_AT=2026-08-29
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-29：Phase 6 harness 收敛为四个 Conversation group、`2 / 2 / 2 / 1` 新附件 turn，并取得 standalone 九项完整 PASS。随后 Phase 7 reduced combined/reproduction 暴露 stale function-policy RESTORE：forced-function → `none` 仍复用旧网页 policy，导致 ChatGPT 重发 external-function request。根因定位为 persisted `toolFingerprint` 未绑定 function policy；当前候选已把 normalized `tool_choice` 纳入 fingerprint，并把 live harness 改为 policy-change REBUILD + same-policy restart RESTORE。
+- 2026-08-29：最终 V1 acceptance 收口。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 均修复；fresh deterministic **86/595**、fresh Docker/full smoke、Phase 7 standalone、紧邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过。staged diff/secret 检查完成后，主 acceptance commit `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
 - 2026-08-28：multiline Composer paste + Phase 6 current-attachment prompt + combined request-budget 候选 fresh **86/580** deterministic 与 `linux/amd64` image `sha256:193c8c89f973887815e5a4dede95803dbaccc45095b86297a8093f6302e0d3c7` + full smoke 通过；standalone Phase 5 四项随后真实通过。final combined 在 Phase 6 image `file_id` 一次 token mismatch 后停止；focused Phase 6 两轮失败位置又分别移动到 TXT timeout 与 XLSX missing response，第二轮已真实通过图片/TXT/PDF/DOCX。为降低无价值重复请求，combined Phase 6 全矩阵现由紧邻 standalone gate 取代，runner 显式输出 `attachmentMatrix=not_run_in_combined`。
 - 2026-08-28：PagePool replacement-before-close 候选完成 fresh deterministic/Docker 并通过 standalone Phase 5；随后 final-candidate combined Phase 3→8 两次暴露同一网络中断 DOM 状态块与正文 `.markdown` 冲突，当前候选把 authoritative Assistant text 收紧为 `.markdown.prose` 后等待统一复验。
 - 2026-08-27：Phase 7 `tool_choice=none` continuation 修复后 standalone V2 七项真实通过；Phase 8 image-only ownership + duplicate-resource 去重后 standalone `url/base64/persistence/restart` 全部通过。随后 combined Phase 5 abort 暴露 Persistent BrowserContext 最后 Page close 会带死 context；PagePool 当前候选改为 replacement-before-close。
@@ -109,7 +109,7 @@ UPDATED_AT=2026-08-29
 
 - Phase 7 function-policy Context Sync 与 cross-URL RESTORE hydration 根因均已修复并通过 standalone + combined；仍需持续防范 ChatGPT DOM/历史加载时序变化，不能把 Composer ready 等同于 Conversation history ready。
 - Phase 6 final standalone、Phase 8 standalone、PagePool lifecycle、`.markdown.prose` selector、multiline abort→REBUILD 与 final combined 都已有真实通过证据。
-- ChatGPT DOM、Cloudflare、认证、图片生成 UI/CDN、上传格式与平台频率保护仍可能变化；Phase 8 request-scoped image baseline + duplicate-resource dedup 已通过 standalone，但仍需 combined 证明与最新 PagePool 生命周期修复共存无回归。
+- ChatGPT DOM、Cloudflare、认证、图片生成 UI/CDN、上传格式与平台频率保护仍可能变化；Phase 8 request-scoped image baseline + duplicate-resource dedup 已通过 standalone，并在最新 PagePool 生命周期修复后的 reduced combined 中证明可共存。
 - Images `size/quality/style` 当前只是兼容接收/忽略，不承诺精确控制；只支持 `n=1`，不支持 edits/variations/partial image streaming。
 - Structured Output 是 Prompt 约束 + 最终本地验证，不是原生 constrained decoding；模型不满足格式时请求会稳定失败，而不是 Gateway 修复/伪造 JSON。
 - Stable Prefix 64-code-point holdback 只吸收当前 bounded tail rewrite；更深 rewrite 穿过 committed prefix 仍 `chatgpt_stream_diverged`。
