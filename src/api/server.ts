@@ -5,6 +5,8 @@ import multipart from '@fastify/multipart';
 import type { FileService } from '../attachments/file-service.js';
 import { MAX_FILE_BYTES } from '../attachments/policy.js';
 import type { AppConfig } from '../config/index.js';
+import type { RuntimeDiagnosticsProvider } from '../diagnostics/runtime.js';
+import type { ImageGenerationServiceLike } from '../images/service.js';
 import { authenticateBearer } from './auth.js';
 import {
   GatewayError,
@@ -19,8 +21,10 @@ import {
   type NormalizedStreamingExecutionHandler,
 } from './execution.js';
 import { registerChatCompletionsRoute } from './routes/chat-completions.js';
+import { registerDiagnosticsRoute } from './routes/diagnostics.js';
 import { registerFilesRoute } from './routes/files.js';
 import { registerHealthRoute } from './routes/health.js';
+import { registerImagesRoute } from './routes/images.js';
 import { registerModelsRoute } from './routes/models.js';
 import { registerResponsesRoute } from './routes/responses.js';
 
@@ -29,6 +33,8 @@ export interface BuildServerOptions {
   execute?: NormalizedExecutionHandler;
   stream?: NormalizedStreamingExecutionHandler;
   fileService?: FileService;
+  imageService?: ImageGenerationServiceLike;
+  diagnostics?: RuntimeDiagnosticsProvider;
   logger?: boolean;
 }
 
@@ -40,7 +46,10 @@ function validationErrorFromFastify(error: FastifyError): ValidationError | unde
 }
 
 export function buildServer(options: BuildServerOptions) {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    ajv: { customOptions: { removeAdditional: false } },
+  });
   app.register(multipart, {
     preservePath: true,
     throwFileSizeLimit: false,
@@ -84,7 +93,9 @@ export function buildServer(options: BuildServerOptions) {
 
   registerHealthRoute(app);
   registerModelsRoute(app);
+  if (options.diagnostics) registerDiagnosticsRoute(app, options.diagnostics);
   if (options.fileService) registerFilesRoute(app, options.fileService);
+  if (options.imageService) registerImagesRoute(app, options.config, options.imageService);
   registerChatCompletionsRoute(app, execute, stream);
   registerResponsesRoute(app, execute, stream);
 

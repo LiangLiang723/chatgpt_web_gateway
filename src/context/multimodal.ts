@@ -121,18 +121,18 @@ export function serializeCanonicalMessage(
   if (isCanonicalToolResultMessage(message)) {
     const name = toolNameByCallId.get(message.toolCallId);
     return {
-      role: 'tool',
-      tool_call_id: message.toolCallId,
+      role: 'external_function_result',
+      request_id: message.toolCallId,
       ...(name === undefined ? {} : { name }),
-      output: message.text,
+      result: message.text,
     };
   }
   if (isCanonicalAssistantToolCallMessage(message)) {
     return {
       role: 'assistant',
       ...(message.text.length === 0 ? {} : { text: message.text }),
-      tool_calls: message.toolCalls.map((call) => ({
-        tool_call_id: call.externalCallId,
+      external_function_requests: message.toolCalls.map((call) => ({
+        request_id: call.externalCallId,
         name: call.name,
         arguments: call.arguments,
       })),

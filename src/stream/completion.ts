@@ -27,7 +27,7 @@ export async function waitForStreamingCompletion(
   const clock = options.clock ?? defaultClock;
   const pollIntervalMs = options.pollIntervalMs ?? 200;
   const stableSamples = options.stableSamples ?? 3;
-  const timeoutMs = options.timeoutMs ?? 120_000;
+  const timeoutMs = options.timeoutMs ?? 240_000;
   const startedAt = clock.now();
   let sawTurn = false;
   let stableText = '';

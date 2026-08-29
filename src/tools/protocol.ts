@@ -1,5 +1,6 @@
-export const TOOL_PROTOCOL_START = '<<<CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>';
-export const TOOL_PROTOCOL_END = '<<<END_CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>';
+export const TOOL_PROTOCOL_VERSION = 2;
+export const TOOL_PROTOCOL_START = '<<<EXTERNAL_FUNCTION_REQUESTS_V1>>>';
+export const TOOL_PROTOCOL_END = '<<<END_EXTERNAL_FUNCTION_REQUESTS_V1>>>';
 
 export type ToolProtocolErrorCode =
   | 'chatgpt_tool_required'
@@ -18,7 +19,7 @@ export class ToolProtocolError extends Error {
 }
 
 export interface PrivateToolCallPayload {
-  calls: Array<{
+  requests: Array<{
     name: string;
     arguments: Record<string, unknown>;
   }>;

@@ -1,5 +1,6 @@
 import type { NormalizedTool, NormalizedToolChoice } from '../api/normalized.js';
 import { fingerprintCanonical } from '../context/fingerprint.js';
+import { TOOL_PROTOCOL_VERSION } from './protocol.js';
 
 export interface CanonicalFunctionTool {
   type: 'function';
@@ -51,9 +52,16 @@ export function canonicalizeTools(tools: readonly NormalizedTool[]): CanonicalFu
   return canonical;
 }
 
-export function fingerprintTools(tools: readonly NormalizedTool[]): string | undefined {
+export function fingerprintTools(
+  tools: readonly NormalizedTool[],
+  choice: NormalizedToolChoice,
+): string | undefined {
   if (tools.length === 0) return undefined;
-  return fingerprintCanonical(canonicalizeTools(tools));
+  return fingerprintCanonical({
+    privateProtocolVersion: TOOL_PROTOCOL_VERSION,
+    tools: canonicalizeTools(tools),
+    functionPolicy: choice,
+  });
 }
 
 export function validateToolChoice(

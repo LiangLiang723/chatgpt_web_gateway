@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { NormalizedTool, NormalizedToolChoice } from '../../src/api/normalized.js';
+import { fingerprintCanonical } from '../../src/context/fingerprint.js';
 import {
   canonicalizeTools,
   fingerprintTools,
   validateToolChoice,
 } from '../../src/tools/canonicalize.js';
+import { TOOL_PROTOCOL_VERSION } from '../../src/tools/protocol.js';
 
 const weather: NormalizedTool = {
   type: 'function',
@@ -31,6 +33,8 @@ function choice(value: NormalizedToolChoice): NormalizedToolChoice {
   return value;
 }
 
+const autoChoice = choice({ mode: 'auto' });
+
 describe('tool canonicalization', () => {
   it('makes tool declaration order and object-key order fingerprint-equivalent', () => {
     const reorderedWeather: NormalizedTool = {
@@ -47,7 +51,9 @@ describe('tool canonicalization', () => {
       },
     };
 
-    expect(fingerprintTools([weather, clock])).toBe(fingerprintTools([clock, reorderedWeather]));
+    expect(fingerprintTools([weather, clock], autoChoice)).toBe(
+      fingerprintTools([clock, reorderedWeather], autoChoice),
+    );
     expect(canonicalizeTools([weather, clock]).map((tool) => tool.name)).toEqual([
       'get_time',
       'get_weather',
@@ -56,13 +62,35 @@ describe('tool canonicalization', () => {
 
   it('changes the fingerprint when a semantic definition changes', () => {
     expect(
-      fingerprintTools([
-        {
-          ...weather,
-          description: 'Get current weather from the city service',
-        },
-      ]),
-    ).not.toBe(fingerprintTools([weather]));
+      fingerprintTools(
+        [
+          {
+            ...weather,
+            description: 'Get current weather from the city service',
+          },
+        ],
+        autoChoice,
+      ),
+    ).not.toBe(fingerprintTools([weather], autoChoice));
+  });
+
+  it('binds persisted tool context to the private protocol version', () => {
+    expect(fingerprintTools([weather], autoChoice)).toBe(
+      fingerprintCanonical({
+        privateProtocolVersion: TOOL_PROTOCOL_VERSION,
+        tools: canonicalizeTools([weather]),
+        functionPolicy: autoChoice,
+      }),
+    );
+  });
+
+  it('changes the fingerprint when the function policy changes', () => {
+    expect(fingerprintTools([weather], choice({ mode: 'function', name: 'get_weather' }))).not.toBe(
+      fingerprintTools([weather], choice({ mode: 'none' })),
+    );
+    expect(fingerprintTools([weather], choice({ mode: 'required' }))).not.toBe(
+      fingerprintTools([weather], autoChoice),
+    );
   });
 
   it('rejects duplicate function names', () => {

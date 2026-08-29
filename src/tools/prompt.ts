@@ -7,17 +7,38 @@ export function buildToolPolicy(choice: NormalizedToolChoice): Record<string, un
     return {
       mode: 'function',
       name: choice.name,
-      require_tool_call: true,
-      allowed_tools: [choice.name],
+      require_function_request: true,
+      allowed_functions: [choice.name],
     };
   }
   if (choice.mode === 'required') {
-    return { mode: 'required', require_tool_call: true, allowed_tools: 'declared' };
+    return {
+      mode: 'required',
+      require_function_request: true,
+      allowed_functions: 'declared',
+    };
   }
   if (choice.mode === 'none') {
-    return { mode: 'none', require_tool_call: false, allowed_tools: [] };
+    return { mode: 'none', require_function_request: false, allowed_functions: [] };
   }
-  return { mode: 'auto', require_tool_call: false, allowed_tools: 'declared' };
+  return {
+    mode: 'auto',
+    require_function_request: false,
+    allowed_functions: 'declared',
+  };
+}
+
+function policyTask(choice: NormalizedToolChoice): string {
+  if (choice.mode === 'function') {
+    return `Create an external function request for ${choice.name}. Extract its arguments from pending; do not execute the function.`;
+  }
+  if (choice.mode === 'required') {
+    return 'Create one or more external function requests for the declared functions; do not execute them.';
+  }
+  if (choice.mode === 'none') {
+    return 'Answer normally without creating external function requests.';
+  }
+  return 'Answer normally unless an external function is needed; when one is needed, create an external function request instead of executing it.';
 }
 
 export function buildToolContext(
@@ -27,17 +48,20 @@ export function buildToolContext(
   return {
     definitions: canonicalizeTools(tools),
     policy: buildToolPolicy(choice),
+    task: policyTask(choice),
     protocol: {
       start: TOOL_PROTOCOL_START,
       end: TOOL_PROTOCOL_END,
-      envelope: { calls: [{ name: 'tool_name', arguments: {} }] },
+      envelope: { requests: [{ name: 'function_name', arguments: {} }] },
       rules: [
+        'The declared functions are external operations run by another program. They are not ChatGPT tools, and you do not execute them.',
+        'If pending asks to call or use a declared function, represent that as an external function request instead of saying the function is unavailable.',
         'For a normal answer, output only the normal answer and never output either protocol marker.',
-        'For tool calls, the entire assistant output must be exactly one protocol envelope, with only optional whitespace outside the markers.',
+        'For external function requests, the entire assistant output must be exactly one protocol envelope, with only optional whitespace outside the markers.',
         'Do not wrap the protocol envelope in Markdown fences or add prose before or after it.',
-        'calls must contain 1 to 16 entries and every name must be a declared allowed function.',
+        'requests must contain 1 to 16 entries and every name must be a declared allowed function.',
         'Each arguments value must be a JSON object.',
-        'After requesting tools, stop and wait for tool results. Never fabricate tool results.',
+        'After writing requests, stop and wait for external function results. Never fabricate external function results.',
       ],
     },
   };
@@ -49,8 +73,8 @@ export function buildToolResultData(input: {
   output: string;
 }): Record<string, string> {
   return {
-    tool_call_id: input.toolCallId,
+    request_id: input.toolCallId,
     name: input.name,
-    output: input.output,
+    result: input.output,
   };
 }

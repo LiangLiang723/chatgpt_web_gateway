@@ -7,6 +7,9 @@ export type ChatGptDriverErrorCode =
   | 'chatgpt_response_missing'
   | 'chatgpt_upload_failed'
   | 'chatgpt_upload_timeout'
+  | 'chatgpt_image_missing'
+  | 'chatgpt_image_ambiguous'
+  | 'chatgpt_image_fetch_failed'
   | 'conversation_restore_failed';
 
 export interface ChatGptDriverErrorOptions {

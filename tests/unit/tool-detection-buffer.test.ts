@@ -12,7 +12,7 @@ describe('ToolDetectionBuffer', () => {
     const buffer = new ToolDetectionBuffer(true);
     for (const character of `  ${TOOL_PROTOCOL_START}`) expect(buffer.push(character)).toEqual([]);
     expect(buffer.classification).toBe('tool');
-    expect(buffer.push('\n{"calls":[]}')).toEqual([]);
+    expect(buffer.push('\n{"requests":[]}')).toEqual([]);
     expect(buffer.finish()).toEqual([]);
   });
 

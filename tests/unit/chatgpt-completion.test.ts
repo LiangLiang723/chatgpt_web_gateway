@@ -84,6 +84,21 @@ describe('waitForAssistantCompletion', () => {
 });
 
 describe('waitForAssistantFinalSnapshot', () => {
+  it('allows a slow first Assistant turn beyond two minutes by default', async () => {
+    const clock = scriptedClock();
+
+    await expect(
+      waitForAssistantFinalSnapshot({
+        observe: async () =>
+          clock.now() >= 180_000
+            ? { exists: true, generating: false, text: 'late but valid' }
+            : { exists: false, generating: false, text: '' },
+        clock,
+        pollIntervalMs: 60_000,
+      }),
+    ).resolves.toBe('late but valid');
+  });
+
   it('tolerates a transiently missing owned turn before the final completion snapshot', async () => {
     const clock = scriptedClock();
     const observe = observations([

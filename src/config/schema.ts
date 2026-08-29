@@ -13,6 +13,7 @@ export const AppConfigSchema = Type.Object(
     maxActivePages: Type.Integer({ minimum: 1, maximum: 32 }),
     pageIdleTimeoutMinutes: Type.Integer({ minimum: 1, maximum: 1440 }),
     chatgptProxyServer: Type.Optional(Type.String({ minLength: 1 })),
+    publicBaseUrl: Type.Optional(Type.String({ minLength: 1 })),
     novncPort: Type.Integer({ minimum: 1, maximum: 65535 }),
     novncPassword: Type.Optional(Type.String({ minLength: 1 })),
   },

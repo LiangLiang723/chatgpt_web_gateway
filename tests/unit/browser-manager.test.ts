@@ -85,6 +85,31 @@ describe('BrowserManager', () => {
     await manager.close();
   });
 
+  it('reports an unexpected persistent-context close but ignores intentional shutdown', async () => {
+    const context = fakeContext();
+    let closeHandler: (() => void) | undefined;
+    Object.assign(context, {
+      once: vi.fn((event: string, handler: () => void) => {
+        if (event === 'close') closeHandler = handler;
+        return context;
+      }),
+    });
+    const onUnexpectedClose = vi.fn();
+    const manager = await createBrowserManager({
+      profileDir: tempProfile(),
+      maxActivePages: 4,
+      launchPersistentContext: async () => context,
+      onUnexpectedClose,
+    });
+
+    closeHandler?.();
+    expect(onUnexpectedClose).toHaveBeenCalledTimes(1);
+
+    await manager.close();
+    closeHandler?.();
+    expect(onUnexpectedClose).toHaveBeenCalledTimes(1);
+  });
+
   it('maps persistent-context launch failures to browser_unavailable', async () => {
     const profileDir = tempProfile();
     const launch = vi.fn(async () => {

@@ -28,6 +28,7 @@ export interface RunPhase7ChatGptE2EOptions {
 export interface Phase7ChatGptE2EResult {
   singleTool: true;
   resultContinuation: true;
+  policyRebuild: true;
   multipleTools: true;
   streamTool: true;
   streamText: true;
@@ -39,6 +40,7 @@ interface DriverCall {
   method: 'openFresh' | 'openConversation' | 'sendText' | 'startText';
   prompt?: string;
   conversationUrl?: string;
+  assistantText?: string;
 }
 
 interface SseFrame {
@@ -65,8 +67,11 @@ function createRecordingDriver(calls: DriverCall[]): ChatGptStreamingTextDriver 
       return driver.openConversation(page, conversationUrl);
     },
     async sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult> {
-      calls.push({ method: 'sendText', prompt: request.prompt });
-      return driver.sendText(page, request);
+      const call: DriverCall = { method: 'sendText', prompt: request.prompt };
+      calls.push(call);
+      const result = await driver.sendText(page, request);
+      call.assistantText = result.text;
+      return result;
     },
     async startText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn> {
       calls.push({ method: 'startText', prompt: request.prompt });
@@ -116,9 +121,14 @@ async function postJson(options: {
   });
 }
 
-async function assertHttpOk(response: Response, label: string): Promise<void> {
+async function assertHttpOk(
+  response: Response,
+  label: string,
+  assistantText?: string,
+): Promise<void> {
   if (response.status === 200) return;
-  assert.fail(`${label} returned HTTP ${response.status}: ${await response.text()}`);
+  const diagnostic = assistantText === undefined ? '' : `\nRaw Assistant text: ${assistantText}`;
+  assert.fail(`${label} returned HTTP ${response.status}: ${await response.text()}${diagnostic}`);
 }
 
 function chatToolCalls(body: unknown): Array<{ id: string; name: string; arguments: string }> {
@@ -310,7 +320,7 @@ export async function runPhase7ChatGptE2E(
         tool_choice: { type: 'function', function: { name: 'deterministic_echo' } },
       },
     });
-    await assertHttpOk(echoResponse, 'single tool');
+    await assertHttpOk(echoResponse, 'single tool', firstCalls.at(-1)?.assistantText);
     const firstToolCalls = chatToolCalls(await echoResponse.json());
     assert.equal(firstToolCalls.length, 1);
     assert.equal(firstToolCalls[0]!.name, 'deterministic_echo');
@@ -351,14 +361,28 @@ export async function runPhase7ChatGptE2E(
         tool_choice: 'none',
       },
     });
-    await assertHttpOk(continuation, 'tool result continuation after restart');
+    await assertHttpOk(
+      continuation,
+      'tool result continuation after restart',
+      restartCalls.at(-1)?.assistantText,
+    );
     assert.match(chatText(await continuation.json()), new RegExp(resultToken));
-    assert.equal(conversationUrl(runtime, restoreKey), restoreUrl, 'RESTORE must keep ChatGPT URL');
+    const continuationUrl = conversationUrl(runtime, restoreKey);
+    assert.notEqual(
+      continuationUrl,
+      restoreUrl,
+      'function -> none policy change must REBUILD to a new ChatGPT URL',
+    );
     assert.ok(
+      restartCalls.some((call) => call.method === 'openFresh'),
+      'Expected tool-result continuation to open a fresh ChatGPT conversation after policy change',
+    );
+    assert.equal(
       restartCalls.some(
         (call) => call.method === 'openConversation' && call.conversationUrl === restoreUrl,
       ),
-      'Expected tool-result continuation to restore the persisted ChatGPT URL',
+      false,
+      'Policy change must not RESTORE the old function-request conversation',
     );
     const afterContinuation = runtime.persistence.conversationStore.loadByKey(restoreKey)!;
     assert.equal(afterContinuation.toolCalls[0]?.externalCallId, callId);
@@ -366,6 +390,59 @@ export async function runPhase7ChatGptE2E(
       afterContinuation.messages.some(
         (message) => message.role === 'tool' && message.toolCallId === callId,
       ),
+    );
+
+    await runtime.close();
+    runtime = undefined;
+
+    const beforeStableRestoreCalls = restartCalls.length;
+    runtime = await createRuntime({
+      dataDir,
+      profileDir: profile.profileDir,
+      calls: restartCalls,
+      ...(options.proxyServer ? { proxyServer: options.proxyServer } : {}),
+    });
+    baseUrl = await runtime.app.listen({ host: '127.0.0.1', port: 0 });
+    const restoreProbeToken = token('P7RESTORE');
+    const stableRestore = await postJson({
+      baseUrl,
+      path: '/v1/chat/completions',
+      conversationKey: restoreKey,
+      body: {
+        model: 'chatgpt-web',
+        stream: false,
+        messages: [
+          {
+            role: 'user',
+            content: `Reply exactly with ${restoreProbeToken}.`,
+          },
+        ],
+        tools: [functionTool('deterministic_echo', 'Return a caller-supplied deterministic token')],
+        tool_choice: 'none',
+      },
+    });
+    await assertHttpOk(
+      stableRestore,
+      'stable-policy restart RESTORE',
+      restartCalls.at(-1)?.assistantText,
+    );
+    assert.match(chatText(await stableRestore.json()), new RegExp(restoreProbeToken));
+    assert.equal(
+      conversationUrl(runtime, restoreKey),
+      continuationUrl,
+      'unchanged function policy restart must keep the ChatGPT URL',
+    );
+    const stableRestoreCalls = restartCalls.slice(beforeStableRestoreCalls);
+    assert.ok(
+      stableRestoreCalls.some(
+        (call) => call.method === 'openConversation' && call.conversationUrl === continuationUrl,
+      ),
+      'Expected unchanged function policy to RESTORE the persisted ChatGPT URL',
+    );
+    assert.equal(
+      stableRestoreCalls.some((call) => call.method === 'openFresh'),
+      false,
+      'Unchanged function policy must not REBUILD',
     );
 
     const leftToken = token('P7LEFT');
@@ -526,6 +603,7 @@ export async function runPhase7ChatGptE2E(
     return {
       singleTool: true,
       resultContinuation: true,
+      policyRebuild: true,
       multipleTools: true,
       streamTool: true,
       streamText: true,

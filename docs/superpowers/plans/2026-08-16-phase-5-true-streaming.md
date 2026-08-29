@@ -13,9 +13,9 @@
 ## Global Constraints
 
 - 只实现 Phase 5 纯文本 Streaming；附件、Tools、Structured Output、image execution 继续拒绝。
-- DOM polling 默认约 `200ms`，Stable Prefix 默认 `3` 个 sample，generation timeout 保持 `120000ms`。
+- DOM polling 默认约 `200ms`，Stable Prefix 默认 `3` 个 sample，generation timeout 当前为 `240000ms`。
 - 只观察发送前 `assistantTurns.count()` 所确定的 target Assistant turn；禁止 `.last()` 猜 ownership。
-- completion 以 target turn `copy-turn-action-button` marker + final stable text 为成功边界；全局 Stop control 不是成功必要条件。
+- completion 主边界仍是 target turn `copy-turn-action-button` marker + final stable text；2026-08-29 后允许一个 bounded stalled-Page verification：同一 request 先观察到唯一 Stop、owned turn 无非-prose `.markdown` 状态且同一非空正文持续稳定至少 5 秒，再用同一 BrowserContext 的临时 Page 重开相同 Conversation；只有 verifier 同一 target index 的 authoritative text 完全一致且正式 completion marker 唯一存在，才确认原 Page 已完成。临时 verifier 不输入、不 Send、立即关闭；仅稳定文本或 Stop 消失都不能推断成功。
 - `stream/` 不依赖 Playwright、API、Browser、ChatGPT、Persistence 或 `node:sqlite`。
 - SSE success terminal 必须晚于 SQLite clean commit；post-checkpoint unknown failure 不保存 partial Assistant。
 - client abort 在 completion 前 best-effort Stop 并保持 `in_flight`；completion 后 transport close 不阻止 authoritative final save。
@@ -161,7 +161,7 @@ Cover marker absent, marker present but changing text, marker + 3 stable samples
 
 - [x] **Step 6: GREEN — Completion detector**
 
-Default `pollIntervalMs=200`, `stableSamples=3`, `timeoutMs=120000`; do not inspect Stop control.
+Stream-core default remains `pollIntervalMs=200`, `stableSamples=3`; current `timeoutMs=240000`. The pure `stream/` layer does not inspect Stop control; the ChatGPT turn observer may contribute the bounded stopped-generation completion evidence described in Task 3.
 
 - [x] **Step 7: RED/GREEN — text streaming loop**
 
@@ -208,11 +208,11 @@ export interface ChatGptTextDriver {
 
 - [x] **Step 1: RED — `startText()` ownership test**
 
-Assert baseline captured before fill/click and returned handle observes exactly `assistantTurns.nth(baseline)`.
+Assert baseline captured before Composer input/click and returned handle observes exactly `assistantTurns.nth(baseline)`.
 
 - [x] **Step 2: GREEN — extract target turn handle**
 
-`startText` captures baseline, fills, clicks, then returns closure-bound handle. `observe` returns missing snapshot before target exists and validates completion marker cardinality.
+`startText` captures baseline, focuses the Composer, enters the prompt through the ProseMirror-compatible input path, clicks Send, then returns a closure-bound handle. Single-line prompts use keyboard text input; multiline prompts use one `text/plain` paste transaction so replacement Pages do not truncate after the first paragraph. `observe` returns a missing snapshot before target exists, validates completion marker cardinality, and tracks whether this request actually entered a unique Stop-generating state. If authoritative text then remains unchanged past the stalled-Page threshold while the primary marker is still absent, the Driver may open one temporary verifier Page on the same Conversation URL; verifier success requires the same target index, exactly one authoritative prose node, exact text equality, no transient status, and the formal completion marker. Any non-prose `.markdown` Assistant status suppresses verification, and the verifier never types or clicks Send.
 
 - [x] **Step 3: RED — safe final URL and non-stream reuse**
 
@@ -732,7 +732,7 @@ corepack pnpm test:e2e:chatgpt
 
 Expected: Phase 3 + Phase 4 + Phase 5 all PASS.
 
-2026-08-17 final execution evidence: `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`; standalone `test:e2e:chatgpt:phase5` returned `chatCompletions=true`, `markdown=true`, `responses=true`, `abort=true`; combined `test:e2e:chatgpt` returned Phase 3 auth/driver/gateway challenge, Phase 4 APPEND/RESTORE/REBUILD and all Phase 5 scenarios as PASS. The authenticated runs exposed and TDD-fixed provisional `/c/WEB:*` ownership, Assistant placeholders without `.markdown`, renderer tail rewrites requiring a bounded commit holdback, and the explicit conversation-history rate-limit notification modal. A later 2026-08-26 authenticated combined regression observed a 38-code-point Markdown tail rewrite, so the current default holdback was raised from 16 to 64 code points with deterministic regression coverage. Final fresh deterministic evidence is 55 test files / 332 tests; final fresh `linux/amd64` Docker digest is `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` with full smoke PASS.
+2026-08-17 final execution evidence: `inspect:chatgpt` returned `auth=authenticated` / `composer=unique`; standalone `test:e2e:chatgpt:phase5` returned `chatCompletions=true`, `markdown=true`, `responses=true`, `abort=true`; combined `test:e2e:chatgpt` returned Phase 3 auth/driver/gateway challenge, Phase 4 APPEND/RESTORE/REBUILD and all Phase 5 scenarios as PASS. The authenticated runs exposed and TDD-fixed provisional `/c/WEB:*` ownership, Assistant placeholders without authoritative prose content, renderer tail rewrites requiring a bounded commit holdback, and the explicit conversation-history rate-limit notification modal. A later 2026-08-26 authenticated combined regression observed a 38-code-point Markdown tail rewrite, so the current default holdback was raised from 16 to 64 code points with deterministic regression coverage. Final fresh deterministic evidence for the original Phase 5 closure is 55 test files / 332 tests; final fresh `linux/amd64` Docker digest is `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` with full smoke PASS. A 2026-08-28 later V1 final-candidate regression found that a transient non-prose `.markdown` connection-interrupted status block can coexist beside the authoritative `.markdown.prose` answer in the same owned turn; the current shared Driver selector therefore targets `.markdown.prose` and still rejects multiple authoritative prose nodes. The same V1 closure work later exposed two additional current-page races: the known conversation-history rate-limit modal can appear during Send click and must be dismissed/retried once, and a strict-unique Stop control can detach between inspection and Playwright click. The latter is now deterministic-regressed: Stop click uses the bounded cancellation timeout and re-observes completion on click failure. Later V1 closure debugging reached the abort→REBUILD path and exposed a separate ProseMirror input boundary: `Locator.fill()` could show a complete multiline Composer DOM while Send persisted only the first paragraph. Replacing it with whole-prompt `keyboard.insertText()` fixed ordinary Fresh Pages but still truncated multiline text on a PagePool replacement Page; a no-send replacement probe reproduced this deterministically at the live DOM boundary. The current candidate keeps keyboard input for single-line text and uses a `text/plain` paste transaction for multiline text; the replacement probe shows the complete ProseMirror document and Send readiness. Fresh deterministic evidence for the current V1 candidate is **86 files / 580 tests**; the latest unchanged product Docker image remains `sha256:193c8c89f973887815e5a4dede95803dbaccc45095b86297a8093f6302e0d3c7` with full smoke PASS. Authenticated re-acceptance is now complete for the current multiline input candidate: after a later no-message inspection returned `auth=authenticated` with Composer and Send both unique, standalone Phase 5 returned `chatCompletions=true`, `markdown=true`, `responses=true`, and `abort=true`. This proves the current replacement-Page multiline paste path through abort→REBUILD; final V1 combined acceptance remains tracked by the Phase 9 plan.
 
 - [x] **Step 6: Final docs writeback**
 

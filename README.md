@@ -4,13 +4,14 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：Phase 7 Tool Calling 已实现，等待真实 ChatGPT E2E 网络恢复
+## 当前状态：V1 验收完成，公开版本仍为 V0.0.1
 
-Phase 1–6 已完成工具链、Docker、SQLite、Browser/Driver、Conversation Context Sync、True Streaming 与 Files/附件输入；Phase 7 现已实现 function Tool Calling 执行闭环。2026-08-27 fresh deterministic `verify` 与 Docker build/smoke 全绿，但 authenticated real E2E 的 fresh inspect 被现有 LAN proxy `192.168.3.163:7890` connection refused 阻塞，因此 Phase 7 尚未正式关闭：
+Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前仓库仍保持公开版本 `V0.0.1`；本次 V1 收口不自动创建 `V1.0.0` Tag、GitHub Release 或 registry 镜像：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
 - `GET /health`。
+- authenticated `GET /v1/diagnostics`，只报告本地 Browser/Page/Persistence 状态并固定 `auth_state=not_probed`。
 - `GET /v1/models`，默认只暴露 `chatgpt-web`。
 - `/v1/*` Bearer API Key 认证；`/health` 无需认证。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 的 Schema 校验和统一 `NormalizedRequest` Normalizer。
@@ -30,15 +31,16 @@ Phase 1–6 已完成工具链、Docker、SQLite、Browser/Driver、Conversation
 - bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
 - Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
 - full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle。未提供 key 时每个请求仍建立并持久化独立 `conversation_key = NULL` Fresh Conversation，但不会跨请求猜测身份。
-- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage。Phase 6 图片/文件附件输入与 Phase 7 function Tools/Tool Result continuation 已实现；Structured Output execution 与 image output 仍明确拒绝。
-- `corepack pnpm inspect:chatgpt`、Phase 3–7 standalone E2E 与 combined `corepack pnpm test:e2e:chatgpt` 提供显式真实网页诊断/验收，要求独立测试 Browser Profile；combined 额外要求 `E2E_CHATGPT_COMBINED=1`。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage。Phase 6 图片/文件附件、Phase 7 function Tools/Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
+- `POST /v1/images/generations` 已实现 `n=1`、`url|b64_json`、request-scoped conversation-turn 图片基线采集、`${DATA_DIR}/generated` 原子持久化、SQLite `generated_images` 记录与 SHA-256 完整性检查；图片采集不依赖文本 Assistant role/copy completion marker，并按 `currentSrc || src` 去重同一 generated asset 的重复 DOM copy，`GET /v1/images/:id/content` 继续要求 Bearer authentication。
+- `corepack pnpm inspect:chatgpt`、Phase 3–8 standalone E2E 与 combined `corepack pnpm test:e2e:chatgpt` 提供显式真实网页诊断/验收，要求独立测试 Browser Profile；combined 额外要求 `E2E_CHATGPT_COMBINED=1`。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
 
 **Phase 6 已完成真实验收。** 2026-08-26 最终 combined real E2E 退出码 0，Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses/abort，以及 Phase 6 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、APPEND/RESTORE/Streaming 全部通过。验收过程中真实观测到 38-code-point Markdown renderer 尾部回排，因此 Streaming 默认 commit-tail holdback 从 16 提升为 64；同时 Driver 会在 Composer fill 后等待 Send control readiness，避免 Fresh/Page 复用竞态。
 
-**Phase 7 implementation candidate 已完成。** 当前包含 deterministic Tool Schema canonicalization/fingerprint、Context/Append Prompt v2、strict private-protocol Parser、Gateway-owned persisted call IDs、tool-result APPEND/RESTORE/REBUILD、Chat Completions/Responses non-stream 与 stream function-call encoding，以及 ToolDetectionBuffer 防 private protocol 泄漏。2026-08-27 fresh `corepack pnpm verify` 通过 **78 个测试文件 / 537 个测试**；fresh `linux/amd64` Docker image `sha256:7a74ac01608619baf130b765ba2b82b54f1262b971f2ac3fc1f97d7bcc882499` 与 full `docker:smoke` 通过。真实网页验收尚未执行：fresh `inspect:chatgpt` 在连接已批准 LAN proxy 时得到 `ERR_PROXY_CONNECTION_FAILED`，TCP 诊断确认 `192.168.3.163:7890` connection refused；最新 DevSpace 直连 `chatgpt.com:443` 复查为 network unreachable。
+**Phase 7 Tool Calling V2 已完成验收。** 网页侧不再要求 ChatGPT“调用一个并不存在的原生工具”，而是把 caller-defined function 描述为外部操作请求，固定使用 external-function request envelope。tool-context fingerprint 同时绑定 canonical tool definitions、private protocol version 与 normalized `tool_choice`/function policy；schema/protocol/policy 任一变化都会通过 `tools_changed` 保守 REBUILD，仅声明顺序变化不触发。最终 standalone 已真实通过 single tool、Tool Result continuation、policy-change REBUILD、same-policy restart RESTORE、multiple tools、tool streaming、text streaming 与 schema change REBUILD，并在 reduced combined 中再次全绿。
 
-尚未实现的核心能力包括 Structured Output execution 和 ChatGPT 图片生成。Phase 7 function Tool Calling 的代码与确定性/Docker 验证已完成，但在 standalone + combined authenticated real E2E 通过前不视为正式关闭。Remote URL image fetch 的 SSRF/DNS/redirect 链已确定性验证，但此前 Phase 6 没有使用公网 fixture 做 live remote-fetch E2E。
+**Phase 8/9 也已完成验收。** Structured Output 不再是 501 缺口；图片生成、图片持久化/内容读取、Page failure discard、Persistent BrowserContext fatal restart signaling、`/v1/diagnostics`、`PUBLIC_BASE_URL`、`backup:data` / `restore:data` 与 NAS 运维文档都已接入。Phase 8 standalone `url/base64/persistence/restart` 与 reduced combined 均通过；Phase 9 deterministic/Docker 已覆盖 Structured Output、recovery、diagnostics 与 cold backup/restore。Remote URL image input 的 SSRF/DNS/redirect 链有 deterministic coverage，但仍没有公网 fixture 的 live remote-fetch E2E。
 
 ## V1 批准范围
 
@@ -135,7 +137,7 @@ ${DATA_PATH:-./data} → /data
 
 启动时会在 `/data/gateway.db` 自动创建/校验 SQLite Schema，并按顺序执行 checksum migration。当前 migration history 包含 `001_initial`、`002_add_conversation_sync_checkpoint` 与 `003_add_file_blob_lifecycle`；数据库使用 WAL，因此运行时还可能出现 `gateway.db-wal` / `gateway.db-shm`，它们是正常 SQLite 状态的一部分，不应在 Gateway 运行时手工删除。
 
-Docker smoke 已验证数据库和 `/data/files/blobs`、`/data/temp` 由指定 `PUID/PGID` 非 root 进程读写，并在同一 Bind Mount 下重启容器后继续可用。`/v1/files` 的 metadata/content 可跨 Gateway restart 恢复；DELETE 会立即撤销公开访问，但历史 Conversation Attachment 若仍引用 File，内部 bytes 会保留以支持 REBUILD/恢复，不承诺立即 secure erase。
+Docker smoke 的当前候选会同时验证数据库、`/data/files/blobs`、`/data/generated` 与 `/data/temp` 由指定 `PUID/PGID` 非 root 进程读写，并在同一 Bind Mount 下重启容器后继续可用。`/v1/files` 的 metadata/content 可跨 Gateway restart 恢复；DELETE 会立即撤销公开访问，但历史 Conversation Attachment 若仍引用 File，内部 bytes 会保留以支持 REBUILD/恢复，不承诺立即 secure erase。完整 NAS 部署、冷备份、恢复、诊断与回滚流程见 [`docs/operations.md`](docs/operations.md)。
 
 ## noVNC 维护模式
 
@@ -184,6 +186,7 @@ docker compose up -d
 | `MAX_ACTIVE_PAGES` | `4` | Page Pool 最大打开 Page 数；不同 Conversation 可并行直到容量上限 |
 | `PAGE_IDLE_TIMEOUT_MINUTES` | `30` | Conversation Page affinity 空闲回收时间；容量压力下可提前回收 LRU idle Page |
 | `CHATGPT_PROXY_SERVER` | 空 | 可选 ChatGPT 浏览器代理；支持 `http` / `https` / `socks5`，URL 内禁止账号密码 |
+| `PUBLIC_BASE_URL` | 空 | 可选生成图片公开 URL base；仅允许无 credentials/query/hash 的 `http(s)` base，content route 仍要求 Bearer auth |
 | `NOVNC_BIND` | `127.0.0.1` | noVNC 宿主机绑定地址 |
 | `NOVNC_PORT` | `6080` | noVNC 端口 |
 | `NOVNC_PASSWORD` | 无 | 仅 maintenance mode 必填 |
@@ -224,7 +227,12 @@ corepack pnpm test:e2e:chatgpt
 E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
-corepack pnpm test:e2e:chatgpt:phase6
+corepack pnpm test:e2e:chatgpt:phase7
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:phase8
 ```
 
 测试 Profile 需要通过人工方式完成 ChatGPT 登录；工具不会自动填写账号密码、MFA 或 CAPTCHA。需要代理的环境通过 `CHATGPT_PROXY_SERVER` 显式配置；如果要用 noVNC 给隔离测试 Profile 登录，可在 maintenance overlay 中同时设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile`。如果一个已失效的隔离 Profile 在重新登录时反复陷入 challenge loop，不要继续重复验证或覆盖旧 Profile：保留旧目录作为证据，创建一个新的干净隔离 Profile，再用 maintenance Google Chrome Stable 登录并先运行 `inspect:chatgpt`。真实 E2E 只有人工登录完成并实际通过后才算验收。
@@ -253,10 +261,10 @@ OpenAI Compatible Client / Agent
        NormalizedRequest
               │
               ▼
-      Conversation Engine         ← Phase 6 已实现；四态 + FIFO + checkpoint + multimodal attachments
+      Conversation Engine         ← 四态 + FIFO + checkpoint + multimodal + tools + structured validation
               │
               ▼
-        ChatGPT Driver            ← text/stream/upload readiness；Phase 6 real E2E 已验收
+        ChatGPT Driver            ← text/stream/upload + external-function request + image driver
               │
               ▼
      Playwright Chromium
@@ -275,6 +283,7 @@ OpenAI Compatible Client / Agent
 - [`docs/api-compatibility.md`](docs/api-compatibility.md)：目标兼容范围与当前协议实现说明。
 - [`docs/testing.md`](docs/testing.md)：测试层级和完成门槛。
 - [`docs/development-workflow.md`](docs/development-workflow.md)：开发和整套依赖升级流程。
+- [`docs/operations.md`](docs/operations.md)：NAS 部署、登录、更新、冷备份/恢复、诊断与回滚。
 - [`docs/superpowers/specs/`](docs/superpowers/specs/)：设计规格。
 - [`docs/superpowers/plans/`](docs/superpowers/plans/)：实施计划与执行状态。
 
@@ -286,7 +295,7 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-当前 Phase 6 收尾不自动创建新的发布版本、Git Tag、Docker Registry 镜像或 GitHub Release。
+当前 V1 实现/验收收口不会自动创建新的公开版本、Git Tag、Docker Registry 镜像或 GitHub Release；除非另有明确发布指令。
 
 ## 开源协议
 

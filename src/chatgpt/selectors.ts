@@ -32,9 +32,9 @@ export const sendButtonSelector: SelectorDefinition<'unique'> = {
   ],
 };
 
-export const loginIndicatorSelector: SelectorDefinition<'unique'> = {
+export const loginIndicatorSelector: SelectorDefinition<'collection'> = {
   name: 'loginIndicator',
-  cardinality: 'unique',
+  cardinality: 'collection',
   candidates: [
     {
       name: 'login-button-role',
@@ -69,10 +69,21 @@ export const userTurnsSelector: SelectorDefinition<'collection'> = {
   ],
 };
 
+export const generatedImagesSelector: SelectorDefinition<'collection'> = {
+  name: 'generatedImages',
+  cardinality: 'collection',
+  candidates: [
+    {
+      name: 'conversation-turn-images',
+      locate: (page) => page.locator('section[data-testid^="conversation-turn-"] img'),
+    },
+  ],
+};
+
 export const assistantTextContentSelector = {
   name: 'assistantTextContent',
   candidateName: 'assistant-markdown-content',
-  locate: (assistantTurn: Locator): Locator => assistantTurn.locator('.markdown'),
+  locate: (assistantTurn: Locator): Locator => assistantTurn.locator('.markdown.prose'),
 } as const;
 
 export const assistantTurnCompletionSelector = {
@@ -82,6 +93,12 @@ export const assistantTurnCompletionSelector = {
     assistantTurn.locator(
       'xpath=ancestor::section[@data-turn="assistant"][1]//*[@data-testid="copy-turn-action-button"]',
     ),
+} as const;
+
+export const assistantTransientStatusSelector = {
+  name: 'assistantTransientStatus',
+  candidateName: 'assistant-non-prose-markdown-status',
+  locate: (assistantTurn: Locator): Locator => assistantTurn.locator('.markdown:not(.prose)'),
 } as const;
 
 export const conversationHistoryRateLimitModalSelector: SelectorDefinition<'unique'> = {
@@ -206,8 +223,10 @@ export const chatGptSelectors = {
   loginIndicator: loginIndicatorSelector,
   assistantTurns: assistantTurnsSelector,
   userTurns: userTurnsSelector,
+  generatedImages: generatedImagesSelector,
   assistantTextContent: assistantTextContentSelector,
   assistantTurnCompletion: assistantTurnCompletionSelector,
+  assistantTransientStatus: assistantTransientStatusSelector,
   conversationHistoryRateLimitModal: conversationHistoryRateLimitModalSelector,
   conversationHistoryRateLimitAcknowledge: conversationHistoryRateLimitAcknowledgeSelector,
   attachmentFileInputs: attachmentFileInputsSelector,

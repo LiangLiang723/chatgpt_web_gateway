@@ -158,10 +158,10 @@ export function createConversationPageRegistry(
         if (state !== 'active') return;
         state = 'failed';
         if (conversationId === undefined || binding === undefined) {
-          await lease.release();
+          await lease.close();
           return;
         }
-        await releaseBinding(conversationId, binding, 'release');
+        await releaseBinding(conversationId, binding, 'close');
         scheduleEarliestExpiry();
       },
     };

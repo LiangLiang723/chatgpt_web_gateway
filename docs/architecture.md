@@ -48,12 +48,15 @@ src/
 ├── chatgpt/         ChatGPT DOM 行为、Selector、发送、提取、上传、图片生成
 ├── conversations/   Conversation 生命周期、队列、Page 绑定和恢复
 ├── context/         FRESH / APPEND / RESTORE / REBUILD 纯逻辑
-├── tools/           Tool Schema 标准化、Prompt、Parser、Tool Result
+├── tools/           Tool Schema 标准化、external-function Prompt/Protocol、Parser、Tool Result
+├── structured/      Structured Output policy、JSON/Ajv 本地最终校验
 ├── attachments/     图片/文件解析、下载、去重、落盘、上传准备
+├── images/          图片生成 request/service/storage 与 Generated Image lifecycle
 ├── stream/          Snapshot、Stable Prefix、Delta、内部流事件
 ├── persistence/     SQLite Repository 与文件元数据
+├── diagnostics/     本地 Browser/Page/Persistence readiness snapshot
 ├── config/          环境变量、默认值、配置验证
-└── observability/   结构化日志、诊断和错误上下文
+└── observability/   结构化日志和错误上下文
 ```
 
 ## 内部统一请求模型
@@ -126,24 +129,20 @@ Playwright
 
 Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增加 Conversation → Page affinity、idle timeout 与容量压力下的 LRU idle eviction。默认 `PAGE_IDLE_TIMEOUT_MINUTES=30`，只回收 idle affinity，不抢占 active Conversation。Conversation 请求失败时对应 lease 会 discard，避免把未知状态 Page 继续绑定给该 key；本地 SQLite 状态仍保留，因此后续可通过 conversation URL RESTORE。
 
-故障恢复逐级升级：
+恢复边界分两级：
 
-1. 重新定位 Selector（选择器）。
-2. reload（刷新）当前 Page。
-3. 重新打开 conversation URL。
-4. 新建 Page。
-5. 重建 BrowserContext。
-6. 最后才重启 Chromium。
+1. **Page/Conversation 级：** 单次执行失败时对应 keyed/transient Page 直接关闭，不重新放回 idle pool。Playwright Persistent BrowserContext 关闭最后一个 Page 会同时关闭整个 context，因此 PagePool 在关闭最后一个 failed lease 前先创建一个 fresh idle replacement，再关闭失败 Page；这保持“未知状态 Page 不复用”，同时避免把正常 Page failure 错升级成 BrowserContext death。SQLite `in_flight` / saved Conversation URL 保留，下一请求使用 fresh Page 后按 RESTORE/REBUILD 规则收敛；单 Page 故障不主动杀掉其他 Conversation。
+2. **BrowserContext/进程级：** Persistent BrowserContext 真正意外关闭时 BrowserManager 触发 fatal callback。生产 `src/index.ts` 有序关闭 Gateway 后以非零状态退出，由 Compose `restart: unless-stopped` 重建进程和 Chromium；`/data` 下 SQLite、Browser Profile、Files、Generated Images 均保留。应用内部不维护复杂 BrowserContext 热替换状态机。
 
-单 Page 故障不得无条件杀掉其他 Conversation。
+人工登录失效仍进入 noVNC maintenance 边界处理，不自动填写账号、MFA 或 CAPTCHA。
 
 ## ChatGPT Driver（网页驱动）
 
 上层只依赖稳定接口，不依赖 DOM 细节。所有 ChatGPT Selector 必须集中在 `src/chatgpt/selectors.ts`。
 
-Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航/readiness 与提交彻底拆分为 `openFresh(page)`、`openConversation(page, savedUrl)` 和纯 `sendText(page, { prompt })`。`openConversation` 只接受安全 `https://chatgpt.com` non-root Conversation URL，以 canonical pathname 比较 identity（忽略 query/hash）；确认无法恢复时返回显式 `not_restorable`，auth/selector/browser 异常继续作为错误传播。所有路径仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer。2026-08-16 真实 DOM 验收发现全局 `stop-button` 可能在答案可见文本已经稳定后继续滞留，因此它不再是唯一完成条件；Driver 现在绑定本次新 Assistant turn，并等待该 turn 的 `copy-turn-action-button` completion marker 出现，再结合非空文本连续稳定采样确认完成。固定约 250ms 只是 polling cadence，不把任意 sleep、`networkidle` 或全局按钮瞬时状态当作完成证据。2026-08-26 real E2E 进一步确认 Composer `fill()` 成功后 Send control 仍可能短暂未挂载，因此 Driver 在 fill 后以 strict unique selector 轮询等待 Send readiness；Assistant 完成后的空 Composer 不再被错误要求必须暴露 Send。
+Phase 3 建立了 Fresh text Driver 的发送/完成观察基础；Phase 4 将导航/readiness 与提交彻底拆分为 `openFresh(page)`、`openConversation(page, savedUrl)` 和纯 `sendText(page, { prompt })`。`openConversation` 只接受安全 `https://chatgpt.com` non-root Conversation URL，以 canonical pathname 比较 identity（忽略 query/hash）；确认无法恢复时返回显式 `not_restorable`，auth/selector/browser 异常继续作为错误传播。跨 URL RESTORE 不把 Composer 出现等同于历史 Conversation 已恢复：导航后会在 authenticated readiness 之后再次确认 canonical pathname，并等待既有 user/assistant turn 成对挂载、末个 Assistant completion marker 就绪且连续采样稳定后才返回 `restored`；同一 pathname 的 retained-Page APPEND 不增加该恢复等待。2026-08-29 live restart 直接证明必要性：Composer 已出现时历史 turn 仍为 `0 / 0`，数百毫秒后才一次性水合为 `2 / 2`；旧实现因此把前一轮 `P7RESULT_*` 错认成本轮目标，而重新打开该 Conversation 后末个 Assistant 实际已经是正确 `P7RESTORE_*`。所有路径仍复用 Auth Probe、Assistant Turn baseline ownership 和 completion observer。2026-08-16 真实 DOM 验收发现全局 `stop-button` 可能在答案可见文本已经稳定后继续滞留，因此它不再是唯一完成条件；Driver 绑定本次新 Assistant turn，主要等待该 turn 的 `copy-turn-action-button` completion marker，再结合非空文本稳定确认完成。2026-08-29 reduced combined 又暴露相反边界：Assistant 正文已经长期稳定，但原 Page 的 completion action UI 在 Gateway generation timeout 内没有挂载；之后恢复同一服务器 Conversation 时，完整正文与 action UI 都已正常存在。当前候选因此增加一个严格受限的第二终态：**同一 request 必须先真实观察到唯一 Stop control（证明进入生成态），owned turn 没有任何非-prose `.markdown` 状态块，且同一非空 authoritative text 持续稳定至少 5 秒；随后用同一 BrowserContext 的临时验证 Page 重开完全相同的 Conversation URL，只有 verifier 的同一 target index 也出现唯一 `.markdown.prose`、文本逐字完全一致并挂载正式 `copy-turn-action-button` marker 时，原 observation 才视为完成**。验证 Page 不输入、不点击 Send、不会创建新 Conversation，并在确认后立即关闭；仅仅“正文稳定”或 Stop 消失永远不够。固定约 200ms 只是 polling cadence，不把任意 sleep、`networkidle` 或全局按钮瞬时状态当作完成证据。2026-08-26 real E2E 进一步确认 Composer 写入后 Send control 仍可能短暂未挂载，因此 Driver 在输入后以 strict unique selector 轮询等待 Send readiness；Assistant 完成后的空 Composer 不再被错误要求必须暴露 Send。2026-08-28 abort→REBUILD 调试进一步证明 Playwright `Locator.fill()` 会让多段 ProseMirror DOM 在 Send 后只提交首段；改为整段 `keyboard.insertText()` 后，普通 Fresh Page 可完整提交，但 PagePool replacement-before-close 产生的新 Page 上 multiline `insertText` 仍只接受首段。当前 Driver 因此对单行文本使用 `keyboard.insertText()`，对含换行文本向已聚焦 Composer 分发 `text/plain` paste 事件，由 ProseMirror 自己形成完整文档事务；replacement Page 的无发送 DOM probe 已验证该路径保留全部段落。此前 history-rate-limit 窗口解除后，最新 standalone Phase 5 又真实通过 `chatCompletions/markdown/responses/abort=true`，因此 replacement Page 的 multiline abort→REBUILD Send 路径也已有 authenticated real evidence。
 
-Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。Phase 5 authenticated real E2E 进一步确认 Fresh 会短暂进入 `/c/WEB:<uuid>` provisional route，APPEND 也可能先挂载没有 `.markdown` 正文的临时 Assistant placeholder；Driver 因此只有在正式安全 Conversation URL 与 owned turn 唯一 `.markdown` 正文同时成立后才暴露 authoritative snapshot。若 ChatGPT 生成 writing-block/editor 导致多个正文节点，继续严格 `selector_ambiguous`，不截断结构化 UI 冒充纯文本。
+Selector Registry 区分 `unique` 与 `collection`。Unique selector primary 多匹配立即 `selector_ambiguous`，不会通过 `.first()` / `.nth()` 掩盖；collection 才允许按明确业务索引访问新 turn。Phase 5 authenticated real E2E 进一步确认 Fresh 会短暂进入 `/c/WEB:<uuid>` provisional route，APPEND 也可能先挂载没有 authoritative prose 正文的临时 Assistant placeholder；Driver 因此只有在正式安全 Conversation URL 与 owned turn 唯一 `.markdown.prose` 正文同时成立后才暴露 authoritative snapshot。2026-08-28 final-candidate combined 回归还观察到网络短暂中断时，同一 Assistant turn 会额外挂载非 prose 的 `.markdown` 状态块（`Connection interrupted. Waiting for the complete answer`）；该状态块不是 Assistant 正文，必须被正文 selector 排除。若 ChatGPT 生成 writing-block/editor 导致多个 `.markdown.prose` 正文节点，继续严格 `selector_ambiguous`，不截断结构化 UI 冒充纯文本。
 
 Phase 5 Conversation Engine 继续复用 Phase 4 的 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 与 SQLite `clean | in_flight` checkpoint，并提供 protocol-neutral `{ execute, stream }` 两条纯文本执行入口。`stream=true` 不改变 Context Sync：FRESH/REBUILD 仍发送完整 Context Envelope，APPEND/RESTORE 仍只发送 `current_user`。附件、Tools、Structured Output 与 image execution 仍由 `unsupported_phase5_request` 明确拒绝。Streaming 整个生命周期（包含 abort cleanup）都在 same-key Queue 内；不同 key 仍可并行。
 
@@ -171,9 +170,9 @@ Protocol-neutral TextStreamEvent
 
 `src/stream/` 是纯逻辑层，不依赖 Playwright、`api/`、`browser/`、`chatgpt/`、`persistence/` 或 `node:sqlite`。Assistant ownership 仍由发送前 `assistantTurns.count()` 的 baseline 决定；Driver 的 `ChatGptTextTurn` 只观察固定 target turn，并提供 `observe()`、严格唯一 Stop 的 `stop()` 和安全 `conversationUrl()`。
 
-Stable Prefix 使用最近 3 个 snapshot 的 longest common prefix，并在普通生成阶段默认把最后 **64 个 Unicode code points** 作为 bounded commit-tail holdback 留在内存。2026-08-26 authenticated combined regression 观测到 Markdown renderer 一次 **38 code-point** 尾部回排，因此当前默认值从 16 提升为 64 并有确定性回归测试。最终 completion 确认后再精确 flush 被保留的完整尾部。已经发送的 prefix 永不撤回；若后续 DOM rewrite 穿过已 committed prefix，仍进入稳定 `chatgpt_stream_diverged`，不发送 correction/backspace。Completion 以 target turn 自身的 `copy-turn-action-button` marker + 连续稳定 final text + final reread 为终态，不把可能滞留的全局 Stop control 当成功必要条件。
+Stable Prefix 使用最近 3 个 snapshot 的 longest common prefix，并在普通生成阶段默认把最后 **64 个 Unicode code points** 作为 bounded commit-tail holdback 留在内存。2026-08-26 authenticated combined regression 观测到 Markdown renderer 一次 **38 code-point** 尾部回排，因此当前默认值从 16 提升为 64 并有确定性回归测试。最终 completion 确认后再精确 flush 被保留的完整尾部。已经发送的 prefix 永不撤回；若后续 DOM rewrite 穿过已 committed prefix，仍进入稳定 `chatgpt_stream_diverged`，不发送 correction/backspace。Completion 的主终态仍是 target turn 自身的 `copy-turn-action-button` marker + 连续稳定 final text + final reread；若原 Page 的 action UI 长时间卡住，则只允许使用上述**same-Conversation reload verification**：本轮先观察到生成态 Stop、无非-prose Assistant 状态、同一正文稳定达到阈值，再由临时 verifier Page 对相同 Conversation / target index / exact text / 正式 marker 做二次确认。可能滞留的全局 Stop 不会阻止主 marker，也不会单独证明完成；从未观察到本轮生成态时也不会启动 verifier。
 
-Conversation Engine 在首个 protocol-neutral `started` 后、第一次可能写网页 turn 前持久化 `in_flight`。若客户端在首帧后立即断开，Engine 会在 checkpoint 前检查 AbortSignal；若断开发生在 checkpoint 后但 Send 前，Driver 在 baseline/composer/fill/send 异步边界继续检查同一个 signal，保证不继续点击 Send。生成中 abort 会 best-effort Stop、不保存 partial Assistant、保持 `in_flight` 并 discard 当前 Page；下一 keyed request 通过 REBUILD 收敛。
+Conversation Engine 在首个 protocol-neutral `started` 后、第一次可能写网页 turn 前持久化 `in_flight`。若客户端在首帧后立即断开，Engine 会在 checkpoint 前检查 AbortSignal；若断开发生在 checkpoint 后但 Send 前，Driver 在 baseline/composer/input/send 异步边界继续检查同一个 signal，保证不继续点击 Send。生成中 abort 会 best-effort Stop、不保存 partial Assistant、保持 `in_flight` 并 discard 当前 Page；下一 keyed request 通过 REBUILD 收敛。Stop click 自身使用与取消流程一致的 bounded timeout，不落回 Playwright 较长的默认 click wait；若严格唯一的 Stop 在检查与点击之间消失，而 owned Assistant turn 已建立 completion marker，则该竞态按 `already_complete` 收敛，避免取消清理被 DOM detach 长时间悬住。
 
 成功流只有在 final Assistant text、安全 Conversation URL 和完整 aggregate 已经原子保存为 clean 后才发送成功 terminal。final save 失败不发送 `[DONE]` / `response.completed`；clean commit 后才发生的 terminal transport close 不回滚已经确定完成的网页 turn。
 
@@ -183,16 +182,16 @@ Chat Completions 与 Responses 使用独立 Encoder，但共享同一 internal s
 
 ## Tool Calling（工具调用）
 
-Phase 7 function Tool Calling 已实现为 Gateway-owned private protocol；截至 2026-08-27 deterministic `verify` 与 Docker build/smoke 已通过，authenticated real ChatGPT E2E 因 LAN proxy connection refused 尚未完成。执行链如下：
+Phase 7 function Tool Calling 已重构为 Gateway-owned **external-function request protocol**。2026-08-27 authenticated inspect 已在新的可达 LAN proxy 上恢复；此前真实网页拒绝 caller-defined pseudo-tool 的证据促使 V2 不再要求 ChatGPT 把函数当作网页原生工具。后续 restart Tool Result continuation 先暴露 `tool_choice=none` Prompt 传播缺陷，又在 reduced combined/standalone 复现出更深层 stale-policy 问题：网页 Conversation 会保留上一轮 function-request policy，因此 function policy 变化不能继续复用原 URL。当前候选把 normalized `tool_choice` 纳入 tool-context fingerprint，使 policy 变化通过 `tools_changed` 保守 REBUILD。Fresh live rerun 已观察到 forced-function → none 使用新 Conversation URL 且最终页面产生正确 result；完整 standalone 当前仅因 ChatGPT conversation-history rate limit 暂停。执行链如下：
 
 ```text
 OpenAI Tool Schema
    ↓
 Canonicalize + Fingerprint
    ↓
-Tool Prompt
+External-function definitions + request policy
    ↓
-ChatGPT
+ChatGPT emits request records only
    ↓
 Tool Detection Buffer
    ↓
@@ -201,9 +200,9 @@ Tool Parser
 OpenAI tool_calls
 ```
 
-`src/tools/` 保持纯逻辑边界：`canonicalize.ts` 负责 stable tool definitions/fingerprint 与 tool-choice validation；`prompt.ts`/`protocol.ts` 定义固定 private sentinel 和 JSON-safe tool context/policy；`parser.ts` 在 generation 完成后严格解析，不自动修复模型输出；`detection-buffer.ts` 只做 streaming prefix classification，不依赖 API、Playwright、Persistence 或 SQLite。
+`src/tools/` 保持纯逻辑边界：`canonicalize.ts` 负责 stable tool definitions、tool-context fingerprint 与 tool-choice validation；fingerprint 同时绑定 canonical definitions、private protocol version 与 normalized function policy，任一语义变化都会让旧网页上下文保守 REBUILD。`prompt.ts`/`protocol.ts` 定义固定 `EXTERNAL_FUNCTION_REQUESTS_V1` sentinel/envelope 和 JSON-safe external-function context/policy；`parser.ts` 在 generation 完成后严格解析，不自动修复模型输出；`detection-buffer.ts` 只做 streaming prefix classification，不依赖 API、Playwright、Persistence 或 SQLite。
 
-Canonical Conversation first-class 表达 assistant Tool Call 与 tool-result message。Planner 的 pending turn 可以是 exactly one user 或 one-or-more consecutive tool results；stored/current tool fingerprint 不同会保守 `REBUILD(reason='tools_changed')`。FRESH/REBUILD Context Prompt v2 注入完整 tool definitions/protocol/history/pending；APPEND/RESTORE 只发送当前 `tool_policy` + `pending`，避免重复完整 schema。Tool Result 的 function name 从已持久化 `externalCallId` 解析，客户端 output 仅作为 untrusted data field。
+Canonical Conversation first-class 表达 assistant Tool Call 与 tool-result message。Planner 的 pending turn 可以是 exactly one user 或 one-or-more consecutive tool results；stored/current tool-context fingerprint 不同会保守 `REBUILD(reason='tools_changed')`。这不仅覆盖 schema/protocol 变化，也覆盖 `auto|none|required|function(name)` policy 变化。FRESH/REBUILD Context Prompt v2 在允许 function request 时注入完整 definitions/protocol/history/pending；APPEND/RESTORE 只发生在 policy 未变化时，并只发送当前 `function_policy` + `pending`。`tool_choice=none` 的 Context Prompt 只携带最小禁止策略、不注入 schema/protocol；pending 只有 Tool Result 时要求使用该 result 继续此前 user request，而不是寻找不存在的“final pending user message”。Tool Result 的 function name 从已持久化 `externalCallId` 解析，客户端 output 仅作为 untrusted data field。
 
 严格 Parser 成功后由 Conversation Engine 生成 Gateway-owned `call_<32 hex>` ID，再构造 final aggregate；assistant Tool Call 使用 `messages.role='assistant'` + `tool_calls` table，客户端结果使用 `messages.role='tool'` + `tool_call_id`。最终 clean aggregate 原子保存完成后，route/stream encoder 才允许输出成功 terminal；parser failure 保持 checkpoint `in_flight`，下一次 keyed request 通过 REBUILD 收敛。
 
@@ -237,13 +236,24 @@ Playwright setInputFiles
 
 Phase 6 锁定逻辑 File 与物理 Blob 分离：公开 `/v1/files` 和 inline URL/Data URL/Base64 都最终解析成本地 File；相同 bytes 可以有不同逻辑 File identity，但共享一个 SHA-256 Blob。永久 Blob path 不包含用户 filename，raw URL/Base64 不进入 Attachment persistence。`chatgpt/` 只接收已经准备好的本地 staging path，不下载网络、不解码 Base64、不访问 SQLite。
 
-Context Sync 仍只有 `FRESH | APPEND | RESTORE | REBUILD`：APPEND/RESTORE 只上传当前新增 user turn 附件；FRESH/REBUILD 从本地 File 事实源重新上传当前有效 full context 所需附件。第一次 Browser upload side effect 前必须先持久化 `in_flight`；upload/readiness 的未知失败保持 `in_flight` 并 discard Page。stream/non-stream 在 Send 后继续共享 Phase 5 target Assistant / completion / Stable Prefix。
+Context Sync 仍只有 `FRESH | APPEND | RESTORE | REBUILD`：APPEND/RESTORE 只上传当前新增 user turn 附件；FRESH/REBUILD 从本地 File 事实源重新上传当前有效 full context 所需附件。对于没有 system/developer、Tools、Structured Output 等额外语义的单条 user 文本 + 附件请求，附件 bytes 已经通过网页上传，因此 Browser Prompt 直接发送用户文本，不再额外包一层 JSON/context wrapper；只有需要重建历史、保留非普通语义或没有可直发文本时才使用结构化 Context Prompt。第一次 Browser upload side effect 前必须先持久化 `in_flight`；upload/readiness 的未知失败保持 `in_flight` 并 discard Page。stream/non-stream 在 Send 后继续共享 Phase 5 target Assistant / completion / Stable Prefix。
 
 SQLite 保存 File/Blob/Attachment 元数据和引用，大文件字节保存在 `data/files/`。migration 003、Files DELETE retained-history、SSRF/资源限制、upload ownership/readiness 与双协议附件执行链均已实现。2026-08-26 最终 combined Phase 3/4/5/6 real E2E 通过，Phase 6 因而关闭；该验收覆盖 Data URL image、image `file_id`、TXT/PDF/DOCX/XLSX、APPEND/RESTORE 与 attachment Streaming。Remote URL image fetch 的安全链由 deterministic tests 覆盖，本轮没有使用公网 fixture 做 live remote-fetch E2E。
 
+## Structured Output（结构化输出）
+
+Chat Completions `response_format=json_object/json_schema` 与 Responses `text.format=json_object/json_schema` 统一进入 `NormalizedRequest.output.structured`。Gateway 不声称 ChatGPT Web 具有原生 constrained decoding：
+
+1. `src/structured/output.ts` 把约束作为 JSON-safe `structured_output` policy 加入 Context/Append Prompt。
+2. `json_schema` 在 Browser execution 前用本地 Ajv compile；无效 schema 直接 `invalid_conversation_request`，不访问 ChatGPT。
+3. 最终 Assistant DOM 文本必须是完整 JSON object；`json_schema` 还必须通过同一 schema 的本地 Ajv validation。
+4. 最终验证失败返回 `chatgpt_structured_output_invalid`，不会保存 clean success；Streaming 的成功 terminal 仍晚于最终本地校验和 SQLite clean commit。
+
 ## 图片生成
 
-`POST /v1/images/generations` 通过 ChatGPT 网页触发图片生成，等待最终图片就绪后下载到 `data/generated/`，再返回 URL 或 Base64。V1 不做 partial image（部分图片）流式，也不做 `n>1`。
+Images execution 不进入 Conversation Engine。`POST /v1/images/generations` → `ImageGenerationService` → Page Pool lease → `ChatGptImageDriver` Fresh turn。Driver 只发送最小 `Create an image: <prompt>`；Send 前记录 conversation-turn `img` collection baseline，只检查本请求随后新增的可见、已加载且至少 256×256 的图片元素。图片归属不依赖 `[data-message-author-role="assistant"]` 或文本 turn 的 `copy-turn-action-button`，因为当前 ChatGPT image-only turn 可不挂在该 role 容器下；合格 DOM 节点按 `currentSrc || src` 去重同一生成资源，恰好一个不同图片源即进入 bytes fetch，多个不同图片源稳定拒绝，直到超时仍没有候选才返回 generation timeout。
+
+最终图片 bytes 在 authenticated page/context 边界取回后做 PNG/JPEG/WebP/GIF signature sniff，使用 Gateway UUID 文件名写入 `${DATA_DIR}/generated` 的同目录 temp → rename 原子路径，并插入既有 `generated_images` Repository。读取时重新计算 SHA-256 与 SQLite 记录核对。`response_format=url` 返回 authenticated `GET /v1/images/:id/content`；`b64_json` 返回持久化后的相同 bytes。可选 `PUBLIC_BASE_URL` 只负责 URL base，必须是无 credentials/query/hash 的 `http(s)` base。V1 不做 edits/variations、partial image streaming 或 `n>1`。
 
 ## Persistence（持久化）
 
@@ -265,7 +275,13 @@ Phase 2 使用 Node 24 内置 `node:sqlite` 的单 `DatabaseSync` 连接，不�
 
 业务实体使用 UUID v4 主键和 Unix 毫秒时间；需要查询/约束的字段关系化，复杂 content/instructions/tools/source 使用 JSON `TEXT`。上层只依赖 Repository / `ConversationStore`，`node:sqlite` 不能泄漏到 `src/persistence/` 外。完整 Conversation aggregate 的保存必须在单个同步事务中完成；事务 helper 会拒绝 async callback。进程关闭并重新打开同一数据库后应能恢复语义一致的结构化状态。
 
-Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 时幂等关闭数据库。Phase 6 进一步把 `${DATA_DIR}/files/blobs` 与 `${DATA_DIR}/temp` 纳入正式容器边界；最终 Docker 镜像包含 `migrations/`。2026-08-19 Docker smoke 已验证 migration `001/002/003`、gateway.db 与 files/temp 的 PUID/PGID writeability，以及同一 Bind Mount 下 `/v1/files` bytes 在 Gateway restart 后精确恢复、DELETE 后公开访问消失。
+Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 时幂等关闭数据库。Phase 6 进一步把 `${DATA_DIR}/files/blobs` 与 `${DATA_DIR}/temp` 纳入正式容器边界；Phase 8 把 `${DATA_DIR}/generated` 纳入同一非 root writeability smoke。最终 Docker 镜像包含 `migrations/`。当前 migration 仍只有 `001/002/003`，Phase 7–9 不新增 migration。
+
+## Diagnostics 与冷备份
+
+`GET /health` 继续只表示 process liveness。authenticated `GET /v1/diagnostics` 由 `src/diagnostics/` 返回 bounded local snapshot：`status`、`ui_mode`、Browser available、Page open/leased/idle、`auth_state=not_probed`，以及 SQLite/Files/Generated Images local readiness。该接口不请求 ChatGPT，也不返回 API Key、Cookie、proxy URL、Profile path、Prompt、Tool argument/result 或内容 bytes。
+
+`scripts/backup-data.mjs` / `restore-data.mjs` 把整个 `${DATA_DIR}` 作为冷备份边界。两者都要求显式 `--gateway-stopped`；backup destination 必须位于 DATA_DIR 外且不存在，并写 `BACKUP_MANIFEST.json`；restore 只接受受支持 manifest 且要求目标 DATA_DIR 为空。Browser Profile 与用户数据会随备份一起复制，因此备份本身按高敏感凭据处理。详细流程见 [`operations.md`](operations.md)。
 
 ## API Authentication（接口认证）
 

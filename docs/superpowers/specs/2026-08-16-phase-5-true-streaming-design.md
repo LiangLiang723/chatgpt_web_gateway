@@ -16,7 +16,7 @@ Phase 5 在 Phase 4 已完成的 Conversation ownership、Context Sync、Assista
 2. DOM polling 采用约 `200ms` cadence，且每次只观察本请求拥有的 Assistant turn。
 3. 使用 Stable Prefix（稳定前缀）而不是 `currentText.slice(previousText.length)`，抵抗 Markdown / React DOM 回写造成的文本重排。
 4. 已经发给客户端的文本永不撤回、永不重复；最终完成时必须 flush 尚未发送的尾部。
-5. Completion（完成）继续以**目标 Assistant turn 自身的 completion marker** 为主要完成证据，不重新依赖可能滞留的全局 Stop control。
+5. Completion（完成）继续以**目标 Assistant turn 自身的 completion marker** 为主要完成证据；2026-08-29 后只增加一个受限 stalled-Page verifier：本轮先真实观察到唯一 Stop，owned turn 无非-prose `.markdown` 状态且同一非空正文持续稳定达到阈值，再用同一 BrowserContext 的临时 Page 重开同一 Conversation；只有 verifier 在同一 target index 读到 exact text + 正式 marker 才确认完成。不能退化成“文本稳定就完成”，也不重新把可能滞留的全局 Stop control 设为主完成条件。
 6. Chat Completions SSE 与 Responses SSE 使用不同协议 Encoder，但共享同一套 protocol-neutral internal stream events。
 7. Client abort（客户端主动断开）发生在生成尚未完成时，Gateway 必须 best-effort 停止 ChatGPT 当前生成，并保持 SQLite `in_flight`，让下一次同 key 请求通过 Phase 4 REBUILD 收敛，而不是把部分回答伪装成已提交历史。
 8. Streaming 成功只有在最终 Assistant 文本、ChatGPT Conversation URL 和 SQLite aggregate 已确认提交后，才发送协议终止成功事件。
@@ -37,7 +37,7 @@ Phase 5 不是重新设计 Conversation 或 Browser 生命周期。以下 Phase 
 - 成功后一次 `ConversationStore.save()` 原子保存 authoritative messages、Assistant、Conversation URL 和 clean checkpoint。
 - post-checkpoint 未知失败不猜网页副作用，保持 `in_flight`，下一请求 REBUILD。
 - Driver 已使用 Assistant baseline 锁定本请求新 Assistant turn。
-- 当前真实 DOM 已证明全局 `stop-button` 可能在回答文本稳定后继续滞留，因此目标 Assistant turn 的 `copy-turn-action-button` completion marker 才是当前更可靠的完成边界。
+- 当前真实 DOM 已证明全局 `stop-button` 可能在回答文本稳定后继续滞留，因此目标 Assistant turn 的 `copy-turn-action-button` completion marker 仍是主完成边界。2026-08-29 reduced combined 又证明原 Page 的 action completion UI 也可能在 240 秒窗口内一直不挂载，而之后重开同一服务器 Conversation 时完整正文和 action UI 已存在。Driver 因此不再从 Stop 消失猜 completion；只有同一 request 已经亲眼见过唯一 Stop、没有非-prose Assistant 状态且同一正文持续稳定后，才允许临时 verifier Page 重开**同一个** Conversation，并要求同一 target index / exact text / formal marker 三者同时成立。
 - 当前非流式 `sendText()` 最终返回完整 Assistant text + safe ChatGPT Conversation URL。
 
 Phase 5 只在这些已验证边界上增加 Streaming，不重新定义 FRESH / APPEND / RESTORE / REBUILD。
@@ -74,7 +74,7 @@ Phase 5 仍是**纯文本执行阶段**。附件、Tools、Structured Output 和
 2. **Stable Prefix 是唯一允许提交给客户端的文本。** 未稳定尾部只存在于内存 snapshot window，不提前发出。
 3. **已提交 prefix 不允许回退。** 如果后续 DOM snapshot 不再以已提交文本为前缀，立即进入稳定的 stream divergence failure；不能向客户端发送“修正字符”。
 4. **最终 completion snapshot 可以强制 flush 未稳定尾部。** completion marker 已出现且最终文本通过稳定确认后，不再要求尾部额外等待普通 Stable Prefix window。
-5. **全局 Stop control 不再是完成必要条件。** 它主要用于用户取消时执行 `stop()`；completion marker + final stable text 才决定成功。
+5. **全局 Stop control 不再是主完成必要条件。** 正常成功仍由 completion marker + final stable text 决定；只有原 Page marker 长时间未挂载时，Driver 才在“本轮曾观察到唯一 Stop + 无非-prose Assistant 状态 + 同一非空正文持续稳定”后启动 same-Conversation verifier。verifier 必须在同一 target index 得到 exact text + 正式 marker；Stop 消失、Stop 仍存在或仅仅正文稳定都不直接决定成功。
 6. **Client abort 在 completion 之前发生时，不保存 partial Assistant。** checkpoint 保持 `in_flight`，Page binding 失败释放，下一同 key 请求 REBUILD。
 7. **Client abort 在 completion 已经被确认之后发生时，不回滚已完成网页 turn。** Engine 继续 best-effort 完成 SQLite final save；只是客户端不再收到剩余 protocol frames。
 8. **SSE 成功终止必须晚于 SQLite clean commit。** 客户端收到 `[DONE]` 或 `response.completed` 时，本地持久化已经是 clean authoritative state。
@@ -298,7 +298,9 @@ click Send
 
 2026-08-17 authenticated real E2E 发现，Fresh/REBUILD 首次发送后 ChatGPT 会先进入 provisional `/c/WEB:<uuid>` bootstrap route，并在该阶段短暂暴露一个 Assistant collection 节点；随后切换到正式 `/c/<uuid>` route 时，同一 collection index 的内容会被替换为真正回答。这个 provisional 节点**不是 authoritative Assistant target**，不得进入 Stable Prefix 或向客户端输出。对于从无安全 Conversation URL 的 Fresh 页面开始的 `startText()`，`observe()` 必须在正式可恢复 Conversation URL 建立前继续返回 missing snapshot；一旦正式 URL 建立，仍按发送前 baseline index 锁定该请求的 target turn。APPEND/RESTORE 已从正式 Conversation URL 开始，不受该 route gate 影响。
 
-同一轮 authenticated APPEND real E2E 还确认：即使 URL 已经是正式 `/c/<uuid>`，ChatGPT 仍可能先在新 Assistant index 挂载一个约 8 code points 的临时 placeholder；该节点没有正文 `.markdown` content，随后会被卸载，再由真正回答重新占用该 target index。Phase 5 纯文本 authoritative snapshot 因此必须同时满足：**owned Assistant turn index 存在，且该 turn 内唯一 `.markdown` 正文节点存在**。只有 placeholder、正文节点 count=0 时 `observe()` 继续返回 missing；正文节点 count>1 视为 selector ambiguity。输出文本读取该正文节点的 `innerText()`，completion marker 仍从 owned Assistant turn 的 ancestor action 区判断。
+同一轮 authenticated APPEND real E2E 还确认：即使 URL 已经是正式 `/c/<uuid>`，ChatGPT 仍可能先在新 Assistant index 挂载一个约 8 code points 的临时 placeholder；该节点没有 authoritative prose content，随后会被卸载，再由真正回答重新占用该 target index。Phase 5 纯文本 authoritative snapshot 因此必须同时满足：**owned Assistant turn index 存在，且该 turn 内唯一 `.markdown.prose` 正文节点存在**。只有 placeholder、正文节点 count=0 时 `observe()` 继续返回 missing；authoritative prose 正文节点 count>1 视为 selector ambiguity。输出文本读取该正文节点的 `innerText()`，completion marker 仍从 owned Assistant turn 的 ancestor action 区判断。
+
+2026-08-28 final-candidate combined Phase 3→8 又确认一个网页状态边界：网络短暂中断时，同一个 owned Assistant turn 可以在真正 `.markdown.prose` 回答旁额外挂载非 prose `.markdown` 状态块，文本为 `Connection interrupted. Waiting for the complete answer`。这个状态节点属于网页传输/生成状态，不是 Assistant authoritative content；正文 selector 必须排除它，但多个 `.markdown.prose` 仍保持严格 ambiguity，避免通过 `.first()` 截断 writing-block/editor 等结构化输出。
 
 禁止：
 
@@ -355,7 +357,8 @@ export interface ChatGptTextDriver {
 ```text
 capture Assistant baseline
 → resolve unique composer
-→ fill prompt
+→ focus composer
+→ enter single-line prompt with keyboard text input OR multiline prompt as one text/plain ProseMirror paste transaction
 → acknowledge exact known conversation-history rate-limit notification if uniquely visible
 → resolve unique send button
 → click Send
@@ -363,6 +366,8 @@ capture Assistant baseline
 ```
 
 它不等待完整回答。
+
+2026-08-28 V1 abort→REBUILD 调试补充了输入边界：`Locator.fill()` 可让多段文本完整显示在 Composer DOM，却在 Send 后只形成第一段 Web user turn；整段 `keyboard.insertText()` 在普通 Fresh Page 可行，但在 PagePool replacement-before-close 产生的新 Page 上同样只保留第一段。无发送 replacement DOM probe 证明同一 ProseMirror 节点并未 remount，问题是 multiline `insertText` 事务本身；对 multiline 分发 `text/plain` paste 事件后，完整段落结构与 Send readiness 均出现。因此当前设计把单行与多行输入路径分开，不通过直接改 `innerHTML` 或绕过 ProseMirror 状态提交文本。
 
 2026-08-17 authenticated real E2E 在重复多轮验收后观察到 ChatGPT 会挂载 `data-testid="modal-conversation-history-rate-limit"` 通知层，唯一按钮为 `Got it`。隔离 Profile 实验确认：第一轮请求正常完成后该通知出现；点击 `Got it` 只关闭 overlay，同一正式 Conversation URL 上第二轮请求仍可立即正常完成，说明它不是 CAPTCHA/MFA/人机验证，也不是服务端拒绝本次 Send。Driver 因此只允许在 **该精确 testid 唯一、可见，且其内部 `Got it` 按钮唯一** 时确认通知，然后再执行普通 Send；不匹配其它 modal，不 force-click，不自动处理任何登录、MFA 或 challenge UI。modal 或按钮 ambiguity 继续返回稳定 selector error。
 
@@ -433,7 +438,8 @@ observe target
 - 已经 click Send 但 target Assistant turn 还没挂载时，`stop()` 仍允许通过严格唯一的 Stop control 取消本轮生成；“target 尚未出现”不能被误判为“无需停止”。
 - `stop()` 不负责持久化 partial Assistant。
 - Abort cleanup 的 stop failure 记录受控诊断，但客户端通常已经断开，不再尝试写 HTTP error。
-- stop timeout 不能导致无限 shutdown；实现使用内部 bounded timeout。
+- stop timeout 不能导致无限 shutdown；实现使用内部 bounded timeout，而且这个预算必须覆盖 Stop `locator.click()` 本身，不能让 Playwright 较长的默认 click timeout 绕过取消上限。
+- Stop 在 inspect 时严格唯一、但在实际 click 前因本轮自然完成而 detach 时，重新观察 owned target；若 completion marker 已建立则收敛为 `already_complete`，不把 DOM race 误报为取消失败。
 - Stop control 的**存在**不再参与成功 completion 的必要条件，因为 Phase 4 real E2E 已证明它可能滞留。
 
 ## 11. Assistant Snapshot（Assistant 快照）
@@ -630,25 +636,25 @@ Phase 5 不引入复杂 diff 库。
 target Assistant turn completion marker present
 ```
 
-是主要完成信号。
+仍是主要完成信号。全局 Stop 的**存在**不是主 marker 成功的必要条件，因为它可能在答案已经完成后滞留。
 
-Phase 5 不回退到：
+2026-08-29 后增加一个只处理 stalled original Page 的 bounded verifier。它不是简单的：
 
 ```text
 global Stop button disappeared
 ```
 
-作为必要条件。
+而必须先在**同一 request** 观察到唯一 Stop，证明该 turn 确实处于生成态；owned Assistant turn 没有非-prose `.markdown` 状态块，并且同一非空 authoritative text 持续稳定至少 5 秒。之后才允许同一 BrowserContext 创建临时 verifier Page、重开相同 Conversation URL；verifier 必须在同一 target index 看到唯一 authoritative prose、exact text 和唯一正式 completion marker。Stop 从未出现、正文仍变化、存在 `Connection interrupted...` 一类状态、verifier 文本不同或 verifier marker 缺失时都保持未完成。verifier 不输入、不 Send，用完立即关闭，因此不会新建 ChatGPT Conversation。
 
 ### 14.2 Completion requirements
 
-完成必须同时满足：
+Streaming 完成必须同时满足：
 
-1. target turn 已经出现。
-2. target turn completion marker 存在且 unique。
+1. target turn 已经出现，且 authoritative `.markdown.prose` 唯一。
+2. completion evidence 成立：target turn completion marker 存在且 unique；**或**上述 same-Conversation verifier 已对同一 target index 的 exact text + unique formal marker 完成确认。
 3. normalized text 非空。
-4. completion marker 出现后，最终文本连续 `3` 次 sample 完全一致。
-5. 再做一次 final observation；marker 仍存在且文本仍完全一致。
+4. completion evidence 成立后，最终文本连续 `3` 次 stream sample 完全一致。
+5. 再做一次 final observation；completion evidence 仍成立且文本仍完全一致。
 
 最终确认后得到：
 
@@ -660,10 +666,10 @@ interface CompletedAssistant {
 
 ### 14.3 Timeout
 
-继续保留当前 generation timeout baseline：
+当前 generation timeout baseline：
 
 ```text
-120s
+240s
 ```
 
 - timeout 前从未看到 target → `chatgpt_response_missing`

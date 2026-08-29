@@ -1,7 +1,7 @@
 import type { Page } from 'playwright';
 
 import { ChatGptDriverError } from './errors.js';
-import { inspectUnique, type SelectorDefinition } from './selector-registry.js';
+import { inspectCollection, inspectUnique, type SelectorDefinition } from './selector-registry.js';
 import { composerSelector, loginIndicatorSelector } from './selectors.js';
 
 export type ChatGptAuthState =
@@ -9,7 +9,7 @@ export type ChatGptAuthState =
 
 export interface ChatGptAuthSelectors {
   composer: SelectorDefinition<'unique'>;
-  loginIndicator: SelectorDefinition<'unique'>;
+  loginIndicator: SelectorDefinition<'collection'>;
 }
 
 const defaultSelectors: ChatGptAuthSelectors = {
@@ -36,11 +36,8 @@ async function inspectAuthState(
     throwAmbiguous(selectors.composer, composer.candidateName);
   }
 
-  const login = await inspectUnique(page, selectors.loginIndicator);
-  if (login.status === 'unique') return { state: 'auth_required' };
-  if (login.status === 'ambiguous') {
-    throwAmbiguous(selectors.loginIndicator, login.candidateName);
-  }
+  const login = await inspectCollection(page, selectors.loginIndicator);
+  if (login.count > 0) return { state: 'auth_required' };
 
   return { state: 'unknown', reason: 'composer_and_login_indicator_missing' };
 }

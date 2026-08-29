@@ -91,7 +91,7 @@ function request(options: {
 }
 
 function protocol(calls: Array<{ name: string; arguments: Record<string, unknown> }>): string {
-  return `${TOOL_PROTOCOL_START}\n${JSON.stringify({ calls })}\n${TOOL_PROTOCOL_END}`;
+  return `${TOOL_PROTOCOL_START}\n${JSON.stringify({ requests: calls })}\n${TOOL_PROTOCOL_END}`;
 }
 
 class FakePage {
@@ -186,7 +186,7 @@ function payload(prompt: string): Record<string, unknown> {
 }
 
 describe('Conversation Engine tool calling', () => {
-  it('persists a Gateway-owned tool call and APPENDs a tool result to final text', async () => {
+  it('persists a Gateway-owned tool call and REBUILDs when the function policy changes to none', async () => {
     const db = persistence();
     const driver = new FakeDriver();
     const registry = new FakePageRegistry();
@@ -238,26 +238,51 @@ describe('Conversation Engine tool calling', () => {
         conversationKey: 'tool-thread',
         messages: [toolResult(first.toolCalls[0]!.id, '{"condition":"sunny"}')],
         tools: [weather],
-        toolChoice: { mode: 'auto' },
+        toolChoice: { mode: 'none' },
       }),
     );
     expect(second).toMatchObject({ type: 'text', text: 'The weather result is sunny.' });
 
-    const append = payload(driver.prompts[1]!);
-    expect(append).toMatchObject({
+    expect(driver.openedFresh).toEqual([0, 1]);
+    expect(driver.openedConversation).toEqual([]);
+    const rebuilt = payload(driver.prompts[1]!);
+    expect(rebuilt).toMatchObject({
       version: 2,
-      tool_policy: { mode: 'auto' },
+      function_policy: {
+        mode: 'none',
+        require_function_request: false,
+        allowed_functions: [],
+      },
+      history: [
+        { role: 'user', text: 'What is the weather in Xiamen?' },
+        {
+          role: 'assistant',
+          external_function_requests: [
+            {
+              request_id: first.toolCalls[0]!.id,
+              name: 'get_weather',
+              arguments: '{"city":"Xiamen"}',
+            },
+          ],
+        },
+      ],
       pending: [
         {
-          role: 'tool',
-          tool_call_id: first.toolCalls[0]!.id,
+          role: 'external_function_result',
+          request_id: first.toolCalls[0]!.id,
           name: 'get_weather',
-          output: '{"condition":"sunny"}',
+          result: '{"condition":"sunny"}',
         },
       ],
     });
-    expect(append).not.toHaveProperty('tools');
-    expect(append).not.toHaveProperty('history');
+    expect(rebuilt).not.toHaveProperty('external_functions');
+    expect(driver.prompts[1]).toContain(
+      'Continue the prior user request using the pending external function result data now.',
+    );
+    expect(driver.prompts[1]).toContain(
+      'The current function_policy overrides earlier function-request instructions for this turn. Do not create or repeat any external function request.',
+    );
+    expect(driver.prompts[1]).not.toContain('Answer the final pending user message now.');
 
     const final = db.conversationStore.loadByKey('tool-thread');
     expect(final?.messages.map((message) => message.role)).toEqual([
@@ -310,7 +335,7 @@ describe('Conversation Engine tool calling', () => {
     const db = persistence();
     const driver = new FakeDriver();
     driver.results.push({
-      text: `${TOOL_PROTOCOL_START}\n{"calls":[`,
+      text: `${TOOL_PROTOCOL_START}\n{"requests":[`,
       conversationUrl: 'https://chatgpt.com/c/tool-bad',
     });
     const execute = createConversationEngine({

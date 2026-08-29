@@ -97,6 +97,7 @@ class TestRegistry implements ConversationPageRegistry {
 class TestDriver implements ChatGptStreamingTextDriver {
   readonly requests: ChatGptTextRequest[] = [];
   nextStartError?: Error;
+  nextText?: string;
 
   async openFresh(): Promise<void> {}
 
@@ -106,7 +107,9 @@ class TestDriver implements ChatGptStreamingTextDriver {
 
   async sendText(_page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult> {
     this.requests.push(request);
-    return { text: 'phase6-http-ok', conversationUrl: 'https://chatgpt.com/c/phase6-http' };
+    const text = this.nextText ?? 'phase6-http-ok';
+    this.nextText = undefined;
+    return { text, conversationUrl: 'https://chatgpt.com/c/phase6-http' };
   }
 
   async startText(_page: Page, request: ChatGptTextRequest): Promise<ChatGptTextTurn> {
@@ -570,7 +573,7 @@ describe('Phase 6 cross-protocol attachment HTTP matrix', () => {
     expect((await second).status).toBe(200);
   });
 
-  it('allows Phase 7 Tools while Structured Output remains unsupported with attachment execution enabled', async () => {
+  it('allows Phase 7 Tools and Structured Output with attachment execution enabled', async () => {
     const context = setup();
     const base = await listen(context);
 
@@ -588,13 +591,20 @@ describe('Phase 6 cross-protocol attachment HTTP matrix', () => {
     expect(tools.status).toBe(200);
     expect(await tools.json()).toMatchObject({ choices: [{ finish_reason: 'stop' }] });
 
+    context.driver.nextText = '{"ok":true}';
     const structured = await postJson(base, '/v1/responses', {
       ...responsesBody([{ type: 'input_text', text: 'structured' }]),
       text: { format: { type: 'json_object' } },
     });
-    expect(structured.status).toBe(501);
+    expect(structured.status).toBe(200);
     expect(await structured.json()).toMatchObject({
-      error: { code: 'unsupported_phase7_request' },
+      object: 'response',
+      status: 'completed',
+      output: [
+        {
+          content: [{ type: 'output_text', text: '{"ok":true}' }],
+        },
+      ],
     });
   });
 });

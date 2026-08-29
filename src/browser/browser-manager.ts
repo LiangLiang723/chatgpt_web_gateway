@@ -22,6 +22,7 @@ export interface CreateBrowserManagerOptions {
   maxActivePages: number;
   proxyServer?: string;
   launchPersistentContext?: LaunchPersistentContext;
+  onUnexpectedClose?: () => void;
 }
 
 const defaultLaunchPersistentContext: LaunchPersistentContext = (profileDir, options) =>
@@ -52,6 +53,11 @@ export async function createBrowserManager(
 
   const pages = createPagePool(context, { maxOpenPages: options.maxActivePages });
   let closed = false;
+  if (options.onUnexpectedClose) {
+    context.once('close', () => {
+      if (!closed) options.onUnexpectedClose?.();
+    });
+  }
 
   return {
     context,

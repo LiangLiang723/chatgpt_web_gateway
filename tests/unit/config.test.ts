@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       maxActivePages: 4,
       pageIdleTimeoutMinutes: 30,
       chatgptProxyServer: undefined,
+      publicBaseUrl: undefined,
       novncPort: 6080,
       novncPassword: undefined,
     });
@@ -38,6 +39,7 @@ describe('loadConfig', () => {
         MAX_ACTIVE_PAGES: '7',
         PAGE_IDLE_TIMEOUT_MINUTES: '12',
         CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
+        PUBLIC_BASE_URL: ' https://gateway.example/base/ ',
         NOVNC_PORT: '7777',
         NOVNC_PASSWORD: 'maintenance-secret',
       }),
@@ -52,6 +54,7 @@ describe('loadConfig', () => {
       maxActivePages: 7,
       pageIdleTimeoutMinutes: 12,
       chatgptProxyServer: 'http://proxy.example:7890',
+      publicBaseUrl: 'https://gateway.example/base',
       novncPort: 7777,
       novncPassword: 'maintenance-secret',
     });
@@ -92,6 +95,20 @@ describe('loadConfig', () => {
 
   it('rejects unsupported UI modes', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', UI_MODE: 'desktop' })).toThrow(/UI_MODE/);
+  });
+
+  it('rejects invalid public base URLs', () => {
+    for (const value of [
+      'not-a-url',
+      'ftp://gateway.example',
+      'https://user:pass@gateway.example',
+      'https://gateway.example/path?query=1',
+      'https://gateway.example/path#fragment',
+    ]) {
+      expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PUBLIC_BASE_URL: value })).toThrow(
+        /PUBLIC_BASE_URL/,
+      );
+    }
   });
 
   it('rejects invalid or credential-bearing ChatGPT proxy servers', () => {

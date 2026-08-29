@@ -205,7 +205,7 @@ describe('ConversationPageRegistry', () => {
     await registry.close();
   });
 
-  it('drops closed Pages and fail() unbinds then releases exactly once', async () => {
+  it('drops closed Pages and fail() unbinds then closes the failed Page exactly once', async () => {
     const pool = new FakePool(2);
     const registry = createConversationPageRegistry({ pagePool: pool, idleTimeoutMs: 1000 });
 
@@ -217,8 +217,21 @@ describe('ConversationPageRegistry', () => {
     const beta = await registry.acquire('beta');
     await beta.fail();
     await beta.fail();
-    expect(pool.leases[1]!.releaseCalls).toBe(1);
+    expect(pool.leases[1]!.closeCalls).toBe(1);
+    expect(pool.leases[1]!.releaseCalls).toBe(0);
     expect(registry.hasAffinity('beta')).toBe(false);
+    await registry.close();
+  });
+
+  it('also closes a failed transient Page so a later request cannot reuse it', async () => {
+    const pool = new FakePool(1);
+    const registry = createConversationPageRegistry({ pagePool: pool, idleTimeoutMs: 1000 });
+
+    const session = await registry.acquire();
+    await session.fail();
+    expect(pool.leases[0]!.closeCalls).toBe(1);
+    expect(pool.leases[0]!.releaseCalls).toBe(0);
+    expect(pool.outstanding).toBe(0);
     await registry.close();
   });
 

@@ -9,7 +9,7 @@ const tools = [
 ];
 
 function envelope(calls: unknown): string {
-  return `${TOOL_PROTOCOL_START}\n${JSON.stringify({ calls })}\n${TOOL_PROTOCOL_END}`;
+  return `${TOOL_PROTOCOL_START}\n${JSON.stringify({ requests: calls })}\n${TOOL_PROTOCOL_END}`;
 }
 
 function expectCode(run: () => unknown, code: string): void {
@@ -89,7 +89,7 @@ describe('strict tool parser', () => {
     expectCode(
       () =>
         parseAssistantOutput(
-          `${TOOL_PROTOCOL_START}\n${JSON.stringify({ calls: [], extra: true })}\n${TOOL_PROTOCOL_END}`,
+          `${TOOL_PROTOCOL_START}\n${JSON.stringify({ requests: [], extra: true })}\n${TOOL_PROTOCOL_END}`,
           { tools, toolChoice: { mode: 'auto' } },
         ),
       'chatgpt_tool_protocol_invalid',

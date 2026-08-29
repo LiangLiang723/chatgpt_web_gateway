@@ -213,6 +213,53 @@ describe('POST routes', () => {
     });
   });
 
+  it('preserves Chat Completions tool_call_id through Fastify union validation', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = createApp(async (request) => {
+      received.push(request);
+      return textResult('continued');
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: { ...auth, 'x-conversation-key': 'chat-tool-result' },
+      payload: {
+        model: 'chatgpt-web',
+        messages: [
+          {
+            role: 'tool',
+            tool_call_id: 'call_previous',
+            content: 'TOOL_RESULT_TOKEN',
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'deterministic_echo',
+              parameters: { type: 'object' },
+            },
+          },
+        ],
+        tool_choice: 'none',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(received[0]).toMatchObject({
+      conversationKey: 'chat-tool-result',
+      messages: [
+        {
+          role: 'tool',
+          toolCallId: 'call_previous',
+          content: [{ type: 'text', text: 'TOOL_RESULT_TOKEN' }],
+        },
+      ],
+      toolChoice: { mode: 'none' },
+    });
+  });
+
   it('normalizes Responses function_call_output and encodes function_call items', async () => {
     const received: NormalizedRequest[] = [];
     const app = createApp(async (request) => {

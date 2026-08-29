@@ -78,20 +78,28 @@ describe('PagePool', () => {
     await second.release();
   });
 
-  it('closes a leased page exactly once and makes release after close a no-op', async () => {
-    const pool = createPagePool(context(), { maxOpenPages: 2 });
+  it('replaces the last leased page before closing it so a persistent context stays alive', async () => {
+    const fakeContext = new FakeContext();
+    const pool = createPagePool(fakeContext as unknown as BrowserContext, { maxOpenPages: 1 });
     const lease = await pool.acquire();
-    const page = lease.page as unknown as FakePage;
+    const failedPage = lease.page as unknown as FakePage;
 
     await lease.close();
     await lease.close();
     await lease.release();
 
-    expect(page.closed).toBe(true);
-    expect(page.closeCalls).toBe(1);
-    expect(pool.openCount).toBe(0);
+    expect(failedPage.closed).toBe(true);
+    expect(failedPage.closeCalls).toBe(1);
+    expect(fakeContext.created).toHaveLength(2);
+    const replacement = fakeContext.created[1]!;
+    expect(replacement.closed).toBe(false);
+    expect(pool.openCount).toBe(1);
     expect(pool.leasedCount).toBe(0);
-    expect(pool.idleCount).toBe(0);
+    expect(pool.idleCount).toBe(1);
+
+    const next = await pool.acquire();
+    expect(next.page).toBe(replacement);
+    await next.release();
   });
 
   it('makes close after release a no-op so an old lease cannot kill a re-leased Page', async () => {

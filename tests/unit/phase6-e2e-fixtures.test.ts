@@ -6,13 +6,25 @@ import {
   buildPngTokenFixture,
   buildTextFixture,
   buildXlsxFixture,
+  createImageToken,
 } from '../e2e/phase6-fixtures.js';
 
 describe('Phase 6 real E2E fixture builders', () => {
-  it('builds a deterministic PNG with the expected signature and non-trivial image payload', () => {
-    const bytes = buildPngTokenFixture('P6123456');
+  it('builds a deterministic PNG only for high-contrast solid-color markers', () => {
+    const bytes = buildPngTokenFixture('RED');
     expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(bytes.readUInt32BE(16)).toBe(512);
+    expect(bytes.readUInt32BE(20)).toBe(512);
     expect(bytes.byteLength).toBeGreaterThan(200);
+    expect(() => buildPngTokenFixture('GREEN')).toThrow(/RED or BLUE/);
+  });
+
+  it('creates distinct solid-color image markers for consecutive image turns', () => {
+    const first = createImageToken();
+    const second = createImageToken(first);
+    expect(first).toMatch(/^(?:RED|BLUE)$/);
+    expect(second).toMatch(/^(?:RED|BLUE)$/);
+    expect(second).not.toBe(first);
   });
 
   it('builds text and PDF fixtures containing the requested token', () => {

@@ -631,7 +631,7 @@ If a safe stable public fixture is available, run a real URL image path. If not,
 - Adds `corepack pnpm project:status` as the single repository recovery summary.
 - Adds `corepack pnpm test:e2e:chatgpt:phase3` so Phase 3 regressions can be diagnosed without running Phases 4–6.
 - Combined `test:e2e:chatgpt` requires both `E2E_CHATGPT=1` and `E2E_CHATGPT_COMBINED=1`.
-- Phase 6 standalone keeps all existing assertions while using exactly four logical ChatGPT conversation groups: images, documents, memory/restore, streaming.
+- Phase 6 standalone keeps all existing assertions while using exactly four logical ChatGPT conversation groups. The current live-stability layout is images, documents-primary, documents-secondary, and memory/restore; the memory/restore group's single new attachment turn is also the attachment Streaming request, so APPEND/RESTORE reuse that exact attachment context without creating another new attachment turn.
 
 - [x] **Step 1: RED/GREEN project status helper**
 
@@ -643,7 +643,7 @@ Extend the E2E environment gate tests so `E2E_CHATGPT_COMBINED=1` is mandatory o
 
 - [x] **Step 3: RED/GREEN Phase 6 conversation budget**
 
-Add a pure scenario grouping helper and unit test requiring exactly four groups. Refactor the standalone Phase 6 harness so Data URL + `file_id` images share the image key, TXT/PDF/DOCX/XLSX share the document key, APPEND/RESTORE keep their existing memory key, and Streaming remains isolated. Keep unique per-turn fixture tokens and current Attachment persistence assertions so conversation reuse cannot hide a missing current upload.
+Add a pure scenario grouping helper and unit test requiring exactly four unique groups. Data URL + `file_id` images share the image key; XLSX + TXT use documents-primary; PDF + DOCX use documents-secondary; memory/restore has exactly one new attachment turn, and that same request must both prove attachment Streaming and seed the token used by later APPEND/RESTORE. APPEND/RESTORE add no new file. Keep unique per-attachment-turn fixture tokens and current Attachment persistence assertions so conversation reuse cannot hide a missing current upload. 2026-08-29 focused live evidence first showed that a fourth consecutive new-document analysis in one ChatGPT Web Conversation can fail with `chatgpt_response_missing` independent of whether that fourth format is XLSX or DOCX, while Fresh XLSX succeeds. A later full run then reached attachment Streaming as the third new attachment in documents-secondary but answered with the earlier PDF token despite explicit current-attachment wording. Moving Streaming to memory/restore avoided that collision, but adding a separate memory fixture afterward made restart RESTORE recall the earlier Streaming token. The final layout therefore fixes new attachment turns at **2 / 2 / 2 / 1**, merges Streaming + memory seed into one request, and reduces the full standalone gate by one real request without increasing the Conversation budget.
 
 - [x] **Step 4: Persist single-session and real-E2E retry discipline**
 

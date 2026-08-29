@@ -26,12 +26,23 @@ function unique(name: string, counts: number[]): SelectorDefinition<'unique'> {
   };
 }
 
+function collection(name: string, counts: number[]): SelectorDefinition<'collection'> {
+  return {
+    name,
+    cardinality: 'collection',
+    candidates: counts.map((count, index) => ({
+      name: `${name}-${index + 1}`,
+      locate: () => locator(count),
+    })),
+  };
+}
+
 describe('ChatGPT auth probe', () => {
   it('reports authenticated when the composer is uniquely available', async () => {
     await expect(
       probeAuth(page, {
         composer: unique('composer', [1]),
-        loginIndicator: unique('login', [0]),
+        loginIndicator: collection('login', [0]),
       }),
     ).resolves.toEqual({ state: 'authenticated' });
   });
@@ -54,9 +65,9 @@ describe('ChatGPT auth probe', () => {
         },
       ],
     };
-    const loginIndicator: SelectorDefinition<'unique'> = {
+    const loginIndicator: SelectorDefinition<'collection'> = {
       name: 'login',
-      cardinality: 'unique',
+      cardinality: 'collection',
       candidates: [
         {
           name: 'login-missing',
@@ -76,11 +87,11 @@ describe('ChatGPT auth probe', () => {
     });
   });
 
-  it('reports auth_required only when an explicit login indicator is unique', async () => {
+  it('reports auth_required when one or more explicit login indicators are visible', async () => {
     await expect(
       probeAuth(page, {
         composer: unique('composer', [0]),
-        loginIndicator: unique('login', [1]),
+        loginIndicator: collection('login', [2]),
       }),
     ).resolves.toEqual({ state: 'auth_required' });
   });
@@ -89,7 +100,7 @@ describe('ChatGPT auth probe', () => {
     await expect(
       probeAuth(page, {
         composer: unique('composer', [0]),
-        loginIndicator: unique('login', [0]),
+        loginIndicator: collection('login', [0]),
       }),
     ).resolves.toEqual({
       state: 'unknown',
@@ -97,11 +108,11 @@ describe('ChatGPT auth probe', () => {
     });
   });
 
-  it('preserves selector ambiguity instead of misreporting auth_required', async () => {
+  it('preserves composer selector ambiguity instead of misreporting auth_required', async () => {
     await expect(
       probeAuth(page, {
         composer: unique('composer', [2]),
-        loginIndicator: unique('login', [1]),
+        loginIndicator: collection('login', [1]),
       }),
     ).rejects.toMatchObject({
       code: 'selector_ambiguous',

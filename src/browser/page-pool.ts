@@ -71,6 +71,10 @@ export function createPagePool(context: BrowserContext, options: CreatePagePoolO
         },
         async close() {
           if (state !== 'active') return;
+          if (!closed && !page.isClosed() && open.size === 1 && open.has(page)) {
+            const replacement = await context.newPage();
+            trackPage(replacement, 'idle');
+          }
           state = 'closed';
           leased.delete(page);
           removePage(page);

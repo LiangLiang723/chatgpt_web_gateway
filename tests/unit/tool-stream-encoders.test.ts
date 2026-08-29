@@ -44,7 +44,7 @@ describe('tool-call streaming encoders', () => {
       },
     ]);
     expect(bodies[2].choices[0].finish_reason).toBe('tool_calls');
-    expect(JSON.stringify(frames)).not.toContain('CHATGPT_WEB_GATEWAY_TOOL_CALLS');
+    expect(JSON.stringify(frames)).not.toContain('EXTERNAL_FUNCTION_REQUESTS');
   });
 
   it('encodes Responses function_call lifecycles and one response.completed', () => {

@@ -57,7 +57,7 @@ export async function waitForAssistantFinalSnapshot(
   const clock = options.clock;
   const startedAt = clock?.now() ?? Date.now();
   const pollIntervalMs = options.pollIntervalMs ?? 200;
-  const timeoutMs = options.timeoutMs ?? 120_000;
+  const timeoutMs = options.timeoutMs ?? 240_000;
   let sawTurn = false;
 
   while ((clock?.now() ?? Date.now()) - startedAt <= timeoutMs) {

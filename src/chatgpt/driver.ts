@@ -7,9 +7,17 @@ import {
   waitForAssistantFinalSnapshot,
   type WaitForAssistantCompletionOptions,
 } from './completion.js';
-import { parseSafeChatGptConversationUrl } from './conversation-url.js';
+import {
+  parseSafeChatGptConversationUrl,
+  type SafeChatGptConversationUrl,
+} from './conversation-url.js';
 import { asChatGptDriverError, ChatGptDriverError } from './errors.js';
-import { inspectCollection, inspectUnique, resolveUnique } from './selector-registry.js';
+import {
+  inspectCollection,
+  inspectUnique,
+  resolveUnique,
+  type SelectorDefinition,
+} from './selector-registry.js';
 import { chatGptSelectors } from './selectors.js';
 
 export type ChatGptTextTarget =
@@ -67,10 +75,17 @@ export interface CreateChatGptDriverOptions {
   stopTimeoutMs?: number;
   sendPollIntervalMs?: number;
   sendTimeoutMs?: number;
+  restorePollIntervalMs?: number;
+  restoreTimeoutMs?: number;
+  restoreStableSamples?: number;
   uploadPollIntervalMs?: number;
   uploadTimeoutMs?: number;
   uploadNow?: () => number;
   uploadSleep?: (ms: number) => Promise<void>;
+  completionNow?: () => number;
+  completionVerificationStableMs?: number;
+  completionVerificationRetryMs?: number;
+  completionVerificationPageTimeoutMs?: number;
 }
 
 export function createChatGptDriver(
@@ -89,12 +104,19 @@ export function createChatGptDriver(
   const stopTimeoutMs = options.stopTimeoutMs ?? 5_000;
   const sendPollIntervalMs = options.sendPollIntervalMs ?? 100;
   const sendTimeoutMs = options.sendTimeoutMs ?? 5_000;
+  const restorePollIntervalMs = options.restorePollIntervalMs ?? 100;
+  const restoreTimeoutMs = options.restoreTimeoutMs ?? 15_000;
+  const restoreStableSamples = options.restoreStableSamples ?? 2;
   const uploadPollIntervalMs = options.uploadPollIntervalMs ?? 100;
   const uploadTimeoutMs = options.uploadTimeoutMs ?? 60_000;
   const uploadNow = options.uploadNow ?? Date.now;
   const uploadSleep =
     options.uploadSleep ??
     ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const completionNow = options.completionNow ?? Date.now;
+  const completionVerificationStableMs = options.completionVerificationStableMs ?? 5_000;
+  const completionVerificationRetryMs = options.completionVerificationRetryMs ?? 30_000;
+  const completionVerificationPageTimeoutMs = options.completionVerificationPageTimeoutMs ?? 15_000;
 
   const ensureReady = async (page: Page): Promise<void> => {
     const auth = await authProbe(page);
@@ -111,6 +133,36 @@ export function createChatGptDriver(
         selectorName: chatGptSelectors.composer.name,
       });
     }
+  };
+
+  const waitForRequiredControl = async (
+    page: Page,
+    definition: SelectorDefinition<'unique'>,
+    context: string,
+  ): Promise<Locator> => {
+    const startedAt = Date.now();
+    let lastMissing: ChatGptDriverError | undefined;
+    while (Date.now() - startedAt <= sendTimeoutMs) {
+      try {
+        return (await resolveUniqueSelector(page, definition)).locator;
+      } catch (error) {
+        if (
+          !(error instanceof ChatGptDriverError) ||
+          error.code !== 'selector_missing' ||
+          error.selectorName !== definition.name
+        ) {
+          throw error;
+        }
+        lastMissing = error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, sendPollIntervalMs));
+    }
+    throw new ChatGptDriverError({
+      code: 'selector_missing',
+      message: `ChatGPT ${definition.name} did not appear ${context}`,
+      selectorName: definition.name,
+      cause: lastMissing,
+    });
   };
 
   const waitForSendControl = async (page: Page, context: string): Promise<Locator> => {
@@ -135,12 +187,12 @@ export function createChatGptDriver(
     });
   };
 
-  const dismissConversationHistoryRateLimitModal = async (page: Page): Promise<void> => {
+  const dismissConversationHistoryRateLimitModal = async (page: Page): Promise<boolean> => {
     const modal = await inspectUniqueSelector(
       page,
       chatGptSelectors.conversationHistoryRateLimitModal,
     );
-    if (modal.status === 'missing') return;
+    if (modal.status === 'missing') return false;
     if (modal.status === 'ambiguous') {
       throw new ChatGptDriverError({
         code: 'selector_ambiguous',
@@ -149,7 +201,7 @@ export function createChatGptDriver(
         candidateName: modal.candidateName,
       });
     }
-    if (!(await modal.locator.isVisible())) return;
+    if (!(await modal.locator.isVisible())) return false;
 
     const acknowledge = chatGptSelectors.conversationHistoryRateLimitAcknowledge.locate(
       modal.locator,
@@ -172,6 +224,29 @@ export function createChatGptDriver(
       });
     }
     await acknowledge.click();
+    return true;
+  };
+
+  const clickSendControl = async (
+    page: Page,
+    context: string,
+    throwIfAborted: () => void,
+  ): Promise<void> => {
+    const click = async (): Promise<void> => {
+      const sendButton = await waitForSendControl(page, context);
+      throwIfAborted();
+      await sendButton.click({ timeout: sendTimeoutMs });
+    };
+
+    try {
+      await click();
+    } catch (error) {
+      throwIfAborted();
+      const dismissed = await dismissConversationHistoryRateLimitModal(page);
+      if (!dismissed) throw error;
+      throwIfAborted();
+      await click();
+    }
   };
 
   const readConversationUrl = (page: Page): string => {
@@ -225,6 +300,63 @@ export function createChatGptDriver(
     return 'ready';
   };
 
+  const waitForRestoredConversationHydration = async (
+    page: Page,
+    expectedConversationUrl: SafeChatGptConversationUrl,
+  ): Promise<boolean> => {
+    const startedAt = Date.now();
+    let stableSignature: string | undefined;
+    let stableSamples = 0;
+
+    while (Date.now() - startedAt <= restoreTimeoutMs) {
+      const current = parseSafeChatGptConversationUrl(page.url());
+      if (!current || current.pathname !== expectedConversationUrl.pathname) return false;
+
+      const userTurns = await inspectCollectionSelector(page, chatGptSelectors.userTurns);
+      const assistantTurns = await inspectCollectionSelector(page, chatGptSelectors.assistantTurns);
+      let readySignature: string | undefined;
+
+      if (
+        userTurns.count > 0 &&
+        assistantTurns.count > 0 &&
+        userTurns.count === assistantTurns.count
+      ) {
+        const lastAssistantTurn = assistantTurns.locator.nth(assistantTurns.count - 1);
+        const completionMarker = chatGptSelectors.assistantTurnCompletion.locate(lastAssistantTurn);
+        const completionMarkerCount = await completionMarker.count();
+        if (completionMarkerCount > 1) {
+          throw new ChatGptDriverError({
+            code: 'selector_ambiguous',
+            message: 'Restored ChatGPT Assistant completion marker is ambiguous',
+            selectorName: chatGptSelectors.assistantTurnCompletion.name,
+            candidateName: chatGptSelectors.assistantTurnCompletion.candidateName,
+          });
+        }
+        const transientStatus = chatGptSelectors.assistantTransientStatus.locate(lastAssistantTurn);
+        if (completionMarkerCount === 1 && (await transientStatus.count()) === 0) {
+          readySignature = `${userTurns.count}:${assistantTurns.count}`;
+        }
+      }
+
+      if (readySignature !== undefined) {
+        if (readySignature === stableSignature) {
+          stableSamples += 1;
+        } else {
+          stableSignature = readySignature;
+          stableSamples = 1;
+        }
+        if (stableSamples >= restoreStableSamples) return true;
+      } else {
+        stableSignature = undefined;
+        stableSamples = 0;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, restorePollIntervalMs));
+    }
+
+    return false;
+  };
+
   const waitForAttachmentsReady = async (options: {
     tiles: Awaited<ReturnType<typeof inspectCollection>>;
     alerts: Awaited<ReturnType<typeof inspectCollection>>;
@@ -246,6 +378,104 @@ export function createChatGptDriver(
       }
       await uploadSleep(uploadPollIntervalMs);
       options.throwIfAborted();
+    }
+  };
+
+  const resynchronizeCompletedSourcePage = async (options: {
+    sourcePage: Page;
+    conversationUrl: string;
+    throwIfAborted: () => void;
+  }): Promise<boolean> => {
+    const expected = parseSafeChatGptConversationUrl(options.conversationUrl);
+    if (!expected) return false;
+    await options.sourcePage.reload({
+      waitUntil: 'domcontentloaded',
+      timeout: navigationTimeoutMs,
+    });
+    options.throwIfAborted();
+    const resynced = parseSafeChatGptConversationUrl(options.sourcePage.url());
+    if (!resynced || resynced.pathname !== expected.pathname) return false;
+    await ensureReady(options.sourcePage);
+    options.throwIfAborted();
+    await waitForRequiredControl(
+      options.sourcePage,
+      chatGptSelectors.composer,
+      'after completed Conversation reload',
+    );
+    options.throwIfAborted();
+    const remainingStop = await inspectUniqueSelector(
+      options.sourcePage,
+      chatGptSelectors.stopControl,
+    );
+    return remainingStop.status === 'missing';
+  };
+
+  const verifyCompletedConversation = async (options: {
+    sourcePage: Page;
+    conversationUrl: string;
+    baseline: number;
+    expectedText: string;
+    throwIfAborted: () => void;
+  }): Promise<boolean> => {
+    let verificationPage: Page | undefined;
+    try {
+      verificationPage = await options.sourcePage.context().newPage();
+      options.throwIfAborted();
+      await verificationPage.goto(options.conversationUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: navigationTimeoutMs,
+      });
+      options.throwIfAborted();
+
+      const expected = parseSafeChatGptConversationUrl(options.conversationUrl);
+      const restored = parseSafeChatGptConversationUrl(verificationPage.url());
+      if (!expected || !restored || restored.pathname !== expected.pathname) return false;
+
+      await ensureReady(verificationPage);
+      options.throwIfAborted();
+      const startedAt = Date.now();
+      while (Date.now() - startedAt <= completionVerificationPageTimeoutMs) {
+        const assistantTurns = await inspectCollectionSelector(
+          verificationPage,
+          chatGptSelectors.assistantTurns,
+        );
+        options.throwIfAborted();
+        if (assistantTurns.count > options.baseline) {
+          const turn = assistantTurns.locator.nth(options.baseline);
+          const textContent = chatGptSelectors.assistantTextContent.locate(turn);
+          const textContentCount = await textContent.count();
+          options.throwIfAborted();
+          if (textContentCount > 1) return false;
+          if (textContentCount === 1) {
+            const transientStatus = chatGptSelectors.assistantTransientStatus.locate(turn);
+            const transientStatusCount = await transientStatus.count();
+            options.throwIfAborted();
+            const completionMarker = chatGptSelectors.assistantTurnCompletion.locate(turn);
+            const completionMarkerCount = await completionMarker.count();
+            options.throwIfAborted();
+            if (completionMarkerCount > 1) return false;
+            if (
+              transientStatusCount === 0 &&
+              completionMarkerCount === 1 &&
+              (await textContent.innerText()) === options.expectedText
+            ) {
+              return resynchronizeCompletedSourcePage({
+                sourcePage: options.sourcePage,
+                conversationUrl: options.conversationUrl,
+                throwIfAborted: options.throwIfAborted,
+              });
+            }
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        options.throwIfAborted();
+      }
+      return false;
+    } catch (error) {
+      if (error instanceof TextStreamAbortedError) throw error;
+      return false;
+    } finally {
+      if (verificationPage) await verificationPage.close().catch(() => undefined);
     }
   };
 
@@ -281,12 +511,14 @@ export function createChatGptDriver(
           chatGptSelectors.attachmentUploadAlerts,
         );
         throwIfAborted();
-        const attachmentInput = await resolveUniqueSelector(page, chatGptSelectors.attachmentInput);
+        const attachmentInput = await waitForRequiredControl(
+          page,
+          chatGptSelectors.attachmentInput,
+          'before attachment upload',
+        );
         throwIfAborted();
         try {
-          await attachmentInput.locator.setInputFiles(
-            attachments.map((attachment) => attachment.path),
-          );
+          await attachmentInput.setInputFiles(attachments.map((attachment) => attachment.path));
         } catch (error) {
           throw new ChatGptDriverError({
             code: 'chatgpt_upload_failed',
@@ -308,9 +540,30 @@ export function createChatGptDriver(
         throwIfAborted();
       }
 
-      const composer = await resolveUniqueSelector(page, chatGptSelectors.composer);
+      const composer = await waitForRequiredControl(
+        page,
+        chatGptSelectors.composer,
+        'before Composer input',
+      );
       throwIfAborted();
-      await composer.locator.fill(request.prompt);
+      await composer.focus();
+      throwIfAborted();
+      if (request.prompt.includes('\n')) {
+        await composer.evaluate((element, prompt) => {
+          const clipboardData = new DataTransfer();
+          clipboardData.setData('text/plain', prompt);
+          element.dispatchEvent(
+            new ClipboardEvent('paste', {
+              bubbles: true,
+              cancelable: true,
+              clipboardData,
+              composed: true,
+            }),
+          );
+        }, request.prompt);
+      } else {
+        await page.keyboard.insertText(request.prompt);
+      }
       throwIfAborted();
       await dismissConversationHistoryRateLimitModal(page);
       throwIfAborted();
@@ -324,9 +577,17 @@ export function createChatGptDriver(
           });
         }
       }
-      const sendButton = await waitForSendControl(page, 'after Composer fill');
-      throwIfAborted();
-      await sendButton.click();
+      await clickSendControl(page, 'after Composer input', throwIfAborted);
+
+      let sawGeneratingStopControl = false;
+      let verificationStableText = '';
+      let verificationStableSince = completionNow();
+      let lastVerificationAttemptAt = Number.NEGATIVE_INFINITY;
+      const resetCompletionVerificationWindow = (): void => {
+        verificationStableText = '';
+        verificationStableSince = completionNow();
+        lastVerificationAttemptAt = Number.NEGATIVE_INFINITY;
+      };
 
       const observe = async (): Promise<AssistantSnapshot> => {
         if (waitingForStableConversationRoute) {
@@ -367,10 +628,72 @@ export function createChatGptDriver(
           });
         }
 
+        const text = await textContent.innerText();
+        let completionMarkerPresent = completionMarkerCount === 1;
+        if (completionMarkerPresent) {
+          const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
+          if (stopControl.status === 'ambiguous') {
+            throw new ChatGptDriverError({
+              code: 'selector_ambiguous',
+              message: 'ChatGPT stop control is ambiguous beside a completed target turn',
+              selectorName: chatGptSelectors.stopControl.name,
+              candidateName: stopControl.candidateName,
+            });
+          }
+          if (stopControl.status === 'unique') {
+            sawGeneratingStopControl = true;
+            const conversationUrl = parseSafeChatGptConversationUrl(page.url());
+            completionMarkerPresent =
+              conversationUrl !== undefined &&
+              (await resynchronizeCompletedSourcePage({
+                sourcePage: page,
+                conversationUrl: conversationUrl.href,
+                throwIfAborted,
+              }));
+            if (!completionMarkerPresent) {
+              resetCompletionVerificationWindow();
+              return { exists: true, text, completionMarkerPresent: false };
+            }
+          }
+        }
+        if (!completionMarkerPresent) {
+          const transientStatus = chatGptSelectors.assistantTransientStatus.locate(turn);
+          const transientStatusCount = await transientStatus.count();
+          if (transientStatusCount > 0 || text.trim().length === 0) {
+            resetCompletionVerificationWindow();
+          } else {
+            const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
+            if (stopControl.status === 'unique') sawGeneratingStopControl = true;
+
+            const now = completionNow();
+            if (text !== verificationStableText) {
+              verificationStableText = text;
+              verificationStableSince = now;
+              lastVerificationAttemptAt = Number.NEGATIVE_INFINITY;
+            } else if (
+              sawGeneratingStopControl &&
+              now - verificationStableSince >= completionVerificationStableMs &&
+              now - lastVerificationAttemptAt >= completionVerificationRetryMs
+            ) {
+              lastVerificationAttemptAt = now;
+              const conversationUrl = parseSafeChatGptConversationUrl(page.url());
+              if (conversationUrl) {
+                completionMarkerPresent = await verifyCompletedConversation({
+                  sourcePage: page,
+                  conversationUrl: conversationUrl.href,
+                  baseline,
+                  expectedText: text,
+                  throwIfAborted,
+                });
+              }
+            }
+          }
+        }
+
         return {
           exists: true,
-          text: await textContent.innerText(),
-          completionMarkerPresent: completionMarkerCount === 1,
+          text,
+          completionMarkerPresent,
         };
       };
 
@@ -378,24 +701,40 @@ export function createChatGptDriver(
         const current = await observe();
         if (current.exists && current.completionMarkerPresent) return 'already_complete';
 
-        const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
-        if (stopControl.status === 'ambiguous') {
-          throw new ChatGptDriverError({
-            code: 'selector_ambiguous',
-            message: 'ChatGPT stop control is ambiguous',
-            selectorName: chatGptSelectors.stopControl.name,
-            candidateName: stopControl.candidateName,
-          });
-        }
-        if (stopControl.status !== 'unique') {
-          throw new ChatGptDriverError({
-            code: 'selector_missing',
-            message: 'ChatGPT stop control is unavailable for cancellation',
-            selectorName: chatGptSelectors.stopControl.name,
-          });
-        }
+        const resolveStopControl = async (): Promise<Locator> => {
+          const stopControl = await inspectUniqueSelector(page, chatGptSelectors.stopControl);
+          if (stopControl.status === 'ambiguous') {
+            throw new ChatGptDriverError({
+              code: 'selector_ambiguous',
+              message: 'ChatGPT stop control is ambiguous',
+              selectorName: chatGptSelectors.stopControl.name,
+              candidateName: stopControl.candidateName,
+            });
+          }
+          if (stopControl.status !== 'unique') {
+            throw new ChatGptDriverError({
+              code: 'selector_missing',
+              message: 'ChatGPT stop control is unavailable for cancellation',
+              selectorName: chatGptSelectors.stopControl.name,
+            });
+          }
+          return stopControl.locator;
+        };
 
-        await stopControl.locator.click();
+        await dismissConversationHistoryRateLimitModal(page);
+        let stopControl = await resolveStopControl();
+        try {
+          await stopControl.click({ timeout: stopTimeoutMs });
+        } catch (error) {
+          const dismissed = await dismissConversationHistoryRateLimitModal(page);
+          const afterClickRace = await observe();
+          if (afterClickRace.exists && afterClickRace.completionMarkerPresent) {
+            return 'already_complete';
+          }
+          if (!dismissed) throw error;
+          stopControl = await resolveStopControl();
+          await stopControl.click({ timeout: stopTimeoutMs });
+        }
         const startedAt = Date.now();
         while (Date.now() - startedAt <= stopTimeoutMs) {
           const observation = await observe();
@@ -451,7 +790,8 @@ export function createChatGptDriver(
         if (!expected) return 'not_restorable';
 
         const current = parseSafeChatGptConversationUrl(page.url());
-        if (current?.pathname !== expected.pathname) {
+        const navigated = current?.pathname !== expected.pathname;
+        if (navigated) {
           await page.goto(expected.href, {
             waitUntil: 'domcontentloaded',
             timeout: navigationTimeoutMs,
@@ -462,6 +802,11 @@ export function createChatGptDriver(
         if (!restored || restored.pathname !== expected.pathname) return 'not_restorable';
 
         await ensureReady(page);
+        const readyUrl = parseSafeChatGptConversationUrl(page.url());
+        if (!readyUrl || readyUrl.pathname !== expected.pathname) return 'not_restorable';
+        if (navigated && !(await waitForRestoredConversationHydration(page, expected))) {
+          return 'not_restorable';
+        }
         return 'restored';
       } catch (error) {
         throw asChatGptDriverError(error);

@@ -19,6 +19,22 @@ function observations(values: AssistantSnapshot[]) {
 }
 
 describe('waitForStreamingCompletion', () => {
+  it('allows a slow first Assistant turn beyond two minutes by default', async () => {
+    const clock = scriptedClock();
+
+    await expect(
+      waitForStreamingCompletion({
+        observe: async () =>
+          clock.now() >= 180_000
+            ? { exists: true, text: 'late but valid', completionMarkerPresent: true }
+            : { exists: false, text: '', completionMarkerPresent: false },
+        clock,
+        pollIntervalMs: 60_000,
+        stableSamples: 1,
+      }),
+    ).resolves.toBe('late but valid');
+  });
+
   it('requires the target completion marker plus three stable final samples and a final reread', async () => {
     const observe = observations([
       { exists: false, text: '', completionMarkerPresent: false },

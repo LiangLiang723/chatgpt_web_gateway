@@ -1,6 +1,7 @@
 import { Ajv } from 'ajv';
 
 import { parseChatGptProxyServer } from './proxy.js';
+import { parsePublicBaseUrl } from './public-base-url.js';
 import { AppConfigSchema } from './schema.js';
 import type { AppConfig } from './schema.js';
 
@@ -62,6 +63,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1440,
     ),
     chatgptProxyServer: parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER),
+    publicBaseUrl: parsePublicBaseUrl(env.PUBLIC_BASE_URL),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),
     novncPassword: optionalNonEmpty(env.NOVNC_PASSWORD),
   };

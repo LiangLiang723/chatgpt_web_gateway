@@ -135,6 +135,41 @@ const executionErrorMap = {
     type: 'server_error',
     message: 'Gateway file storage failed',
   },
+  invalid_image_request: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The image generation request is invalid',
+  },
+  unsupported_image_request: {
+    statusCode: 400,
+    type: 'invalid_request_error',
+    message: 'The image generation request uses an unsupported option',
+  },
+  image_not_found: {
+    statusCode: 404,
+    type: 'invalid_request_error',
+    message: 'Generated image was not found',
+  },
+  chatgpt_image_missing: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT completed without a readable generated image',
+  },
+  chatgpt_image_ambiguous: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT produced multiple generated image candidates',
+  },
+  chatgpt_image_fetch_failed: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT generated image bytes could not be fetched',
+  },
+  image_storage_error: {
+    statusCode: 500,
+    type: 'server_error',
+    message: 'Gateway generated image storage failed',
+  },
   unsupported_phase7_request: {
     statusCode: 501,
     type: 'server_error',
@@ -159,6 +194,11 @@ const executionErrorMap = {
     statusCode: 502,
     type: 'server_error',
     message: 'ChatGPT violated the current tool choice policy',
+  },
+  chatgpt_structured_output_invalid: {
+    statusCode: 502,
+    type: 'server_error',
+    message: 'ChatGPT produced structured output that does not satisfy the requested format',
   },
   unsupported_phase6_request: {
     statusCode: 501,
@@ -282,11 +322,16 @@ export function gatewayErrorFromExecution(error: unknown): GatewayError | undefi
   const code = executionCodeFromUnknown(error);
   if (!code) return undefined;
   const mapped = executionErrorMap[code];
+  const rawParam =
+    typeof error === 'object' && error !== null && 'param' in error
+      ? (error as { param?: unknown }).param
+      : undefined;
   return new GatewayError({
     message: mapped.message,
     statusCode: mapped.statusCode,
     type: mapped.type,
     code,
+    param: typeof rawParam === 'string' ? rawParam : null,
   });
 }
 

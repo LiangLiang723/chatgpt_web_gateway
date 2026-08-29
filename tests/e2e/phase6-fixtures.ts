@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
@@ -23,63 +24,34 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([header, typeBytes, data, checksum]);
 }
 
-const GLYPHS: Record<string, string[]> = {
-  '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
-  '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
-  '2': ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
-  '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
-  '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
-  '5': ['11111', '10000', '10000', '11110', '00001', '00001', '11110'],
-  '6': ['01110', '10000', '10000', '11110', '10001', '10001', '01110'],
-  '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
-  '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-  '9': ['01110', '10001', '10001', '01111', '00001', '00001', '01110'],
-  G: ['01110', '10001', '10000', '10111', '10001', '10001', '01110'],
-  I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
-  M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
-  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-};
+const IMAGE_MARKERS = ['RED', 'BLUE'] as const;
+
+export function createImageToken(excludedToken?: string): string {
+  const candidates = IMAGE_MARKERS.filter((token) => token !== excludedToken);
+  return candidates[randomInt(0, candidates.length)]!;
+}
 
 export function buildPngTokenFixture(token: string): Buffer {
-  if (!/^P6\d{6}$/.test(token)) {
-    throw new Error('PNG marker must be P6 followed by six digits');
-  }
-  const scale = 8;
-  const margin = 16;
-  const glyphWidth = 5 * scale;
-  const glyphHeight = 7 * scale;
-  const spacing = scale;
-  const width = margin * 2 + token.length * glyphWidth + (token.length - 1) * spacing;
-  const height = margin * 2 + glyphHeight;
-  const pixels = Buffer.alloc(width * height * 3, 0xff);
+  const rgb =
+    token === 'RED'
+      ? ([255, 0, 0] as const)
+      : token === 'BLUE'
+        ? ([0, 0, 255] as const)
+        : undefined;
+  if (!rgb) throw new Error('PNG marker must be RED or BLUE');
 
-  let originX = margin;
-  for (const char of token) {
-    const glyph = GLYPHS[char];
-    if (!glyph) throw new Error(`Missing PNG glyph for ${char}`);
-    for (let row = 0; row < glyph.length; row += 1) {
-      for (let column = 0; column < 5; column += 1) {
-        if (glyph[row]?.[column] !== '1') continue;
-        for (let y = 0; y < scale; y += 1) {
-          for (let x = 0; x < scale; x += 1) {
-            const pixelX = originX + column * scale + x;
-            const pixelY = margin + row * scale + y;
-            const offset = (pixelY * width + pixelX) * 3;
-            pixels[offset] = 0;
-            pixels[offset + 1] = 0;
-            pixels[offset + 2] = 0;
-          }
-        }
-      }
-    }
-    originX += glyphWidth + spacing;
-  }
-
+  const width = 512;
+  const height = 512;
   const raw = Buffer.alloc(height * (1 + width * 3));
   for (let row = 0; row < height; row += 1) {
-    const rawOffset = row * (1 + width * 3);
-    raw[rawOffset] = 0;
-    pixels.copy(raw, rawOffset + 1, row * width * 3, (row + 1) * width * 3);
+    const rowOffset = row * (1 + width * 3);
+    raw[rowOffset] = 0;
+    for (let column = 0; column < width; column += 1) {
+      const offset = rowOffset + 1 + column * 3;
+      raw[offset] = rgb[0];
+      raw[offset + 1] = rgb[1];
+      raw[offset + 2] = rgb[2];
+    }
   }
 
   const ihdr = Buffer.alloc(13);

@@ -311,10 +311,12 @@ function assertRuntimeIdentity(id) {
       [
         'touch /data/.gateway-smoke-write',
         'test -d /data/files/blobs',
+        'test -d /data/generated',
         'test -d /data/temp',
         'touch /data/files/blobs/.gateway-smoke-write',
+        'touch /data/generated/.gateway-smoke-write',
         'touch /data/temp/.gateway-smoke-write',
-        'rm /data/.gateway-smoke-write /data/files/blobs/.gateway-smoke-write /data/temp/.gateway-smoke-write',
+        'rm /data/.gateway-smoke-write /data/files/blobs/.gateway-smoke-write /data/generated/.gateway-smoke-write /data/temp/.gateway-smoke-write',
       ].join(' && '),
     ],
     { quiet: true },

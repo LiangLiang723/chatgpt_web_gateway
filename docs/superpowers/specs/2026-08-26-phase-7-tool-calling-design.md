@@ -1,7 +1,7 @@
 # Phase 7 Tool Calling Design（工具调用设计）
 
 **Date:** 2026-08-26
-**Status:** Approved design; implementation candidate completed on 2026-08-27, authenticated real ChatGPT acceptance blocked before DOM/Auth inspection by unavailable network proxy
+**Status:** Accepted — final deterministic/Docker, standalone Phase 7, adjacent Phase 6, and reduced combined Phase 3→8 all passed on 2026-08-29
 
 ## 1. Goal（目标）
 
@@ -155,10 +155,10 @@ interface CanonicalFunctionTool {
 Tool fingerprint：
 
 ```text
-SHA-256(stable-json(canonical-tools))
+SHA-256(stable-json({ privateProtocolVersion, tools: canonical-tools, functionPolicy: normalized-tool-choice }))
 ```
 
-`tool_choice` 不写入 tool fingerprint。它是**每轮策略**，而不是工具定义身份；每次 Prompt 都显式携带当前 choice。
+`tool_choice` / function policy 必须写入 tool fingerprint。真实网页证明 function-request policy 会留在 ChatGPT Conversation 上下文中，单靠下一轮 Prompt 覆盖旧 policy 不够可靠；因此 tools 相同但 `auto|none|required|function(name)` 发生变化时也必须自动 `REBUILD(reason='tools_changed')`。私有网页协议版本同样写入 fingerprint：Gateway 升级模型侧协议后，既有带 tools 的网页 Conversation 必须保守 REBUILD。仅工具声明顺序变化仍保持 fingerprint 等价。
 
 ## 5. Tool Context Sync（工具上下文同步）
 
@@ -183,7 +183,7 @@ Planner 比较时额外比较 stored/current tool fingerprint：
 - 相同：可继续 APPEND / RESTORE。
 - 不同：`REBUILD(reason='tools_changed')`。
 
-任何工具新增、删除、描述变化、参数模式变化都保守 REBUILD。仅 tool declaration order 变化不 REBUILD。
+任何工具新增、删除、描述变化、参数模式变化、private protocol version 变化，或 function policy（`tool_choice`）变化都保守 REBUILD。仅 tool declaration order 变化不 REBUILD。
 
 ### 5.3 Pending browser turn（待发送网页轮次）
 
@@ -205,25 +205,25 @@ B. one or more consecutive tool-result messages
 
 FRESH / REBUILD 可以携带完整历史，其中包括过去的 Tool Call / Tool Result；最后 pending turn 仍按上面两种形态确定。
 
-## 6. Gateway Private Tool Protocol（网关私有工具协议）
+## 6. Gateway Private External Function Request Protocol（网关私有外部函数请求协议）
 
-ChatGPT Web 不提供 OpenAI function-calling wire protocol（线路协议），因此 Gateway 使用只存在于网页 Prompt/Assistant DOM 内的私有协议。
+ChatGPT Web 不提供 OpenAI function-calling wire protocol（线路协议）。V1 曾把 caller-defined function 描述成网页“可调用工具”；authenticated real E2E 证明 ChatGPT 会把这种说法解释为当前 chat 中不存在的原生/pseudo tool，并拒绝执行。V2 因此改变抽象：**ChatGPT 不拥有、也不执行这些函数；它只生成给外部程序执行的 function request record（函数请求记录）**。Gateway 再把记录翻译成 OpenAI `tool_calls` / `function_call`。
 
 ### 6.1 Sentinel（哨兵）
 
-固定协议标记：
+V2 固定协议标记：
 
 ```text
-<<<CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>
+<<<EXTERNAL_FUNCTION_REQUESTS_V1>>>
 <JSON payload>
-<<<END_CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>
+<<<END_EXTERNAL_FUNCTION_REQUESTS_V1>>>
 ```
 
 Payload：
 
 ```json
 {
-  "calls": [
+  "requests": [
     {
       "name": "get_weather",
       "arguments": {
@@ -236,33 +236,35 @@ Payload：
 
 ### 6.2 Model rules
 
-Tool Prompt 必须告诉 ChatGPT：
+模型侧上下文必须明确：
 
+- 声明的函数属于**外部执行程序**；ChatGPT 没有这些工具，也绝不能声称自己执行了它们。
+- 用户文本中的“call/use `<function>`”在该上下文中表示“生成一个 external function request record”，不是要求 ChatGPT 调用原生工具。
 - 普通回答直接输出普通文本，不能输出协议 marker（标记）。
-- 需要调用工具时，整个 Assistant output（助手输出）只能是一个完整 Tool Protocol envelope（工具协议信封）。
+- 需要外部函数时，整个 Assistant output（助手输出）只能是一个完整 Function Request envelope（函数请求信封）。
 - marker 之外只能有 whitespace（空白），不得有 Markdown fence（代码围栏）、解释或前后 prose（正文）。
-- `calls` 至少一项。
-- 每一项 name 必须来自当前工具列表。
+- `requests` 至少一项。
+- 每一项 name 必须来自当前外部函数列表。
 - `arguments` 必须是 JSON object（JSON 对象）。
-- 不得编造 Tool Result；调用后停止，等待客户端结果。
-- `tool_choice=none`：绝不输出 Tool Protocol。
-- `tool_choice=required`：必须输出至少一个 Tool Call。
-- 指定 function：所有调用只允许该函数，且至少一个调用。
+- 生成请求后停止，等待外部函数结果；不得编造结果。
+- `tool_choice=none`：模型侧 Prompt 不注入函数协议/schema，只按普通 Conversation + 外部结果数据继续回答。
+- `tool_choice=required`：必须输出至少一个 Function Request。
+- 指定 function：只生成该函数的请求，且至少一项；此时任务是“提取/生成该外部函数的 arguments”，不是“调用该工具”。
 
 ### 6.3 Why not Markdown JSON（为什么不用 Markdown JSON）
 
-不使用“请输出一个 JSON code block”作为协议，因为普通回答也可能自然包含 JSON/代码块，无法可靠区分业务文本和 Tool Call。固定首部 marker + strict parser 提供显式 framing（分帧）。
+不使用“请输出一个 JSON code block”作为协议，因为普通回答也可能自然包含 JSON/代码块，无法可靠区分业务文本和 Function Request。固定首部 marker + strict parser 提供显式 framing（分帧）。
 
 ## 7. Tool Prompt（工具提示）
 
 新增 `src/tools/prompt.ts`。
 
-Tool schema 只在需要建立/重建网页上下文时完整注入：
+模型可见字段使用 `external_functions` / `function_policy` / `function_requests`，不把 caller-defined function 描述成 ChatGPT-native `tools`。Schema 只在需要建立/重建网页上下文且本轮允许 function request 时完整注入：
 
-- FRESH：完整 tools + protocol rules。
-- REBUILD：完整 tools + protocol rules。
-- APPEND：如果 fingerprint 未变化，不重复完整 schema，只携带本轮 `tool_choice` 和当前输入。
-- RESTORE：原网页 Conversation 保留 schema；与 APPEND 相同。
+- FRESH：`auto|required|function` 时完整 external functions + request protocol rules；`none` 时不注入 schema/protocol。
+- REBUILD：与 FRESH 相同。
+- APPEND：如果 fingerprint 未变化，不重复完整 schema，只携带本轮 `function_policy` 和当前输入；`none` 仍携带最小 `function_policy={mode:none,...}`，明确禁止再次生成 request，但不重复 schema/protocol。由于同一网页 Conversation 仍保留上一轮 function-request 指令，`none` 的 Prompt 前导语还必须明确声明**本轮 policy 覆盖更早的 function-request 指令**，并禁止 create/repeat request。
+- RESTORE：原网页 Conversation 保留 schema；与 APPEND 相同。若恢复失败回退到 context/REBUILD，`none` 同样只携带最小禁止策略，不注入 schema/protocol。pending 只有 Tool Result 时，前导语必须把它描述成“继续此前 user request 所需的 external function result data”，不能错误声称存在“final pending user message”。
 
 Context Prompt v2（上下文提示版本 2）必须同时表达：
 
@@ -270,7 +272,7 @@ Context Prompt v2（上下文提示版本 2）必须同时表达：
 {
   "version": 2,
   "instructions": {},
-  "tools": {},
+  "external_functions": {},
   "history": [],
   "pending": []
 }
@@ -283,16 +285,18 @@ Append Prompt v2：
 ```json
 {
   "version": 2,
-  "tool_policy": {},
+  "function_policy": {},
   "pending": []
 }
 ```
 
-Tool Result 发送给 ChatGPT 时必须包含：
+`tool_choice=none` 时保留最小 `function_policy`，其 `mode=none`、`require_function_request=false`、`allowed_functions=[]`；同时省略完整 function schema 与 sentinel protocol。模型可见的 historical assistant Tool Call / Tool Result 也序列化为 `external_function_requests` / `external_function_result`，避免把旧历史重新解释成 ChatGPT-native tool activity。
 
-- `tool_call_id`
-- function name（从已持久化 call 解析，不能相信客户端重复提供）
-- output text
+Tool Result 发送给 ChatGPT 时必须包含中性的外部函数结果字段：
+
+- `request_id`（来自持久化 Gateway-owned call ID）
+- function `name`（从已持久化 call 解析，不能相信客户端重复提供）
+- `result` text
 
 这样 ChatGPT 能把结果和它上一轮请求的函数对应起来。
 
@@ -315,10 +319,10 @@ type ParsedAssistantOutput =
    - `auto` / `none` → text。
    - `required` / 指定 function → `chatgpt_tool_required`。
 3. 输出包含 sentinel：必须是“可选空白 + 完整 start marker + JSON + end marker + 可选空白”；否则 `chatgpt_tool_protocol_invalid`。
-4. JSON 必须 parse 成 object，唯一根字段 `calls`，calls 为 1..16 个。
-5. 每个 call 只允许 `name`、`arguments`；name 非空，arguments 是 JSON object。
+4. JSON 必须 parse 成 object，唯一根字段 `requests`，requests 为 1..16 个。
+5. 每个 request 只允许 `name`、`arguments`；name 非空，arguments 是 JSON object。
 6. name 不在当前 tools → `chatgpt_tool_unknown`。
-7. `tool_choice=none` 却出现 calls → `chatgpt_tool_forbidden`。
+7. `tool_choice=none` 却出现 requests → `chatgpt_tool_forbidden`。
 8. 指定 function 时出现其他 name → `chatgpt_tool_forbidden`。
 9. Parser 将 `arguments` 重新 `JSON.stringify()` 成协议需要的 arguments string，保证对外永远是合法 JSON。
 10. Parser 不尝试自动修 Markdown fence、缺括号、单引号、未知函数或损坏 JSON；失败必须显式返回稳定错误。
@@ -533,7 +537,7 @@ Tool schema 与 Tool Result 都是不可信输入。
 2. APPEND tool result → final text。
 3. multiple Tool Calls → multiple results → final text。
 4. second Tool Call after first results。
-5. RESTORE tool result continuation。
+5. function policy 不变时 RESTORE tool-result/user continuation；function policy 改变时必须 REBUILD。
 6. tools unchanged does not rebuild；tool order only changes does not rebuild。
 7. schema add/remove/change → REBUILD `tools_changed`。
 8. tool result unknown ID / duplicate result / mixed user+tool tail rejected。
@@ -553,9 +557,9 @@ Phase 7 不能复用 Phase 6 的 E2E 结论。新增 standalone Phase 7 harness�
 3. **multiple tools**：一次返回至少两个 tool calls，call IDs 唯一。
 4. **stream tool call**：SSE 中不出现 private marker/JSON content leak，最终 finish reason / Responses events 正确。
 5. **stream text with tools=auto**：模型选择普通文本时仍在生成阶段出现至少一个公开 text delta。
-6. **RESTORE**：释放/重新获取 page 后回传 tool result，继续原 Conversation。
+6. **policy-change REBUILD + stable-policy RESTORE**：restart 后从指定 function/required 切到 `tool_choice=none` 回传 Tool Result 时必须 REBUILD 到新 ChatGPT Conversation；随后保持相同 tools + `none` 再 restart 时必须 RESTORE 并保持 URL。
 7. **schema change REBUILD**：改变工具 schema 后使用新网页 Conversation 上下文，旧工具不可被继续调用。
-8. **combined Phase 3 → 4 → 5 → 6 → 7**：最终候选回归退出码 0。
+8. **combined V1 superset Phase 3 → 4 → 5 → 6 → 7 → 8**：最终候选回归退出码 0；该更强回归包含完整 Phase 7 语义门槛。
 
 真实网页测试遵循 `docs/testing.md` 已有请求预算、退避、Profile（配置）与敏感信息规则。
 
@@ -569,7 +573,7 @@ Phase 7 没有计划新增生产依赖或数据库 migration，但正式关闭 P
 - `corepack pnpm docker:smoke`。
 - authenticated `inspect:chatgpt`。
 - standalone Phase 7 real E2E。
-- combined Phase 3/4/5/6/7 real E2E。
+- combined V1 Phase 3/4/5/6/7/8 real E2E（作为原 Phase 3→7 门槛的严格超集）。
 
 如果实现事实证明无需 Docker 层变化，仍把 fresh smoke 作为回归证据，而不是声称“代码没碰 Docker 所以不用测”。
 
@@ -599,14 +603,16 @@ NEXT_TASK=write-phase-8-image-generation-spec
 
 ## 19. Current implementation evidence（当前实现证据）
 
-截至 2026-08-27，§4–§15 与 §17 的产品实现和 deterministic/Docker 验证已经落地：
+截至 2026-08-29，§4–§17 的 V2 产品实现与最终 authenticated acceptance 已全部关闭：
 
-- fresh `corepack pnpm verify`：**78/78 test files、537/537 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。
-- fresh `linux/amd64` Docker image ID：`sha256:7a74ac01608619baf130b765ba2b82b54f1262b971f2ac3fc1f97d7bcc882499`；full `docker:smoke` 通过。
-- standalone `test:e2e:chatgpt:phase7` 与 combined Phase 3→7 harness 已实现并通过 deterministic/type coverage。
-- authenticated real acceptance **尚未完成**：fresh `inspect:chatgpt` 使用既有隔离 re-auth Profile 与 `http://192.168.3.163:7890` 时在网页加载前失败为 `ERR_PROXY_CONNECTION_FAILED`；TCP 诊断确认该 proxy connection refused，最新 DevSpace direct `chatgpt.com:443` 复查为 network unreachable。按 `docs/testing.md` 的 real-E2E 退避规则，没有继续 standalone/combined 请求。
+- final RESTORE-hydration/Auth candidate fresh `corepack pnpm verify`：**86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；真实 Fastify HTTP regression 继续证明 Chat Completions `role=tool` 的 `tool_call_id` 不会被 union validator mutation 删除。
+- fresh `linux/amd64` product image 为 `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa`，full `docker:smoke` 通过；LAN proxy `http://192.168.3.83:7890` 只在构建/真实 E2E 环境显式提供，没有写入镜像或仓库默认配置。
+- V1 private Tool wording 的模型可靠性被真实网页证据否定后，§6–§7 已修订为 V2 external-function request semantics：caller-defined functions 只被描述为 Gateway 外部操作，ChatGPT 只生成 `EXTERNAL_FUNCTION_REQUESTS_V1` request records；协议版本绑定进 tool fingerprint，使旧 V1 网页上下文保守 REBUILD。
+- restart Tool Result continuation 先暴露 `tool_choice=none` 未进入 APPEND Prompt；继续真实验收后又证明即使 Prompt 显式覆盖旧 policy，复用原网页 Conversation 仍可能重新输出上一轮 external-function request。根因是持久化 `toolFingerprint` 只绑定 tools/protocol、没有绑定 function policy。当前候选把 normalized `tool_choice` 纳入 fingerprint，使 `function/required/auto ↔ none` 等 policy 变化通过现有 `tools_changed` 路径强制 REBUILD；policy 不变仍允许 APPEND/RESTORE。
+- 最终 standalone 前一轮又暴露 cross-URL RESTORE hydration race：Composer authenticated readiness 可先出现，而历史 user/assistant turns 仍为 `0/0`；随后同一页面水合为 `2/2` 且实际包含正确的 `P7RESTORE_*`。Driver 因此在跨 URL restore 时等待历史 turns 成对挂载、末个 Assistant completion marker 就绪且 count signature 稳定后才返回 `restored`。最终 standalone 随后返回 `singleTool/resultContinuation/policyRebuild/multipleTools/streamTool/streamText/restore/schemaRebuild=true`。
+- 紧邻的 Phase 6 final `2/2/2/1` standalone 九项全部通过；随后 reduced combined Phase 3→8 退出码 0，Phase 7 八项再次全绿。combined 的 Phase 5 abort / Phase 6 attachment matrix 按测试治理由紧邻 standalone gate 承担。
 
-因此本 spec 的设计与实现候选已经成立，但 Phase 7 仍保持 active，不能把下面依赖真实网页的 acceptance criteria 8/9 声称为通过。
+因此当前 spec 状态是 **accepted**。Acceptance criteria 8–10 均有 final candidate fresh evidence；Git commit/push 由统一 Phase 9/10 closure 记录。
 
 ## 20. Acceptance criteria（验收标准）
 
@@ -620,7 +626,7 @@ Phase 7 只有同时满足以下条件才能关闭：
 6. parser/error path 不错误提交 clean checkpoint。
 7. SQLite tool call / result 可重启恢复，external call ID 稳定。
 8. standalone Phase 7 authenticated real E2E 通过。
-9. combined Phase 3/4/5/6/7 authenticated real E2E 通过。
+9. combined Phase 3/4/5/6/7/8 authenticated real E2E 通过；该 strict superset 包含 Phase 7 regression。
 10. fresh verify + Docker smoke + repository governance 全绿。
 11. 项目文档和 Project Memory（项目记忆）与真实实现同步。
 12. feature branch 正常提交并 push；不 force-push，不创建 PR / Release / Docker registry publish，除非用户另行要求。

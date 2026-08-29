@@ -9,6 +9,7 @@ import type {
   CanonicalConversationRequest,
   CanonicalMessage,
 } from '../context/types.js';
+import { validateStructuredOutputDefinition } from '../structured/output.js';
 import { fingerprintTools, validateToolChoice } from '../tools/canonicalize.js';
 import {
   Phase4ExecutionError,
@@ -183,7 +184,12 @@ function canonicalConversationRequest(
     }
   }
   if (request.output.structured !== undefined) {
-    unsupported(phase, 'Structured output execution is not available yet');
+    if (phase !== 'phase7') unsupported(phase, 'Structured output execution is not available yet');
+    try {
+      validateStructuredOutputDefinition(request.output.structured);
+    } catch {
+      invalid(phase, 'Structured output definition is invalid');
+    }
   }
 
   const messages: CanonicalMessage[] = request.messages.map((message) => {
@@ -220,7 +226,9 @@ function canonicalConversationRequest(
     instructions: canonicalizeInstructions(request.instructions),
     messages,
     mode: messages.length === 1 || toolOnlyIncremental ? 'incremental' : 'full',
-    ...(phase !== 'phase7' ? {} : { toolFingerprint: fingerprintTools(request.tools) }),
+    ...(phase !== 'phase7'
+      ? {}
+      : { toolFingerprint: fingerprintTools(request.tools, request.toolChoice) }),
   };
 }
 

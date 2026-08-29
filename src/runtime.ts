@@ -17,8 +17,13 @@ import {
 } from './browser/browser-manager.js';
 import type { BrowserManager } from './browser/types.js';
 import { createChatGptDriver, type ChatGptTextDriver } from './chatgpt/driver.js';
+import { createChatGptImageDriver, type ChatGptImageDriver } from './chatgpt/image-driver.js';
 import type { AppConfig } from './config/index.js';
 import { createConversationExecutionEngine } from './conversations/conversation-engine.js';
+import {
+  createRuntimeDiagnosticsProvider,
+  type RuntimeDiagnosticsProvider,
+} from './diagnostics/runtime.js';
 import {
   createConversationPageRegistry as defaultCreateConversationPageRegistry,
   type ConversationPageRegistry,
@@ -28,6 +33,8 @@ import {
   createConversationQueue as defaultCreateConversationQueue,
   type ConversationQueue,
 } from './conversations/conversation-queue.js';
+import { ImageGenerationService } from './images/service.js';
+import { ImageStorage } from './images/storage.js';
 import { createPersistenceContext, type PersistenceContext } from './persistence/index.js';
 
 export interface CreateGatewayRuntimeOptions {
@@ -41,6 +48,8 @@ export interface CreateGatewayRuntimeOptions {
   ) => ConversationPageRegistry;
   createConversationQueue?: () => ConversationQueue;
   driver?: ChatGptTextDriver;
+  imageDriver?: ChatGptImageDriver;
+  onBrowserFatal?: () => void;
 }
 
 export interface GatewayRuntime {
@@ -48,6 +57,8 @@ export interface GatewayRuntime {
   readonly persistence: PersistenceContext;
   readonly fileService: FileService;
   readonly attachmentResolver: AttachmentResolver;
+  readonly imageService: ImageGenerationService;
+  readonly diagnostics: RuntimeDiagnosticsProvider;
   readonly browser?: BrowserManager;
   readonly pageRegistry?: ConversationPageRegistry;
   close(): Promise<void>;
@@ -71,8 +82,10 @@ export async function createGatewayRuntime(
     fileService,
     stager: new AttachmentStager({ dataDir: options.config.dataDir }),
   });
+  const imageStorage = new ImageStorage({ dataDir: options.config.dataDir });
   try {
     await fileService.cleanup();
+    await imageStorage.initialize();
   } catch (error) {
     persistence.close();
     throw error;
@@ -102,6 +115,9 @@ export async function createGatewayRuntime(
         ...(options.config.chatgptProxyServer
           ? { proxyServer: options.config.chatgptProxyServer }
           : {}),
+        ...(options.onBrowserFatal === undefined
+          ? {}
+          : { onUnexpectedClose: options.onBrowserFatal }),
       });
       pageRegistry = (
         options.createConversationPageRegistry ?? defaultCreateConversationPageRegistry
@@ -120,6 +136,17 @@ export async function createGatewayRuntime(
     throw error;
   }
 
+  const imageService = new ImageGenerationService({
+    storage: imageStorage,
+    repository: persistence.generatedImages,
+    ...(browser === undefined
+      ? {}
+      : {
+          pagePool: browser.pages,
+          driver: options.imageDriver ?? createChatGptImageDriver(),
+        }),
+  });
+
   const execution: ConversationExecutionEngine =
     browser === undefined || pageRegistry === undefined || conversationQueue === undefined
       ? {
@@ -134,6 +161,11 @@ export async function createGatewayRuntime(
           attachmentResolver,
         });
 
+  const diagnostics = createRuntimeDiagnosticsProvider({
+    config: options.config,
+    ...(browser === undefined ? {} : { browser }),
+  });
+
   let app: FastifyInstance;
   try {
     app = buildServer({
@@ -141,6 +173,8 @@ export async function createGatewayRuntime(
       execute: execution.execute,
       stream: execution.stream,
       fileService,
+      imageService,
+      diagnostics,
       logger: options.logger ?? false,
     });
   } catch (error) {
@@ -158,6 +192,8 @@ export async function createGatewayRuntime(
     persistence,
     fileService,
     attachmentResolver,
+    imageService,
+    diagnostics,
     ...(browser === undefined ? {} : { browser }),
     ...(pageRegistry === undefined ? {} : { pageRegistry }),
     async close() {

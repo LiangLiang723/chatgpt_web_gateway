@@ -14,8 +14,8 @@
 
 - Gateway never executes caller-defined functions; it only returns tool calls and accepts tool results.
 - Only OpenAI function tools are supported in Phase 7; built-in/MCP/custom tools remain unsupported.
-- Tool definition changes conservatively cause `REBUILD(reason='tools_changed')`; tool declaration order alone does not.
-- Private marker is fixed as `<<<CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>` / `<<<END_CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>`.
+- Tool definitions, private protocol version, or normalized function policy (`tool_choice`) changes conservatively cause `REBUILD(reason='tools_changed')`; tool declaration order alone does not.
+- Model-side private protocol is V2 external-function-request semantics, fixed as `<<<EXTERNAL_FUNCTION_REQUESTS_V1>>>` / `<<<END_EXTERNAL_FUNCTION_REQUESTS_V1>>>`; ChatGPT only emits request records and never pretends to own/execute caller-defined functions.
 - Tool payload JSON is never exposed as public text content.
 - `tool_choice=none|auto|required|function` must have deterministic validation and prompt behavior.
 - Tool-call IDs are Gateway-owned and persisted; Responses output item IDs are encoder-owned.
@@ -34,10 +34,10 @@
 New files:
 
 - `src/tools/canonicalize.ts` — canonical function tool representation, validation, stable fingerprint.
-- `src/tools/protocol.ts` — sentinel constants and shared private protocol types.
-- `src/tools/prompt.ts` — tool context/policy/result prompt data builders.
+- `src/tools/protocol.ts` — external-function-request sentinel/version constants and shared private protocol types.
+- `src/tools/prompt.ts` — model-facing external-function context/policy/result prompt data builders.
 - `src/tools/parser.ts` — strict final Assistant output parser.
-- `src/tools/detection-buffer.ts` — stream prefix classifier that never emits private protocol as text.
+- `src/tools/detection-buffer.ts` — stream prefix classifier that never emits private external-function protocol as text.
 - `tests/unit/tool-canonicalize.test.ts`
 - `tests/unit/tool-prompt.test.ts`
 - `tests/unit/tool-parser.test.ts`
@@ -93,7 +93,7 @@ Expected: FAIL because `src/tools/canonicalize.ts` does not exist.
 
 - [x] **Step 2: Implement deterministic canonicalization and fingerprint**
 
-Use existing `fingerprintCanonical()` for SHA-256 stable JSON. Sort object keys recursively and sort top-level tools by name; preserve arrays. Do not include `tool_choice` in tool fingerprint.
+Use existing `fingerprintCanonical()` for SHA-256 stable JSON. Sort object keys recursively and sort top-level tools by name; preserve arrays. Bind `privateProtocolVersion`, canonical tools, and normalized `tool_choice`/function policy into the persisted tool fingerprint so policy changes cannot APPEND/RESTORE into stale webpage instructions.
 
 - [x] **Step 3: Run canonicalization tests**
 
@@ -109,15 +109,15 @@ Expected: FAIL because prompt helpers do not exist.
 
 - [x] **Step 5: Implement private protocol constants and prompt helpers**
 
-The prompt contract must require the exact envelope:
+The model-side prompt contract now requires the exact external-function-request envelope:
 
 ```text
-<<<CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>
-{"calls":[{"name":"tool_name","arguments":{}}]}
-<<<END_CHATGPT_WEB_GATEWAY_TOOL_CALLS_V1>>>
+<<<EXTERNAL_FUNCTION_REQUESTS_V1>>>
+{"requests":[{"name":"function_name","arguments":{}}]}
+<<<END_EXTERNAL_FUNCTION_REQUESTS_V1>>>
 ```
 
-It must explicitly forbid prose/fences around tool calls and forbid fabricating tool results.
+It must explicitly state that declared functions are external operations, interpret user “call/use” wording as generating request records, forbid prose/fences around request records, and forbid fabricating function results.
 
 - [x] **Step 6: Run Prompt tests**
 
@@ -185,8 +185,8 @@ same without affinity => RESTORE
 full request stored prefix + two tool results => APPEND
 unknown tool result => rejected before planner
 mixed new tool result + user => rejected
-tool fingerprint changed => REBUILD tools_changed
-tool declaration reorder => equal fingerprint => APPEND
+tool definition/protocol/function-policy fingerprint changed => REBUILD tools_changed
+tool declaration reorder with identical policy => equal fingerprint => APPEND
 ```
 
 - [x] **Step 3: Generalize canonical context types and planner**
@@ -199,7 +199,7 @@ Validate tool results against request/local call history where possible. Keep at
 
 - [x] **Step 5: Upgrade Context/Append Prompt to version 2**
 
-FRESH/REBUILD context includes full canonical tool context plus structured history/pending. APPEND/RESTORE includes current `tool_policy` plus pending messages and omits unchanged full schema.
+FRESH/REBUILD context includes model-visible `external_functions` plus structured history/pending only when the current choice permits function requests. APPEND/RESTORE is only allowed when the tool-context fingerprint, including current `function_policy`, is unchanged; it carries current policy plus pending messages and omits unchanged full schema. A policy transition such as forced function → `none` therefore REBUILDs instead of attempting to override stale webpage instructions in-place. `tool_choice=none` omits schema/protocol but still carries a minimal `function_policy` that explicitly forbids another external function request; context/REBUILD uses the same minimal none-policy.
 
 - [x] **Step 6: Run Task 2 tests plus Phase 4/6 context regressions**
 
@@ -512,7 +512,7 @@ result -> final text
 multiple calls
 stream tool with zero private marker leak
 stream auto text emits meaningful delta before completion
-RESTORE tool result continuation
+policy-change Tool Result continuation REBUILD + stable-policy restart RESTORE
 tool schema change REBUILD
 ```
 
@@ -522,12 +522,12 @@ Use simple deterministic pseudo-tools whose results are supplied by the harness 
 
 Run static/type tests for scripts before touching live ChatGPT.
 
-- [!] **Step 4: Run fresh authenticated inspect gate** — blocked 2026-08-27 before DOM/Auth inspection: approved LAN proxy `192.168.3.163:7890` connection refused; latest DevSpace direct `chatgpt.com:443` recheck is network unreachable.
+- [x] **Step 4: Run fresh authenticated inspect gate** — 2026-08-27 new LAN proxy `http://192.168.3.83:7890` restored network; fresh inspect on the existing isolated re-auth Profile returned `auth=authenticated` and `composer=unique`.
 
 Run: `corepack pnpm inspect:chatgpt` with the project’s approved E2E environment/profile/proxy.
 Expected: authenticated, unique Composer, no unresolved challenge.
 
-- [ ] **Step 5: Run standalone Phase 7 real E2E**
+- [x] **Step 5: Run standalone Phase 7 real E2E** — final authenticated run returned `singleTool=true`, `resultContinuation=true`, `policyRebuild=true`, `multipleTools=true`, `streamTool=true`, `streamText=true`, `restore=true`, and `schemaRebuild=true`. The preceding run exposed one final RESTORE lifecycle defect rather than a Tool protocol defect: after cross-URL navigation, Composer could become authenticated/ready before historical turns hydrated, so `sendText()` captured a zero Assistant baseline and returned the prior `P7RESULT_*`. No-message live sampling of that exact Conversation showed Composer ready with `users=0/assistants=0`, then several hundred milliseconds later history hydrated to `2/2` containing both the prior result and the correct new `P7RESTORE_*`. The Driver now waits for restored user/assistant history, final Assistant completion marker and stable counts before allowing the next baseline; the final standalone then passed without weakening any assertion.
 
 Run: `corepack pnpm test:e2e:chatgpt:phase7` with the same approved environment.
 Expected: exit code 0 and all seven semantic groups true.
@@ -540,7 +540,7 @@ Commit: `🧪 增加 Phase 7 真实工具调用验收`
 
 ---
 
-### Task 9: Docker Regression and Combined Phase 3→7 Real E2E
+### Task 9: Docker Regression and Final Combined V1 Real E2E
 
 **Files:**
 - No product file change expected unless verification reveals a real defect.
@@ -559,31 +559,30 @@ Expected: format/lint/typecheck/all tests/build/repo checks pass.
 Run: `corepack pnpm docker:build`
 Record resulting image ID/digest in plan/Project State only after success.
 
+2026-08-27 current-code rebuild used explicit BuildKit proxy args `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY=http://192.168.3.83:7890` and produced image ID `sha256:f2935da9e4930ba04691b334344f71058895010a046307060b911c4173a33ec2`. The LAN proxy is not committed as a Dockerfile/repository default.
+
 - [x] **Step 3: Run full Docker smoke**
 
 Run: `corepack pnpm docker:smoke`
 Expected: migrations, restart lifecycle, Browser/noVNC/seccomp, permissions and prior smoke assertions all pass.
 
-- [!] **Step 4: Run fresh authenticated inspect if enough time/session budget elapsed** — same external network blocker as Task 8 Step 4; do not retry until a reachable ChatGPT network path exists.
+- [x] **Step 4: Run fresh authenticated inspect if enough time/session budget elapsed** — same 2026-08-27 authenticated/unique-Composer inspect evidence from Task 8 Step 4 using `http://192.168.3.83:7890`.
 
 Run: `corepack pnpm inspect:chatgpt`.
 
-- [ ] **Step 5: Run combined Phase 3/4/5/6/7 E2E**
+- [x] **Step 5: Run combined Phase 3/4/5/6/7/8 E2E strict superset** — after final Phase 7 standalone and the required adjacent Phase 6 standalone passed, reduced combined Phase 3→8 exited 0. It reported Phase 3 `gatewayChallenge=true`; Phase 4 APPEND/RESTORE/REBUILD true; Phase 5 Chat Completions/Markdown/Responses true with `abort=not_run_in_combined`; Phase 6 `attachmentMatrix=not_run_in_combined`; all eight Phase 7 semantic results true; and Phase 8 `url/base64/persistence/restart=true`. The omitted expensive matrices are covered by the immediately preceding standalone gates as required by `docs/testing.md`.
 
-Use the repository’s combined opt-in flag exactly as defined by the harness.
-Expected: one process exits 0 with all prior phase assertions plus Phase 7 true.
-
-- [-] **Step 6: Fix only evidence-backed defects** — no product defect was evidenced; current failure is external network reachability.
+- [x] **Step 6: Fix only evidence-backed defects** — standalone real E2E exposed Fastify default Ajv `removeAdditional=true` mutating Chat Completions message unions and deleting a valid `tool_call_id` before the `role=tool` branch was checked. Added a real Fastify regression test and set `removeAdditional:false`; full deterministic verify is green. Three Prompt-only attempts at the separate ChatGPT refusal were reverted after failing to establish reliable behavior.
 
 Any failure triggers `superpowers:systematic-debugging`, a focused failing deterministic regression where possible, minimal fix, standalone phase re-check, then combined re-check. Do not weaken existing assertions to make the run green.
 
-- [-] **Step 7: Commit any verification-driven fix separately** — no verification-driven product fix was required after the final deterministic/Docker pass.
+- [-] **Step 7: Commit any verification-driven fix separately** — superseded by the consolidated V1 implementation/verification commit sequence owned by active Phase 9 Task 6; the Fastify union-validation fix remains in the current working tree and must not be described as committed until that final sequence succeeds.
 
 Use a concrete `🐛` commit describing the actual defect. If no code changes were needed, no commit is required for this step.
 
 ---
 
-### Task 10: Documentation, Project Memory, Final Verification, Plan Closure, and Push
+### Task 10: Phase 7 Documentation and Acceptance Handoff
 
 **Files:**
 - Modify: `README.md`
@@ -596,15 +595,7 @@ Use a concrete `🐛` commit describing the actual defect. If no code changes we
 - Modify: `docs/PROJECT_STATE.md`
 
 **Interfaces:**
-- Final Project State target after all evidence succeeds:
-
-```text
-PHASE=phase-7-complete
-STATUS=ready-for-phase-8-design
-GOVERNING_SPEC=docs/superpowers/specs/2026-08-26-phase-7-tool-calling-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=write-phase-8-image-generation-spec
-```
+- Phase 8/9 implementation has already proceeded under the user's instruction to finish all V1 functionality before the final test stage. The old Phase-7-only closure target is therefore superseded; current Project State and final closure are owned by the Phase 9 unified V1 plan while this plan retains Phase 7 acceptance evidence.
 
 - [x] **Step 1: Write back actual implemented compatibility**
 
@@ -618,7 +609,7 @@ Record canonical tool context, private protocol/parser, tool-result continuation
 
 No checkbox may be checked without corresponding current-session evidence or committed historical evidence produced by this Phase.
 
-- [x] **Step 4: Run fresh final verification after documentation changes**
+- [-] **Step 4: Run Phase-7-only final verification after documentation changes** — superseded by Phase 9 Task 6 fresh unified verification of the larger current worktree.
 
 Run:
 
@@ -630,17 +621,11 @@ corepack pnpm project:status
 
 Expected: all green; project status matches Phase 7 finalizing/closure state.
 
-- [ ] **Step 5: Inspect staged diff and commit final writeback**
+- [-] **Step 5: Inspect staged diff and commit Phase-7-only final writeback** — superseded by the consolidated V1 staged-diff/commit sequence in Phase 9 Task 6.
 
-Commit implementation/evidence writeback: `📝 完成 Phase 7 工具调用验收回写`.
+- [x] **Step 6: Close Phase 7 acceptance within unified V1 closure** — standalone Phase 7 V2 and reduced combined Phase 3→8 both passed on the final RESTORE-hydration/Auth candidate. Phase 7 acceptance is closed as part of the Phase 10 V1 closure; the obsolete `ready-for-phase-8-design` state is not restored.
 
-- [ ] **Step 6: Close the Active Plan**
-
-Set `ACTIVE_PLAN=none`, `PHASE=phase-7-complete`, `STATUS=ready-for-phase-8-design`, `NEXT_TASK=write-phase-8-image-generation-spec`; update this plan status to closed.
-
-Run project-memory/docs/diff checks again, then commit: `📝 关闭 Phase 7 实施计划`.
-
-- [ ] **Step 7: Push feature branch normally**
+- [-] **Step 7: Push Phase-7-only branch checkpoint** — final normal feature-branch push is coordinated by Phase 9 Task 6.
 
 Run:
 

@@ -10,12 +10,19 @@ function fakePage(
 ) {
   let currentUrl = initialUrl;
   const events: string[] = [];
+  const keyboard = {
+    insertText: vi.fn(async (text: string) => events.push(`insertText:${text}`)),
+  };
   const page = {
     goto: vi.fn(async (url: string, options: unknown) => {
       events.push(`goto:${url}:${JSON.stringify(options)}`);
       currentUrl = redirectAfterGoto ?? url;
     }),
+    reload: vi.fn(async (options: unknown) => {
+      events.push(`reload:${JSON.stringify(options)}`);
+    }),
     url: vi.fn(() => currentUrl),
+    keyboard,
   } as unknown as Page;
   return {
     page,
@@ -29,16 +36,60 @@ function fakePage(
 function readinessDriver(options: {
   initialUrl?: string;
   redirectAfterGoto?: string;
+  redirectAfterAuth?: string;
   authState?: 'authenticated' | 'auth_required' | 'unknown';
+  restoreHistory?: {
+    userCounts: number[];
+    assistantCounts: number[];
+  };
 }) {
-  const { page, events } = fakePage(options.initialUrl, options.redirectAfterGoto);
+  const { page, events, setUrl } = fakePage(options.initialUrl, options.redirectAfterGoto);
+  const userCounts = [...(options.restoreHistory?.userCounts ?? [1, 1])];
+  const assistantCounts = [...(options.restoreHistory?.assistantCounts ?? [1, 1])];
+  const restoredAssistantTurn = {
+    locator: vi.fn((selector: string) =>
+      selector.includes('copy-turn-action-button')
+        ? ({ count: async () => 1 } as unknown as Locator)
+        : ({ count: async () => 0 } as unknown as Locator),
+    ),
+  } as unknown as Locator;
+  const restoredAssistantTurns = {
+    nth: vi.fn(() => restoredAssistantTurn),
+  } as unknown as Locator;
   const driver = createChatGptDriver({
     probeAuth: async () => {
       events.push('auth');
+      if (options.redirectAfterAuth) setUrl(options.redirectAfterAuth);
       if (options.authState === 'auth_required') return { state: 'auth_required' };
       if (options.authState === 'unknown') return { state: 'unknown', reason: 'unknown-dom' };
       return { state: 'authenticated' };
     },
+    inspectCollection: async (_page, definition) => {
+      if (definition.name === 'userTurns') {
+        const count = userCounts.length > 1 ? userCounts.shift()! : (userCounts[0] ?? 0);
+        events.push(`restore:user:${count}`);
+        return {
+          status: 'collection',
+          candidateName: 'user-test',
+          count,
+          locator: { count: async () => count } as unknown as Locator,
+        };
+      }
+      if (definition.name === 'assistantTurns') {
+        const count =
+          assistantCounts.length > 1 ? assistantCounts.shift()! : (assistantCounts[0] ?? 0);
+        events.push(`restore:assistant:${count}`);
+        return {
+          status: 'collection',
+          candidateName: 'assistant-test',
+          count,
+          locator: restoredAssistantTurns,
+        };
+      }
+      throw new Error(`Unexpected collection selector ${definition.name}`);
+    },
+    restorePollIntervalMs: 0,
+    restoreTimeoutMs: 50,
   });
   return { page, events, driver };
 }
@@ -52,10 +103,12 @@ function successfulSendHarness(
     finalUrlAfterCompletion?: string;
     postCompletionSendStatuses?: Array<'missing' | 'unique'>;
     sendResolveFails?: boolean;
+    composerResolveMissingAttempts?: number;
   } = {},
 ) {
   const { page, events, setUrl } = fakePage(currentUrl);
   const composer = {
+    focus: vi.fn(async () => events.push('focus:composer')),
     fill: vi.fn(async (text: string) => events.push(`fill:${text}`)),
   } as unknown as Locator;
   const send = {
@@ -71,7 +124,7 @@ function successfulSendHarness(
   const assistantTurn = {
     innerText: vi.fn(async () => 'final answer'),
     locator: vi.fn((selector: string) =>
-      selector === '.markdown' ? assistantTextContent : assistantTurnCompletion,
+      selector === '.markdown.prose' ? assistantTextContent : assistantTurnCompletion,
     ),
   } as unknown as Locator;
   const assistantTurns = {
@@ -81,6 +134,9 @@ function successfulSendHarness(
       return assistantTurn;
     }),
   } as unknown as Locator;
+  let composerResolveMissingAttempts = options.composerResolveMissingAttempts ?? 0;
+  const trackComposerResolution = options.composerResolveMissingAttempts !== undefined;
+  let remainingStaleStopChecks = options.stopControlStatus === 'unique' ? 1 : 0;
 
   const driver = createChatGptDriver({
     probeAuth: async () => {
@@ -117,17 +173,29 @@ function successfulSendHarness(
             }
           : { status: 'missing', count: 0 };
       }
-      return definition.name === 'stopControl' && options.stopControlStatus === 'unique'
-        ? {
-            status: 'unique',
-            candidateName: 'stop-test',
-            count: 1,
-            locator: { count: async () => 1 } as unknown as Locator,
-          }
-        : { status: 'missing', count: 0 };
+      if (definition.name === 'stopControl' && remainingStaleStopChecks > 0) {
+        remainingStaleStopChecks -= 1;
+        return {
+          status: 'unique',
+          candidateName: 'stop-test',
+          count: 1,
+          locator: { count: async () => 1 } as unknown as Locator,
+        };
+      }
+      return { status: 'missing', count: 0 };
     },
     resolveUnique: async (_page, definition) => {
       if (definition.name === 'composer') {
+        if (composerResolveMissingAttempts > 0) {
+          composerResolveMissingAttempts -= 1;
+          if (trackComposerResolution) events.push('resolve:composer:missing');
+          throw new ChatGptDriverError({
+            code: 'selector_missing',
+            message: 'Composer is temporarily not mounted',
+            selectorName: 'composer',
+          });
+        }
+        if (trackComposerResolution) events.push('resolve:composer:unique');
         return { locator: composer, candidateName: 'composer-test' };
       }
       if (definition.name === 'sendButton') {
@@ -193,9 +261,13 @@ describe('ChatGptDriver navigation readiness', () => {
     expect(events).toEqual(['auth']);
   });
 
-  it('openConversation navigates a different Page to the validated saved URL', async () => {
+  it('openConversation navigates a different Page and waits for restored history after Composer readiness', async () => {
     const { page, events, driver } = readinessDriver({
       initialUrl: 'https://chatgpt.com/c/other',
+      restoreHistory: {
+        userCounts: [0, 2, 2],
+        assistantCounts: [0, 2, 2],
+      },
     });
     const saved = 'https://chatgpt.com/c/thread-1?model=auto';
 
@@ -205,7 +277,27 @@ describe('ChatGptDriver navigation readiness', () => {
       waitUntil: 'domcontentloaded',
       timeout: 60_000,
     });
-    expect(events.at(-1)).toBe('auth');
+    expect(events).toEqual([
+      expect.stringContaining('goto:https://chatgpt.com/c/thread-1?model=auto:'),
+      'auth',
+      'restore:user:0',
+      'restore:assistant:0',
+      'restore:user:2',
+      'restore:assistant:2',
+      'restore:user:2',
+      'restore:assistant:2',
+    ]);
+  });
+
+  it('returns not_restorable when navigation redirects after authenticated Composer readiness', async () => {
+    const { page, driver } = readinessDriver({
+      initialUrl: 'https://chatgpt.com/c/other',
+      redirectAfterAuth: 'https://chatgpt.com/',
+    });
+
+    await expect(driver.openConversation(page, 'https://chatgpt.com/c/thread-1')).resolves.toBe(
+      'not_restorable',
+    );
   });
 
   it.each([
@@ -299,7 +391,8 @@ describe('ChatGptDriver sendText', () => {
     expect(page.goto).not.toHaveBeenCalled();
     expect(events).toEqual([
       'baseline',
-      'fill:hello',
+      'focus:composer',
+      'insertText:hello',
       'inspect:send:unique',
       'click:send',
       'completion',
@@ -324,7 +417,23 @@ describe('ChatGptDriver sendText', () => {
     ]);
   });
 
-  it('waits for the Send control to appear after fill instead of failing a transient fresh-page race', async () => {
+  it('waits for a transiently unmounted Composer between retained-page turns', async () => {
+    const { page, events, driver } = successfulSendHarness(
+      'https://chatgpt.com/c/test-conversation',
+      { composerResolveMissingAttempts: 2 },
+    );
+
+    await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
+      text: 'final answer',
+    });
+    expect(events.filter((event) => event.startsWith('resolve:composer:'))).toEqual([
+      'resolve:composer:missing',
+      'resolve:composer:missing',
+      'resolve:composer:unique',
+    ]);
+  });
+
+  it('waits for the Send control to appear after Composer input instead of failing a transient fresh-page race', async () => {
     const { page, events, driver } = successfulSendHarness(
       'https://chatgpt.com/c/test-conversation',
       {
@@ -343,15 +452,19 @@ describe('ChatGptDriver sendText', () => {
     ]);
   });
 
-  it('treats the target Assistant turn completion marker as final even when a stale global stop control remains', async () => {
-    const { page, driver } = successfulSendHarness('https://chatgpt.com/c/test-conversation', {
-      completionMarkerCount: 1,
-      stopControlStatus: 'unique',
-    });
+  it('resynchronizes a completed target turn when a stale global Stop control remains', async () => {
+    const { page, driver, events } = successfulSendHarness(
+      'https://chatgpt.com/c/test-conversation',
+      {
+        completionMarkerCount: 1,
+        stopControlStatus: 'unique',
+      },
+    );
 
     await expect(driver.sendText(page, { prompt: 'hello' })).resolves.toMatchObject({
       text: 'final answer',
     });
+    expect(events).toContain('reload:{"waitUntil":"domcontentloaded","timeout":60000}');
   });
 
   it('keeps observing until the target Assistant turn exposes its completion marker', async () => {

@@ -42,6 +42,7 @@ import type {
 } from '../persistence/types.js';
 import { TextStreamAbortedError } from '../stream/errors.js';
 import { streamAssistantText } from '../stream/text-stream.js';
+import { validateStructuredAssistantText } from '../structured/output.js';
 import { fingerprintTools } from '../tools/canonicalize.js';
 import { ToolDetectionBuffer } from '../tools/detection-buffer.js';
 import { parseAssistantOutput } from '../tools/parser.js';
@@ -210,9 +211,11 @@ function createInFlightConversation(options: {
       instructions: options.request.instructions,
       tools: options.request.tools,
       toolChoice: options.request.toolChoice,
-      ...(fingerprintTools(options.request.tools) === undefined
+      ...(fingerprintTools(options.request.tools, options.request.toolChoice) === undefined
         ? {}
-        : { toolFingerprint: fingerprintTools(options.request.tools) }),
+        : {
+            toolFingerprint: fingerprintTools(options.request.tools, options.request.toolChoice),
+          }),
       sync: { status: 'in_flight', syncedMessageCount: 0, startedAt: options.startedAt },
       createdAt: options.startedAt,
       updatedAt: options.startedAt,
@@ -236,7 +239,7 @@ function finalConversationRecord(options: {
     tools: options.request.tools,
     toolChoice: options.request.toolChoice,
   };
-  const fingerprint = fingerprintTools(options.request.tools);
+  const fingerprint = fingerprintTools(options.request.tools, options.request.toolChoice);
   if (fingerprint === undefined) delete result.toolFingerprint;
   else result.toolFingerprint = fingerprint;
   return result;
@@ -319,13 +322,15 @@ function buildPrompt(options: {
   const names = toolNameMap([...history, ...options.plan.pending]);
   return options.promptMode === 'append'
     ? buildAppendPrompt(options.plan.pending, options.uploadFilenameByReference, {
-        toolChoice: options.request.toolChoice,
+        toolChoice: options.request.tools.length === 0 ? undefined : options.request.toolChoice,
+        structuredOutput: options.request.output.structured,
         toolNameByCallId: names,
       })
     : buildContextPrompt({
         instructions: options.canonicalRequest.instructions,
         tools: options.request.tools,
         toolChoice: options.request.toolChoice,
+        structuredOutput: options.request.output.structured,
         history,
         pending: options.plan.pending,
         toolNameByCallId: names,
@@ -527,7 +532,10 @@ function parseAssistantResult(options: {
     tools: options.request.tools,
     toolChoice: options.request.toolChoice,
   });
-  if (parsed.type === 'text') return parsed;
+  if (parsed.type === 'text') {
+    validateStructuredAssistantText(parsed.text, options.request.output.structured);
+    return parsed;
+  }
   const toolCalls: NormalizedToolCall[] = parsed.calls.map((call) => ({
     id: `call_${options.randomUuid().replaceAll('-', '')}`,
     name: call.name,

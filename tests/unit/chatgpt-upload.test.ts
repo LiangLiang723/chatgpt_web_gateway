@@ -2,6 +2,7 @@ import type { Locator, Page } from 'playwright';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createChatGptDriver } from '../../src/chatgpt/driver.js';
+import { ChatGptDriverError } from '../../src/chatgpt/errors.js';
 
 interface UploadHarnessOptions {
   baselineTiles?: number;
@@ -12,6 +13,7 @@ interface UploadHarnessOptions {
   uploadSleep?: (ms: number) => Promise<void>;
   uploadTimeoutMs?: number;
   uploadPollIntervalMs?: number;
+  attachmentInputResolveMissingAttempts?: number;
 }
 
 function sequenceValue(sequence: number[] | undefined, fallback: number): () => number {
@@ -80,10 +82,14 @@ function uploadHarness(options: UploadHarnessOptions = {}) {
       uploaded = true;
     }),
   } as unknown as Locator;
+  let attachmentInputResolveMissingAttempts = options.attachmentInputResolveMissingAttempts ?? 0;
 
   const composer = {
-    fill: vi.fn(async (text: string) => events.push(`fill:${text}`)),
+    focus: vi.fn(async () => events.push('focus:composer')),
   } as unknown as Locator;
+  const keyboard = {
+    insertText: vi.fn(async (text: string) => events.push(`insertText:${text}`)),
+  };
 
   const send = {
     click: vi.fn(async () => events.push('click:send')),
@@ -91,6 +97,7 @@ function uploadHarness(options: UploadHarnessOptions = {}) {
 
   const page = {
     url: vi.fn(() => 'https://chatgpt.com/c/upload-test'),
+    keyboard,
   } as unknown as Page;
 
   const driver = createChatGptDriver({
@@ -130,6 +137,18 @@ function uploadHarness(options: UploadHarnessOptions = {}) {
         : { status: 'missing', count: 0 },
     resolveUnique: async (_page, definition) => {
       if (definition.name === 'attachmentInput') {
+        if (attachmentInputResolveMissingAttempts > 0) {
+          attachmentInputResolveMissingAttempts -= 1;
+          events.push('resolve:attachmentInput:missing');
+          throw new ChatGptDriverError({
+            code: 'selector_missing',
+            message: 'Attachment input is temporarily not mounted',
+            selectorName: 'attachmentInput',
+          });
+        }
+        if (options.attachmentInputResolveMissingAttempts !== undefined) {
+          events.push('resolve:attachmentInput:unique');
+        }
         return { locator: attachmentInput, candidateName: 'attachment-input-test' };
       }
       if (definition.name === 'composer') {
@@ -195,11 +214,38 @@ describe('ChatGptDriver attachment upload ownership', () => {
     ]);
     expect(events).not.toContain('pending:0:existing');
     expect(events.indexOf('upload:/tmp/request/a.txt,/tmp/request/b.png')).toBeLessThan(
-      events.indexOf('fill:inspect attachments'),
+      events.indexOf('focus:composer'),
     );
-    expect(events.indexOf('fill:inspect attachments')).toBeLessThan(events.indexOf('click:send'));
+    expect(events.indexOf('insertText:inspect attachments')).toBeLessThan(
+      events.indexOf('click:send'),
+    );
     expect(events.slice(0, 3)).toEqual(['baseline:assistant', 'baseline:tiles', 'baseline:alerts']);
     expect(send.click).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for a transiently unmounted attachment input between retained-page turns', async () => {
+    const { page, events, driver, attachmentInput } = uploadHarness({
+      baselineTiles: 0,
+      ownedPendingSequences: [[0]],
+      attachmentInputResolveMissingAttempts: 2,
+      uploadPollIntervalMs: 0,
+    });
+
+    await expect(
+      driver.startText(page, {
+        prompt: 'inspect attachment',
+        attachments: [twoAttachments[0]],
+      } as Parameters<typeof driver.startText>[1] & {
+        attachments: [(typeof twoAttachments)[0]];
+      }),
+    ).resolves.toBeDefined();
+
+    expect(events.filter((event) => event.startsWith('resolve:attachmentInput:'))).toEqual([
+      'resolve:attachmentInput:missing',
+      'resolve:attachmentInput:missing',
+      'resolve:attachmentInput:unique',
+    ]);
+    expect(attachmentInput.setInputFiles).toHaveBeenCalledTimes(1);
   });
 
   it('maps a new upload alert to chatgpt_upload_failed and never sends', async () => {

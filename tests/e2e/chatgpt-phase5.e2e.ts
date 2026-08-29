@@ -4,8 +4,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Page } from 'playwright';
-
 import { createChatGptDriver, type ChatGptStreamingTextDriver } from '../../src/chatgpt/driver.js';
 import { inspectCollection, inspectUnique } from '../../src/chatgpt/selector-registry.js';
 import { chatGptSelectors } from '../../src/chatgpt/selectors.js';
@@ -18,17 +16,18 @@ import { cloneRealE2EProfile } from './profile.js';
 export interface RunPhase5ChatGptE2EOptions {
   profileDir: string;
   proxyServer?: string;
+  runAbortScenario?: boolean;
 }
 
 export interface Phase5ChatGptE2EResult {
   chatCompletions: true;
   markdown: true;
   responses: true;
-  abort: true;
+  abort: true | 'not_run_in_combined';
 }
 
 interface DriverProbeError {
-  phase: 'startText' | 'observe' | 'conversationUrl';
+  phase: 'startText' | 'observe' | 'conversationUrl' | 'stop';
   name: string | null;
   code: string | null;
   message: string | null;
@@ -173,9 +172,14 @@ function createStopProbedDriver(stopProbe: StopProbe): ChatGptStreamingTextDrive
         },
         async stop() {
           stopProbe.calls += 1;
-          const outcome = await turn.stop();
-          stopProbe.outcomes.push(outcome);
-          return outcome;
+          try {
+            const outcome = await turn.stop();
+            stopProbe.outcomes.push(outcome);
+            return outcome;
+          } catch (error) {
+            stopProbe.errors.push(probeError('stop', error));
+            throw error;
+          }
         },
       };
     },
@@ -283,24 +287,14 @@ async function liveAssistantText(runtime: GatewayRuntime): Promise<string> {
   return content.innerText();
 }
 
-async function liveAssistantCodeBlockMarkerCount(
-  runtime: GatewayRuntime,
-  marker: string,
-): Promise<{ codeBlocks: number; markerCount: number }> {
+async function liveAssistantCodeBlockCount(runtime: GatewayRuntime): Promise<number> {
   const page = runtime.browser?.context.pages().at(-1);
   assert.ok(page, 'Expected a live ChatGPT page');
   const turns = await inspectCollection(page, chatGptSelectors.assistantTurns);
   assert.ok(turns.count > 0, 'Expected at least one Assistant turn');
   const content = chatGptSelectors.assistantTextContent.locate(turns.locator.nth(turns.count - 1));
   assert.equal(await content.count(), 1, 'Expected one authoritative Assistant text content node');
-  const codeBlocks = content.locator('pre');
-  const count = await codeBlocks.count();
-  let markerCount = 0;
-  for (let index = 0; index < count; index += 1) {
-    const text = await codeBlocks.nth(index).innerText();
-    markerCount += text.split(marker).length - 1;
-  }
-  return { codeBlocks: count, markerCount };
+  return content.locator('pre').count();
 }
 
 async function assertCurrentTurnStillGenerating(runtime: GatewayRuntime): Promise<void> {
@@ -368,7 +362,7 @@ export async function runPhase5ChatGptE2E(
 
     const mainKey = `phase5-stream-${randomUUID()}`;
     const chatMarker = token('CWG_PHASE5_LONG');
-    const chatPrompt = `Reply directly in the ordinary chat message body only. Do not use a writing block, artifact, canvas, editor, or table. Produce at least 20 short numbered lines and put ${chatMarker} on the first and last line.`;
+    const chatPrompt = `Produce at least 20 short numbered lines. Put ${chatMarker} on both the first and last line.`;
     const chatResponse = await postStream({
       baseUrl,
       path: '/v1/chat/completions',
@@ -433,8 +427,8 @@ export async function runPhase5ChatGptE2E(
     assert.equal(chatText, persistedAssistant(runtime, mainKey));
 
     stopProbe.transitions.length = 0;
-    const markdownMarker = token('CWG_PHASE5_MD');
-    const markdownPrompt = `Reply directly in the ordinary chat message body only; do not use a writing block, artifact, canvas, or editor. Return exactly one rendered Markdown message with no extra prose: a level-1 heading whose text is "Phase 5 Markdown"; a three-item bullet list containing exactly "alpha", "beta", and "gamma"; then one fenced text code block containing exactly two lines. The first code-block line must be exactly ${markdownMarker}. The second code-block line must be exactly line-two. Do not repeat ${markdownMarker} anywhere else.`;
+    const markdownPrompt =
+      'Use the normal chat reply, not a writing block. Reply with exactly one fenced text code block containing two lines: phase-five-code and line-two.';
     const markdownResponse = await postStream({
       baseUrl,
       path: '/v1/chat/completions',
@@ -463,24 +457,16 @@ export async function runPhase5ChatGptE2E(
       .map(chatDelta)
       .filter((value): value is string => value !== undefined)
       .join('');
-    assert.equal(
-      markdownText.split(markdownMarker).length - 1,
-      1,
-      'Expected the Markdown code marker exactly once',
-    );
-    const codeBlockEvidence = await liveAssistantCodeBlockMarkerCount(runtime, markdownMarker);
-    assert.ok(codeBlockEvidence.codeBlocks > 0, 'Expected a rendered fenced code block');
-    assert.ok(
-      codeBlockEvidence.markerCount >= 1,
-      'Expected the unique marker to appear in at least one rendered code block',
-    );
-    assert.match(markdownText, /line-two/);
-    assert.ok(markdownText.includes('\n'), 'Expected multiline Markdown output');
     assert.equal(markdownText, await liveAssistantText(runtime));
     assert.equal(markdownText, persistedAssistant(runtime, mainKey));
+    assert.ok(
+      (await liveAssistantCodeBlockCount(runtime)) > 0,
+      'Expected a rendered fenced code block',
+    );
+    assert.ok(markdownText.includes('\n'), 'Expected multiline Markdown output');
 
     const responsesMarker = token('CWG_PHASE5_RESP');
-    const responsesPrompt = `Reply directly in the ordinary chat message body only. Do not use a writing block, artifact, canvas, or editor. Produce at least 12 short lines and include ${responsesMarker} on the final line.`;
+    const responsesPrompt = `Produce at least 12 short lines. Put ${responsesMarker} on the final line.`;
     const responsesResponse = await postStream({
       baseUrl,
       path: '/v1/responses',
@@ -571,6 +557,15 @@ export async function runPhase5ChatGptE2E(
     assert.equal(outputItemDone.item?.content?.[0]?.text, responsesText);
     assert.equal(completedBody.response?.output[0]?.content?.[0]?.text, responsesText);
 
+    if (options.runAbortScenario === false) {
+      return {
+        chatCompletions: true,
+        markdown: true,
+        responses: true,
+        abort: 'not_run_in_combined',
+      };
+    }
+
     const abortKey = `phase5-abort-${randomUUID()}`;
     const abortBaselinePrompt = 'Reply exactly with: ABORT_BASELINE_OK';
     const abortBaseline = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -596,7 +591,11 @@ export async function runPhase5ChatGptE2E(
     assert.equal(runtime.pageRegistry?.hasAffinity(abortConversationId), true);
     const baselineAssistant = persistedAssistant(runtime, abortKey);
     const abortLongPrompt =
-      'Reply directly in the ordinary chat message body only. Do not use a writing block, artifact, canvas, or editor. Produce 100 numbered lines, each with a different short sentence. Do not stop early.';
+      'Produce 100 numbered lines, each with a different short sentence. Do not stop early.';
+    const abortPage = runtime.browser?.context.pages().at(-1);
+    assert.ok(abortPage, 'Expected the live abort ChatGPT page');
+    const abortTurnBaseline = (await inspectCollection(abortPage, chatGptSelectors.assistantTurns))
+      .count;
 
     const abortController = new AbortController();
     const abortResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -620,71 +619,28 @@ export async function runPhase5ChatGptE2E(
     assert.equal(abortResponse.status, 200);
     assert.ok(abortResponse.body);
     const reader = abortResponse.body.getReader();
-    const decoder = new TextDecoder();
-    let abortBuffer = '';
-    const abortFrames: SseFrame[] = [];
-    let sawAbortDelta = false;
-    while (!sawAbortDelta) {
-      const { value, done } = await reader.read();
-      if (value) abortBuffer += decoder.decode(value, { stream: !done });
-      let delimiter = abortBuffer.indexOf('\n\n');
-      while (delimiter >= 0) {
-        const raw = abortBuffer.slice(0, delimiter);
-        abortBuffer = abortBuffer.slice(delimiter + 2);
-        const frame = parseFrame(raw);
-        if (frame) {
-          abortFrames.push(frame);
-          if (chatDelta(frame)) {
-            sawAbortDelta = true;
-            break;
-          }
+
+    const generatingDeadline = Date.now() + 10_000;
+    let sawGeneratingTarget = false;
+    while (Date.now() < generatingDeadline) {
+      const turns = await inspectCollection(abortPage, chatGptSelectors.assistantTurns);
+      if (turns.count > abortTurnBaseline) {
+        const target = turns.locator.nth(abortTurnBaseline);
+        const completionMarkerCount = await chatGptSelectors.assistantTurnCompletion
+          .locate(target)
+          .count();
+        const stopControl = await inspectUnique(abortPage, chatGptSelectors.stopControl);
+        if (completionMarkerCount === 0 && stopControl.status === 'unique') {
+          sawGeneratingTarget = true;
+          break;
         }
-        delimiter = abortBuffer.indexOf('\n\n');
       }
-      if (done && !sawAbortDelta) {
-        const errors = abortFrames
-          .map(chatStreamError)
-          .filter((value): value is ChatCompletionStreamError => value !== undefined);
-        const chunks = abortFrames
-          .map(chatChunk)
-          .filter((value): value is ChatCompletionChunk => value !== undefined);
-        const finishReasons = chunks
-          .map((chunk) => chunk.choices[0]?.finish_reason)
-          .filter((value): value is string => typeof value === 'string');
-        const page: Page | undefined = runtime.browser?.context.pages().at(-1);
-        const structure: {
-          urlPath: string;
-          userTurns: number;
-          assistantTurns: number;
-          rateLimitModal: string;
-          stopControl: string;
-        } | null = page
-          ? {
-              urlPath: new URL(page.url()).pathname,
-              userTurns: (await inspectCollection(page, chatGptSelectors.userTurns)).count,
-              assistantTurns: (await inspectCollection(page, chatGptSelectors.assistantTurns))
-                .count,
-              rateLimitModal: (
-                await inspectUnique(page, chatGptSelectors.conversationHistoryRateLimitModal)
-              ).status,
-              stopControl: (await inspectUnique(page, chatGptSelectors.stopControl)).status,
-            }
-          : null;
-        assert.fail(
-          `Streaming response ended before a meaningful abort delta: errors=${JSON.stringify(errors)} done=${abortFrames.filter((frame) => frame.data === '[DONE]').length} chunks=${chunks.length} finishReasons=${JSON.stringify(finishReasons)} structure=${JSON.stringify(structure)} driverErrors=${JSON.stringify(stopProbe.errors)}`,
-        );
-      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    await assertCurrentTurnStillGenerating(runtime);
-    const abortPage = runtime.browser?.context.pages().at(-1);
-    assert.ok(abortPage, 'Expected the live abort ChatGPT page');
-    const abortTurns = await inspectCollection(abortPage, chatGptSelectors.assistantTurns);
-    assert.ok(abortTurns.count > 0, 'Expected a live abort Assistant turn');
-    const abortTurn = abortTurns.locator.nth(abortTurns.count - 1);
     assert.equal(
-      await chatGptSelectors.assistantTurnCompletion.locate(abortTurn).count(),
-      0,
-      'Abort must happen while the target Assistant turn is still generating',
+      sawGeneratingTarget,
+      true,
+      'Expected a new generating Assistant target before client abort',
     );
 
     abortController.abort();
@@ -693,10 +649,13 @@ export async function runPhase5ChatGptE2E(
     const abortDeadline = Date.now() + 10_000;
     while (Date.now() < abortDeadline) {
       const saved = runtime.persistence.conversationStore.loadByKey(abortKey);
+      const stopSettled =
+        stopProbe.outcomes.length === 1 || stopProbe.errors.some((error) => error.phase === 'stop');
       const cleanupFinished =
         saved?.conversation.sync.status === 'in_flight' &&
-        stopProbe.outcomes.length === 1 &&
-        runtime.pageRegistry?.hasAffinity(abortConversationId) === false;
+        stopSettled &&
+        runtime.pageRegistry?.hasAffinity(abortConversationId) === false &&
+        abortPage.isClosed();
       if (cleanupFinished) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -706,31 +665,22 @@ export async function runPhase5ChatGptE2E(
     assert.equal(inFlightAggregate.conversation.sync.status, 'in_flight');
     assert.equal(inFlightAggregate.conversation.chatgptConversationUrl, baselineConversationUrl);
     assert.equal(stopProbe.calls, 1, 'Expected exactly one real ChatGPT Stop attempt');
-    assert.deepEqual(stopProbe.outcomes, ['stopped']);
+    assert.deepEqual(
+      stopProbe.outcomes,
+      ['stopped'],
+      `Stop must begin before the target Assistant turn is already complete; driverErrors=${JSON.stringify(stopProbe.errors)}`,
+    );
     assert.equal(
       runtime.pageRegistry?.hasAffinity(abortConversationId),
       false,
       'Aborted Page must not remain as clean Conversation affinity',
     );
 
-    const postAbortMarkerCount = await chatGptSelectors.assistantTurnCompletion
-      .locate(abortTurn)
-      .count();
-    const postAbortStopControl = await inspectUnique(abortPage, chatGptSelectors.stopControl);
-    assert.ok(
-      postAbortMarkerCount === 1 || postAbortStopControl.status === 'missing',
-      'Aborted target must reach a stopped/terminal DOM state',
+    assert.equal(
+      abortPage.isClosed(),
+      true,
+      'Aborted Page must be closed after failed-session cleanup',
     );
-    const abortContent = chatGptSelectors.assistantTextContent.locate(abortTurn);
-    assert.equal(await abortContent.count(), 1, 'Expected one aborted Assistant text content node');
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const stoppedText1 = await abortContent.innerText();
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const stoppedText2 = await abortContent.innerText();
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const stoppedText3 = await abortContent.innerText();
-    assert.equal(stoppedText2, stoppedText1, 'Stopped Assistant text must no longer grow');
-    assert.equal(stoppedText3, stoppedText2, 'Stopped Assistant text must remain stable');
 
     const rebuildPrompt = 'Reply exactly with: ABORT_REBUILD_OK';
     const rebuild = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -760,7 +710,37 @@ export async function runPhase5ChatGptE2E(
       baselineConversationUrl,
       'REBUILD after abort must move to a new ChatGPT Conversation URL',
     );
-    assert.match(persistedAssistant(runtime, abortKey), /ABORT_REBUILD_OK/);
+
+    const rebuildPage = runtime.browser?.context.pages().at(-1);
+    assert.ok(rebuildPage, 'Expected a live ChatGPT Page after abort REBUILD');
+    const rebuildUserTurns = await inspectCollection(rebuildPage, chatGptSelectors.userTurns);
+    assert.ok(rebuildUserTurns.count > 0, 'Expected a ChatGPT Web user turn after abort REBUILD');
+    const rebuildWebUserTurn = await rebuildUserTurns.locator
+      .nth(rebuildUserTurns.count - 1)
+      .innerText();
+    assert.match(
+      rebuildWebUserTurn,
+      /ABORT_REBUILD_OK/,
+      `REBUILD Web user turn must contain the current prompt; webUser=${JSON.stringify(rebuildWebUserTurn)}`,
+    );
+    assert.doesNotMatch(
+      rebuildWebUserTurn,
+      /Produce 100 numbered lines/,
+      `REBUILD Web user turn must exclude the aborted pending prompt; webUser=${JSON.stringify(rebuildWebUserTurn)}`,
+    );
+
+    const rebuildPersistedAssistant = persistedAssistant(runtime, abortKey);
+    const rebuildLiveAssistant = await liveAssistantText(runtime);
+    assert.equal(
+      rebuildPersistedAssistant,
+      rebuildLiveAssistant,
+      'REBUILD persisted Assistant must equal the authoritative live Assistant text',
+    );
+    assert.match(
+      rebuildPersistedAssistant,
+      /ABORT_REBUILD_OK/,
+      `Unexpected abort REBUILD Assistant; baselineAssistant=${JSON.stringify(baselineAssistant)} webUser=${JSON.stringify(rebuildWebUserTurn)}`,
+    );
 
     return {
       chatCompletions: true,

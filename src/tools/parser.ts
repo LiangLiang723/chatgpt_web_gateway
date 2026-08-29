@@ -50,11 +50,15 @@ export function parseAssistantOutput(
   } catch {
     return invalid('Tool protocol payload is not valid JSON');
   }
-  if (!isRecord(payload) || !exactKeys(payload, ['calls'])) {
-    invalid('Tool protocol root must contain only calls');
+  if (!isRecord(payload) || !exactKeys(payload, ['requests'])) {
+    invalid('Function request protocol root must contain only requests');
   }
-  if (!Array.isArray(payload.calls) || payload.calls.length < 1 || payload.calls.length > 16) {
-    invalid('Tool protocol calls must contain between 1 and 16 entries');
+  if (
+    !Array.isArray(payload.requests) ||
+    payload.requests.length < 1 ||
+    payload.requests.length > 16
+  ) {
+    invalid('Function request protocol requests must contain between 1 and 16 entries');
   }
 
   if (context.toolChoice.mode === 'none') {
@@ -65,15 +69,15 @@ export function parseAssistantOutput(
   }
 
   const known = new Set(context.tools.map((tool) => tool.name));
-  const calls = payload.calls.map((value) => {
+  const calls = payload.requests.map((value) => {
     if (!isRecord(value) || !exactKeys(value, ['name', 'arguments'])) {
-      return invalid('Each tool call must contain only name and arguments');
+      return invalid('Each function request must contain only name and arguments');
     }
     if (typeof value.name !== 'string' || value.name.trim().length === 0) {
-      return invalid('Tool call name must be a non-empty string');
+      return invalid('Function request name must be a non-empty string');
     }
     if (!isRecord(value.arguments)) {
-      return invalid('Tool call arguments must be a JSON object');
+      return invalid('Function request arguments must be a JSON object');
     }
     if (!known.has(value.name)) {
       throw new ToolProtocolError('chatgpt_tool_unknown', 'ChatGPT requested an unknown tool');
