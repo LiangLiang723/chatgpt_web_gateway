@@ -10,17 +10,17 @@
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-10-complete
 STATUS=v1-acceptance-complete
-RELEASE_VERSION=V0.0.1
+RELEASE_VERSION=V0.1.0
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
 ACTIVE_PLAN=none
-NEXT_TASK=handle-next-explicit-release-or-maintenance-request
-UPDATED_AT=2026-08-29
+NEXT_TASK=handle-next-explicit-maintenance-or-release-request
+UPDATED_AT=2026-08-30
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 1–10 的 V1 实现、验收与 feature-branch Git 收口已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；主 acceptance checkpoint `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
-- **当前状态：** `v1-acceptance-complete`。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 三个最终真实网页缺陷都已从源头修复并有 deterministic/live 证据。最终 authenticated Phase 7 standalone 八项语义结果全部为 `true`；紧邻 Phase 6 standalone 九项全部为 `true`；随后 reduced combined Phase 3→8 退出码 0。公开版本仍为 `V0.0.1`，没有创建 Git Tag、GitHub Release 或 Docker registry 发布物。
+- **当前状态：** `v1-acceptance-complete`。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 三个最终真实网页缺陷都已从源头修复并有 deterministic/live 证据。最终 authenticated Phase 7 standalone 八项语义结果全部为 `true`；紧邻 Phase 6 standalone 九项全部为 `true`；随后 reduced combined Phase 3→8 退出码 0。公开版本已提升为 `V0.1.0`，并按显式发布指令创建同名 Git Tag / GitHub Release；Docker registry 镜像仍未发布。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)。Phase 7/8/9 的专项设计与已关闭实施计划继续保留为历史事实来源。
 - **Active Plan：** `none`。Phase 9 plan 已完成并关闭；Phase 7/8/9 specs/plans 保留验收证据与设计历史。
 - **最新 deterministic/Docker 基线：** final RESTORE-hydration/Auth candidate fresh `corepack pnpm verify` 通过 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image 为 `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa`，full `docker:smoke` PASS。构建代理仅显式使用 `http://192.168.3.83:7890`，未写入仓库/镜像默认配置。
@@ -82,7 +82,7 @@ UPDATED_AT=2026-08-29
 3. ✅ latest authenticated standalone Phase 5 已通过 `chatCompletions/markdown/responses/abort=true`；final adjacent Phase 6 four-group harness 九项完整 PASS；Phase 8 standalone `url/base64/persistence/restart=true` 已通过。
 4. ✅ final Phase 7 standalone 八项语义结果全部 `true`，包含 policy-change REBUILD 与 same-policy restart RESTORE。
 5. ✅ reduced combined Phase 3→8 退出码 0；Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按治理由相邻 standalone 证据承担。
-6. ✅ Git closure：staged diff / `git diff --check` / secret scan 均通过；主 acceptance commit `e0d804c`（`✨ 完成 V1 兼容能力与生产成熟化`）已正常 push `origin/phase-7-tool-calling`。未创建 Git Tag、GitHub Release 或 Docker registry publish。
+6. ✅ Git / release closure：feature branch 已 fast-forward 合并到 `main`；`V0.1.0` 发布元数据同步 `VERSION` / `package.json` / `CHANGELOG` / Project State，并创建同名 Git Tag / GitHub Release。Docker registry image 未发布。
 
 ## Architecture Facts（当前关键边界）
 
@@ -96,6 +96,7 @@ UPDATED_AT=2026-08-29
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-30：`phase-7-tool-calling` 以 fast-forward 合并到 `main`；公开版本从 `V0.0.1` 提升到 `V0.1.0`，同步 CHANGELOG / README / Project State，并按显式发布指令创建同名 Git Tag / GitHub Release；Docker registry image 未发布。
 - 2026-08-29：最终 V1 acceptance 收口。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 均修复；fresh deterministic **86/595**、fresh Docker/full smoke、Phase 7 standalone、紧邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过。staged diff/secret 检查完成后，主 acceptance commit `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
 - 2026-08-28：multiline Composer paste + Phase 6 current-attachment prompt + combined request-budget 候选 fresh **86/580** deterministic 与 `linux/amd64` image `sha256:193c8c89f973887815e5a4dede95803dbaccc45095b86297a8093f6302e0d3c7` + full smoke 通过；standalone Phase 5 四项随后真实通过。final combined 在 Phase 6 image `file_id` 一次 token mismatch 后停止；focused Phase 6 两轮失败位置又分别移动到 TXT timeout 与 XLSX missing response，第二轮已真实通过图片/TXT/PDF/DOCX。为降低无价值重复请求，combined Phase 6 全矩阵现由紧邻 standalone gate 取代，runner 显式输出 `attachmentMatrix=not_run_in_combined`。
 - 2026-08-28：PagePool replacement-before-close 候选完成 fresh deterministic/Docker 并通过 standalone Phase 5；随后 final-candidate combined Phase 3→8 两次暴露同一网络中断 DOM 状态块与正文 `.markdown` 冲突，当前候选把 authoritative Assistant text 收紧为 `.markdown.prose` 后等待统一复验。

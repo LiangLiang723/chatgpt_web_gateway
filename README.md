@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：V1 验收完成，公开版本仍为 V0.0.1
+## 当前状态：V1 验收完成，公开版本 V0.1.0
 
-Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前仓库仍保持公开版本 `V0.0.1`；本次 V1 收口不自动创建 `V1.0.0` Tag、GitHub Release 或 registry 镜像：
+Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前公开版本为 `V0.1.0`；这一 MINOR 版本发布本次已完成的 V1 兼容能力与生产成熟化成果，并保留 `0.x` 早期阶段定位。Git Tag / GitHub Release 随本版本创建，Docker Registry 镜像仍不发布：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -63,7 +63,7 @@ V1 最终目标包括：
 - 多 Conversation 并行
 - ChatGPT 图片生成
 
-> 这是已批准产品范围，不代表上述能力已经全部实现。
+> 这是本轮 V1 已完成并通过验收的产品范围；各接口的精确兼容边界仍以 [`docs/api-compatibility.md`](docs/api-compatibility.md) 为准。
 
 ## Docker 运行
 
@@ -291,11 +291,11 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 
 ## 版本与变更
 
-- 当前仓库版本：`V0.0.1`。
+- 当前仓库版本：`V0.1.0`。
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-当前 V1 实现/验收收口不会自动创建新的公开版本、Git Tag、Docker Registry 镜像或 GitHub Release；除非另有明确发布指令。
+`V0.1.0` 是本轮 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release；Docker Registry 镜像仍需单独发布指令。
 
 ## 开源协议
 

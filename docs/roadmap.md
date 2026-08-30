@@ -90,4 +90,4 @@ Phase 6 已关闭；最终四组 `2 / 2 / 2 / 1` attachment harness 在 V1 closu
 
 状态：**完成。**
 
-覆盖 Chat Completions、Responses、Files、Images Generation、Structured Output、Tool Calling、并发会话、Context Sync、浏览器异常恢复、冷备份/恢复以及文档/API 一致性。2026-08-29 final fresh deterministic/Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过，V1 产品验收关闭。公开版本仍为 `V0.0.1`；版本 bump、Tag、GitHub Release 与 registry publish 需单独发布指令。
+覆盖 Chat Completions、Responses、Files、Images Generation、Structured Output、Tool Calling、并发会话、Context Sync、浏览器异常恢复、冷备份/恢复以及文档/API 一致性。2026-08-29 final fresh deterministic/Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过，V1 产品验收关闭。2026-08-30 feature branch fast-forward 合并到 `main`，公开版本提升为 `V0.1.0` 并创建同名 Git Tag / GitHub Release；Docker registry image 仍未发布。

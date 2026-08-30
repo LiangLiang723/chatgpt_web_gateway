@@ -4,6 +4,36 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## V0.1.0 - 2026-08-30
+
+### Added（新增）
+
+- 完成 Chat Completions / Responses 主链路，支持 Conversation `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、SQLite checkpoint 与真实 DOM Streaming / abort。
+- 完成 Files / Attachments：Data URL、URL、Base64、`file_id`、TXT/PDF/DOCX/XLSX、图片上传、文件生命周期、SSRF/DNS/redirect 安全边界与 restart recovery。
+- 完成 Tool Calling V2 external-function request protocol、`tool_choice` policy、Tool Result continuation、tool/text Streaming 与 tool-context fingerprint REBUILD。
+- 完成 Structured Output `json_object` / `json_schema` 的 Prompt 约束与本地 JSON/Ajv 最终校验。
+- 完成 Images Generation `url|b64_json`、生成图片原子持久化、SQLite `generated_images`、SHA-256 integrity 与 restart 后读取。
+- 新增 authenticated `/v1/diagnostics`、冷 `backup:data` / `restore:data`、NAS 运维文档，以及正式 `linux/amd64` Docker / noVNC maintenance 边界。
+
+### Fixed（修复）
+
+- 修复 Markdown renderer 尾部回排导致 Streaming committed prefix 分叉的问题，并将稳定尾部 holdback 调整为 64 Unicode code points。
+- 修复 Composer Send readiness、Persistent BrowserContext 最后 Page replacement、失败 Page 回池、网络中断状态块与正文 selector 冲突等真实网页生命周期问题。
+- 修复 Fastify/Ajv union validation 删除合法 `tool_call_id`、`tool_choice=none` continuation policy、function policy 未进入 fingerprint 等 Tool Calling 边界。
+- 修复登出首页多个 `Log in` 控件导致 Auth Probe selector ambiguous，以及跨 URL RESTORE 中 Composer 早于历史 turns 水合导致 Assistant baseline 竞态。
+
+### Validation（验证）
+
+- 发布候选 fresh `corepack pnpm verify`：**86 test files / 595 tests**，format / lint / typecheck / build / Project Memory / Docs / Architecture / Version 全绿。
+- 最新 `linux/amd64` Docker image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full `docker:smoke` 已通过。
+- authenticated Phase 7 standalone 八项、相邻 Phase 6 standalone 九项、Phase 8 standalone 与 reduced combined Phase 3→8 均已有真实 ChatGPT Web 通过证据。
+
+### Known limits（已知限制）
+
+- ChatGPT DOM、Cloudflare、认证、上传与图片生成 UI/CDN 属于外部变化面；正式 Docker 验收仍只覆盖 `linux/amd64`，ARM64 未验证。
+- Images `size/quality/style` 当前只兼容接收并忽略；Structured Output 是 Prompt 约束 + 本地验证，不是原生 constrained decoding。
+- 本版本发布 Git Tag / GitHub Release；不发布 Docker Registry 镜像。
+
 ## V0.0.1 - 2026-08-14
 
 ### Added（新增）
