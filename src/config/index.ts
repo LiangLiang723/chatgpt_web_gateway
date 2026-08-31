@@ -62,6 +62,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       1440,
     ),
+    modelContextWindow: parseInteger('MODEL_CONTEXT_WINDOW', env.MODEL_CONTEXT_WINDOW, 128000, 1),
     chatgptProxyServer: parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER),
     publicBaseUrl: parsePublicBaseUrl(env.PUBLIC_BASE_URL),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),

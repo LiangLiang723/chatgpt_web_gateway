@@ -8,7 +8,8 @@
 
 不得访问网络或真实浏览器。重点覆盖：
 
-- OpenAI Schema（结构）→ `NormalizedRequest`。
+- OpenAI Schema（结构）→ `NormalizedRequest`；Chat Completions `stream_options.include_usage?: boolean` 保持 strict compatibility metadata，未知字段/非 boolean 拒绝且不进入 NormalizedRequest。
+- Runtime config 默认值/覆盖/非法值，包括 `MODEL_CONTEXT_WINDOW` 正整数 compatibility hint。
 - `FRESH | APPEND | RESTORE | REBUILD`。
 - Message canonicalization（消息规范化）与 fingerprint（指纹）。
 - Stable Prefix（稳定前缀）。
@@ -33,7 +34,8 @@
 
 使用 local fixture（本地固定样本）和 fake driver（假驱动），不连接 ChatGPT：
 
-- Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary。
+- Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary；Cherry Studio 实际 `stream=true + stream_options.include_usage` 请求形状使用 fake streaming boundary 做 deterministic regression，证明可接受且不产生 fake usage chunk。
+- `GET /v1/models` authenticated integration 覆盖能力元数据与默认/自定义 `MODEL_CONTEXT_WINDOW`，不连接 ChatGPT。
 - Phase 2：真实临时 SQLite 文件 → migration → aggregate save → close → reopen → aggregate/File recovery。
 - Phase 2：Gateway runtime 在 Fastify readiness 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 幂等关闭 SQLite。
 - Phase 3：POST route → Normalizer → injected/fake execution result → Chat Completions / Responses Encoder，全程不访问真实 ChatGPT。
@@ -201,6 +203,8 @@ corepack pnpm docker:smoke
 `corepack pnpm verify` 组合 format、lint、typecheck、unit/integration test、build 和全部仓库治理检查。2026-08-29 final RESTORE-hydration/Auth candidate 的 fresh deterministic evidence 为 **86 test files / 595 tests**，format、lint、typecheck、build、Project Memory、Docs、Architecture、Version 与 `git diff --check` 全部通过。Driver regression 继续要求单行走 keyboard text input、含换行文本由 ProseMirror `text/plain` paste transaction 接收；Phase 7 regression 证明 normalized function policy 变化进入 tool-context fingerprint 并触发 `tools_changed` REBUILD；RESTORE regression 证明跨 Conversation URL 导航后不能只等待 Composer，必须等待历史 user/assistant turns 水合并稳定。使用 Corepack 是正式入口，不要求宿主机全局安装 pnpm。
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
+
+2026-08-31 Cherry Studio compatibility maintenance candidate fresh `corepack pnpm verify` 通过 **86 test files / 600 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。该改动只涉及 HTTP schema/adapter、models metadata/config 与 deterministic tests，因此本轮未运行 Docker build/smoke 或 authenticated ChatGPT E2E。
 
 ## 不能伪造的验证
 

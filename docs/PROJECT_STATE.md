@@ -14,7 +14,7 @@ RELEASE_VERSION=V0.1.0
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
 ACTIVE_PLAN=none
 NEXT_TASK=handle-next-explicit-maintenance-or-release-request
-UPDATED_AT=2026-08-30
+UPDATED_AT=2026-08-31
 ```
 
 ## Snapshot（快照）
@@ -23,7 +23,7 @@ UPDATED_AT=2026-08-30
 - **当前状态：** `v1-acceptance-complete`。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 三个最终真实网页缺陷都已从源头修复并有 deterministic/live 证据。最终 authenticated Phase 7 standalone 八项语义结果全部为 `true`；紧邻 Phase 6 standalone 九项全部为 `true`；随后 reduced combined Phase 3→8 退出码 0。公开版本已提升为 `V0.1.0`，并按显式发布指令创建同名 Git Tag / GitHub Release；Docker registry 镜像仍未发布。
 - **Governing Spec：** [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)。Phase 7/8/9 的专项设计与已关闭实施计划继续保留为历史事实来源。
 - **Active Plan：** `none`。Phase 9 plan 已完成并关闭；Phase 7/8/9 specs/plans 保留验收证据与设计历史。
-- **最新 deterministic/Docker 基线：** final RESTORE-hydration/Auth candidate fresh `corepack pnpm verify` 通过 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image 为 `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa`，full `docker:smoke` PASS。构建代理仅显式使用 `http://192.168.3.83:7890`，未写入仓库/镜像默认配置。
+- **最新 deterministic / Docker 基线：** 2026-08-31 Cherry Studio compatibility maintenance candidate fresh `corepack pnpm verify` 通过 **86 test files / 600 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；本 maintenance change 没有运行 Docker 或真实 ChatGPT E2E。最近一次已验证 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；当时构建代理仅显式使用 `http://192.168.3.83:7890`，未写入仓库/镜像默认配置。
 - **最新真实网页事实：** fresh inspect 为 `auth=authenticated` / Composer unique。Phase 7 standalone 返回 `singleTool/resultContinuation/policyRebuild/multipleTools/streamTool/streamText/restore/schemaRebuild=true`；紧邻 Phase 6 standalone 返回 image Data URL/file_id、XLSX/TXT/PDF/DOCX、Streaming、APPEND、RESTORE 九项全 `true`；reduced combined 随后 Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses、Phase 7 八项、Phase 8 `url/base64/persistence/restart` 全部通过，并按治理报告 Phase 5 `abort=not_run_in_combined`、Phase 6 `attachmentMatrix=not_run_in_combined`。
 
 ## Implemented Now（当前已实现）
@@ -33,7 +33,7 @@ UPDATED_AT=2026-08-30
 - ✅ TypeScript / Fastify / TypeBox/Ajv / Vitest / pnpm 11 工具链；正式 deterministic 入口为 `corepack pnpm verify`。
 - ✅ 正式 `linux/amd64` Docker 边界、Playwright bundled Chromium + Xvfb normal 模式、maintenance-only Google Chrome Stable/noVNC、非 root `PUID/PGID` 与 `/data` Bind Mount。
 - ✅ Node 24 `node:sqlite` 单连接、checksum migrations `001/002/003`、Conversation / Message / Tool Call / Attachment / File / Blob / Generated Image persistence。
-- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`、Phase 6 Files 五接口。
+- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`、Phase 6 Files 五接口。V0.1.x maintenance 起 Chat Completions strict 兼容接收 `stream_options.include_usage?: boolean` 并在 API adapter 层忽略，不产生 fake usage；`/v1/models` 暴露当前实际能力、Streaming 支持与可配置 `context_window` compatibility hint。
 - ✅ `/v1/*` Bearer authentication；Fastify Ajv 显式 `removeAdditional:false`，避免 union 分支验证删除合法 branch-specific 字段（真实 Phase 7 暴露的 `tool_call_id` 回归）。
 
 ### Conversation / Streaming / Attachments
@@ -87,7 +87,7 @@ UPDATED_AT=2026-08-30
 ## Architecture Facts（当前关键边界）
 
 - ChatGPT Web only；不调用或逆向私有 `/backend-api`。
-- 默认只暴露 `chatgpt-web`；不伪造具体 OpenAI API 模型或 token usage。
+- 默认只暴露 `chatgpt-web`；不伪造具体 OpenAI API 模型或 token usage。`MODEL_CONTEXT_WINDOW` 默认 `128000`，仅作为 `/v1/models` compatibility hint，不代表 ChatGPT Web 官方固定 context limit；对话模型不声明独立 Images endpoint 的 `image-generation` 能力。
 - SQLite 是 Conversation/File/Generated Image 恢复事实来源；Page 是可丢弃 runtime cache；same-key Queue 是单进程写序列化边界。
 - Browser upload/image generation 是网页 side effect；未知 post-checkpoint Conversation failure 保持 `in_flight` 并由下一请求 REBUILD 收敛。
 - Tool definitions/results、Structured Output schema、附件来源都按不可信客户端数据处理；Gateway 不执行 caller-defined functions、Shell、HTTP plugin 或 MCP tool。
@@ -96,6 +96,7 @@ UPDATED_AT=2026-08-30
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-31：Cherry Studio compatibility maintenance candidate：Chat Completions strict 接收并忽略 `stream_options.include_usage?: boolean`、不伪造 usage；`/v1/models` 增加能力/输入模态/Streaming/context metadata，`MODEL_CONTEXT_WINDOW` 默认 `128000`。fresh deterministic 为 **86 test files / 600 tests**；本地 schema/metadata 变更未运行 Docker 或真实 ChatGPT E2E。
 - 2026-08-30：`phase-7-tool-calling` 以 fast-forward 合并到 `main`；公开版本从 `V0.0.1` 提升到 `V0.1.0`，同步 CHANGELOG / README / Project State，并按显式发布指令创建同名 Git Tag / GitHub Release；Docker registry image 未发布。
 - 2026-08-29：最终 V1 acceptance 收口。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 均修复；fresh deterministic **86/595**、fresh Docker/full smoke、Phase 7 standalone、紧邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过。staged diff/secret 检查完成后，主 acceptance commit `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
 - 2026-08-28：multiline Composer paste + Phase 6 current-attachment prompt + combined request-budget 候选 fresh **86/580** deterministic 与 `linux/amd64` image `sha256:193c8c89f973887815e5a4dede95803dbaccc45095b86297a8093f6302e0d3c7` + full smoke 通过；standalone Phase 5 四项随后真实通过。final combined 在 Phase 6 image `file_id` 一次 token mismatch 后停止；focused Phase 6 两轮失败位置又分别移动到 TXT timeout 与 XLSX missing response，第二轮已真实通过图片/TXT/PDF/DOCX。为降低无价值重复请求，combined Phase 6 全矩阵现由紧邻 standalone gate 取代，runner 显式输出 `attachmentMatrix=not_run_in_combined`。
@@ -113,6 +114,7 @@ UPDATED_AT=2026-08-30
 - ChatGPT DOM、Cloudflare、认证、图片生成 UI/CDN、上传格式与平台频率保护仍可能变化；Phase 8 request-scoped image baseline + duplicate-resource dedup 已通过 standalone，并在最新 PagePool 生命周期修复后的 reduced combined 中证明可共存。
 - Images `size/quality/style` 当前只是兼容接收/忽略，不承诺精确控制；只支持 `n=1`，不支持 edits/variations/partial image streaming。
 - Structured Output 是 Prompt 约束 + 最终本地验证，不是原生 constrained decoding；模型不满足格式时请求会稳定失败，而不是 Gateway 修复/伪造 JSON。
+- `/v1/models` 的扩展 metadata 使用 snake_case OpenAI-compatible 字段；Cherry Studio 某些版本的通用 OpenAI-compatible fetcher 可能只映射 `id/name/owned_by`，因此客户端 UI 是否自动填充能力/context 仍取决于客户端版本。
 - Stable Prefix 64-code-point holdback 只吸收当前 bounded tail rewrite；更深 rewrite 穿过 committed prefix 仍 `chatgpt_stream_diverged`。
 - Remote URL image input 的 SSRF/DNS/redirect/pinned-address 链已有 deterministic coverage，但此前没有稳定公网 fixture 的 live remote-fetch E2E。
 - Files DELETE 不是立即 secure erase；历史 Attachment 引用可延长内部 bytes 生命周期。

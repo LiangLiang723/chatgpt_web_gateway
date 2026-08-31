@@ -56,7 +56,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 - 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint；无 key 时仍为独立 FRESH `conversation_key = NULL`。
 - Phase 5 `stream=true` 与 non-stream 使用相同的 target Assistant turn ownership 和 completion 语义，不改变 Context Sync 规则。
 - Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 **64 个 Unicode code points** 作为 bounded commit tail；2026-08-26 real E2E 观测到一次 38-code-point Markdown 尾部回排后从 16 提升为 64。completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
-- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage。
+- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage。V0.1.x maintenance 起严格兼容接收 `stream_options.include_usage?: boolean`，该字段只在 HTTP adapter/schema 层作为客户端兼容 metadata 消费并忽略；`include_usage=true` 不新增假的 usage chunk，`stream_options` 内未知字段仍返回 400。
 - Responses 使用 typed SSE：`response.created`、`response.in_progress`、item/content added、`response.output_text.delta`、done events、`response.completed`；IDs 稳定，`sequence_number` 单调，`usage=null`。
 - 首个 internal `started` 之前的错误仍返回普通 OpenAI-style 非 200 JSON；SSE 已开始后的错误使用协议流内 error，并且不发送成功 terminal。
 - 成功 terminal 晚于最终 SQLite clean aggregate commit。final clean save 失败时不发送 `[DONE]` / `response.completed`，checkpoint 保持 `in_flight`。
@@ -81,6 +81,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 | 字符串 / text part `content` | ✅ | ✅ |
 | `stream=false` | ✅ | ✅ 文本与 Phase 6 附件请求 |
 | `stream=true` | ✅ | ✅ 文本与 Phase 6 附件请求均复用真实 DOM Streaming |
+| `stream_options.include_usage` | 🟡 | ✅ V0.1.x maintenance 兼容接收 `boolean` 并忽略；对象保持 strict，未知字段/非 boolean 拒绝；不生成 fake usage chunk |
 | `image_url` URL/Base64 | ✅ | ✅ Phase 6；URL 安全获取 + Data URL，authenticated E2E 覆盖 Data URL |
 | file / `file_id` / Base64 file | ✅ | ✅ Phase 6 |
 | `tools` / assistant `tool_calls` / `role=tool` | ✅ | ✅ Phase 7 function Tools；final policy-fingerprint + RESTORE-hydration candidate deterministic/Docker、standalone 与 reduced combined authenticated acceptance 均通过 |
@@ -156,6 +157,10 @@ SSE 已开始后 HTTP status 已固定为 200；相同稳定错误改用协议�
 ```text
 chatgpt-web
 ```
+
+`GET /v1/models` 同时暴露 Gateway 已实现的兼容扩展元数据：`name="ChatGPT Web"`、`capabilities=["image-recognition","file-input","function-call","structured-output"]`、`input_modalities=["text","image"]`、`supports_streaming=true` 与 `context_window`。`context_window` 来自 `MODEL_CONTEXT_WINDOW`，默认 `128000`；它只是提供给客户端的 **compatibility hint**，不是 ChatGPT 官方保证的 Web 后端固定 context limit。
+
+对话模型不声明 `image-generation`：图片生成是独立 `POST /v1/images/generations` 能力，不等价于 Chat Completions/Responses 模型输出模态。当前只返回 snake_case OpenAI-compatible extension 字段，不额外伪造 `contextWindow` / `supportsStreaming` 等别名。Cherry Studio 的通用 OpenAI-compatible `/models` fetcher 在部分版本中可能只映射 `id/name/owned_by`，因此 Gateway 正确返回扩展元数据并不保证该版本 UI 会自动填充所有模型编辑字段。
 
 不伪装具体 OpenAI API 模型。
 

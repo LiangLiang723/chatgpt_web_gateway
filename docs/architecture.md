@@ -85,6 +85,8 @@ interface NormalizedRequest {
 
 图片生成可以有独立 `ImageRequestAdapter`，但浏览器生命周期、错误、持久化和生成资源管理仍复用公共基础设施。
 
+HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRequest`。例如 Chat Completions 的 `stream_options.include_usage?: boolean` 由 strict request schema 接收后即在 API adapter 边界消费并忽略；未知 `stream_options` 字段仍由 Ajv 拒绝，且不会因为 `include_usage=true` 伪造 token usage。`GET /v1/models` 的 `context_window` 则从 `AppConfig.modelContextWindow` 读取，作为客户端 compatibility hint 暴露，不进入 Conversation/Browser 执行链，也不代表 ChatGPT Web 官方固定 context limit。
+
 ## Conversation（对话）和 Context Sync（上下文同步）
 
 每个 Conversation 有稳定 `ConversationKey`，本地保存完整消息和 ChatGPT conversation URL。

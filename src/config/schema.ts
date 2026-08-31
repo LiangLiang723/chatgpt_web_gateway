@@ -12,6 +12,7 @@ export const AppConfigSchema = Type.Object(
     dataDir: Type.String({ minLength: 1 }),
     maxActivePages: Type.Integer({ minimum: 1, maximum: 32 }),
     pageIdleTimeoutMinutes: Type.Integer({ minimum: 1, maximum: 1440 }),
+    modelContextWindow: Type.Integer({ minimum: 1 }),
     chatgptProxyServer: Type.Optional(Type.String({ minLength: 1 })),
     publicBaseUrl: Type.Optional(Type.String({ minLength: 1 })),
     novncPort: Type.Integer({ minimum: 1, maximum: 65535 }),

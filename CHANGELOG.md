@@ -4,6 +4,17 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## Unreleased（未发布）
+
+### Fixed（修复）
+
+- Cherry Studio / OpenAI-compatible Chat Completions 兼容接收 strict `stream_options.include_usage?: boolean`；该字段仅作为兼容 metadata 忽略，不生成 fake token usage chunk，未知字段继续拒绝。
+- `GET /v1/models` 增加 `chatgpt-web` 能力、输入模态、Streaming 支持与 `context_window` 扩展元数据；新增 `MODEL_CONTEXT_WINDOW=128000` 可配置 compatibility hint，不声明为 ChatGPT 官方 Web context limit。
+
+### Validation（验证）
+
+- fresh `corepack pnpm verify`：**86 test files / 600 tests**，format / lint / typecheck / build / Project Memory / Docs / Architecture / Version 全绿；本地 schema/metadata maintenance change 未运行 Docker 或真实 ChatGPT E2E。
+
 ## V0.1.0 - 2026-08-30
 
 ### Added（新增）

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
-export function registerModelsRoute(app: FastifyInstance): void {
+import type { AppConfig } from '../../config/index.js';
+
+export function registerModelsRoute(app: FastifyInstance, config: AppConfig): void {
   app.get('/v1/models', async () => ({
     object: 'list',
     data: [
@@ -9,6 +11,11 @@ export function registerModelsRoute(app: FastifyInstance): void {
         object: 'model',
         created: 0,
         owned_by: 'chatgpt-web-gateway',
+        name: 'ChatGPT Web',
+        capabilities: ['image-recognition', 'file-input', 'function-call', 'structured-output'],
+        input_modalities: ['text', 'image'],
+        supports_streaming: true,
+        context_window: config.modelContextWindow,
       },
     ],
   }));

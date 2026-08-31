@@ -5,9 +5,9 @@ import { loadConfig } from '../../src/config/index.js';
 
 const apps: Array<ReturnType<typeof buildServer>> = [];
 
-function createApp() {
+function createApp(env: NodeJS.ProcessEnv = {}) {
   const app = buildServer({
-    config: loadConfig({ GATEWAY_API_KEY: 'test-key' }),
+    config: loadConfig({ GATEWAY_API_KEY: 'test-key', ...env }),
   });
   apps.push(app);
   return app;
@@ -67,8 +67,27 @@ describe('health and models routes', () => {
           object: 'model',
           created: 0,
           owned_by: 'chatgpt-web-gateway',
+          name: 'ChatGPT Web',
+          capabilities: ['image-recognition', 'file-input', 'function-call', 'structured-output'],
+          input_modalities: ['text', 'image'],
+          supports_streaming: true,
+          context_window: 128000,
         },
       ],
+    });
+  });
+
+  it('reads the compatibility context window hint from configuration', async () => {
+    const response = await createApp({ MODEL_CONTEXT_WINDOW: '64000' }).inject({
+      method: 'GET',
+      url: '/v1/models',
+      headers: { authorization: 'Bearer test-key' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data[0]).toMatchObject({
+      id: 'chatgpt-web',
+      context_window: 64000,
     });
   });
 });

@@ -14,6 +14,7 @@ describe('loadConfig', () => {
       dataDir: '/data',
       maxActivePages: 4,
       pageIdleTimeoutMinutes: 30,
+      modelContextWindow: 128000,
       chatgptProxyServer: undefined,
       publicBaseUrl: undefined,
       novncPort: 6080,
@@ -38,6 +39,7 @@ describe('loadConfig', () => {
         DATA_DIR: '/srv/gateway',
         MAX_ACTIVE_PAGES: '7',
         PAGE_IDLE_TIMEOUT_MINUTES: '12',
+        MODEL_CONTEXT_WINDOW: '64000',
         CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
         PUBLIC_BASE_URL: ' https://gateway.example/base/ ',
         NOVNC_PORT: '7777',
@@ -53,6 +55,7 @@ describe('loadConfig', () => {
       dataDir: '/srv/gateway',
       maxActivePages: 7,
       pageIdleTimeoutMinutes: 12,
+      modelContextWindow: 64000,
       chatgptProxyServer: 'http://proxy.example:7890',
       publicBaseUrl: 'https://gateway.example/base',
       novncPort: 7777,
@@ -91,6 +94,11 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ GATEWAY_API_KEY: 'x', PAGE_IDLE_TIMEOUT_MINUTES: '1.5' })).toThrow(
       /PAGE_IDLE_TIMEOUT_MINUTES/,
     );
+    for (const value of ['0', '-1', '1.5', 'not-a-number', '9007199254740992']) {
+      expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MODEL_CONTEXT_WINDOW: value })).toThrow(
+        /MODEL_CONTEXT_WINDOW/,
+      );
+    }
   });
 
   it('rejects unsupported UI modes', () => {

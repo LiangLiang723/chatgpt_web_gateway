@@ -6,6 +6,8 @@
 
 2026-08-17 final acceptance evidence: fresh DevSpace `corepack pnpm verify` passed 55 test files / 332 tests; fresh `linux/amd64` Docker build produced `sha256:78cf872f42c51e14a0dcb99281087c2a604ec2fc12e9c642ab58ed2474ac84b0` and full `docker:smoke` passed; authenticated `inspect:chatgpt`, standalone Phase 5 real E2E, and combined Phase 3/4/5 real E2E all passed. Phase 5 is closed; attachments, Tools, Structured Output and image execution remain later phases.
 
+> **Maintenance note (2026-08-31):** 本文中“不接受 `stream_options.include_usage`”是 Phase 5 当时的历史设计事实，不回写成当时已支持。V0.1.x maintenance 为 Cherry Studio/OpenAI-compatible client 兼容性新增 strict schema 接收 `stream_options.include_usage?: boolean`，但继续遵守本规格“不伪造 token usage / 不增加 usage chunk”的核心边界；当前行为以长期 [`../../api-compatibility.md`](../../api-compatibility.md) 为准。
+
 ## 1. Goal（目标）
 
 Phase 5 在 Phase 4 已完成的 Conversation ownership、Context Sync、Assistant turn ownership、SQLite sync checkpoint 和真实 ChatGPT Web E2E 基础上，交付**真正从 ChatGPT DOM 增量读取并向 OpenAI Compatible Client 实时输出**的文本 Streaming 闭环。

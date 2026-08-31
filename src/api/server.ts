@@ -92,7 +92,7 @@ export function buildServer(options: BuildServerOptions) {
   const stream = options.stream ?? backendNotImplementedStreamingExecution;
 
   registerHealthRoute(app);
-  registerModelsRoute(app);
+  registerModelsRoute(app, options.config);
   if (options.diagnostics) registerDiagnosticsRoute(app, options.diagnostics);
   if (options.fileService) registerFilesRoute(app, options.fileService);
   if (options.imageService) registerImagesRoute(app, options.config, options.imageService);

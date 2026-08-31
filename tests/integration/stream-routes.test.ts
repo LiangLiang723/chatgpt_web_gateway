@@ -93,6 +93,79 @@ describe('Streaming HTTP routes', () => {
     expect(body).toContain('data: [DONE]\n\n');
   });
 
+  it.each([true, false])(
+    'accepts Cherry Studio stream_options.include_usage=%s without emitting fake usage',
+    async (includeUsage) => {
+      const received: NormalizedRequest[] = [];
+      const app = appWith({
+        execute: async () => result,
+        stream: async (request, { sink }) => {
+          received.push(request);
+          await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+          await sink({ type: 'text.delta', delta: 'Hello world' });
+          await sink({ type: 'completed', result });
+          return result;
+        },
+      });
+      const base = await listen(app);
+
+      const response = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'chatgpt-web',
+          messages: [{ role: 'user', content: '你是谁' }],
+          stream: true,
+          stream_options: { include_usage: includeUsage },
+        }),
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(received).toHaveLength(1);
+      expect(received[0]?.output).toEqual({ mode: 'text', stream: true });
+      expect(body).toContain('"finish_reason":"stop"');
+      expect(body).toContain('data: [DONE]\n\n');
+      expect(body).not.toContain('"usage"');
+    },
+  );
+
+  it('rejects non-boolean Cherry Studio stream_options.include_usage', async () => {
+    const app = appWith({ execute: async () => result, stream: async () => result });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: true,
+        stream_options: { include_usage: 'true' },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects unknown fields inside Cherry Studio stream_options', async () => {
+    const app = appWith({ execute: async () => result, stream: async () => result });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: true,
+        stream_options: { include_usage: true, future_flag: true },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
   it('routes Responses stream=true through the Responses SSE encoder', async () => {
     const app = appWith({
       execute: async () => result,

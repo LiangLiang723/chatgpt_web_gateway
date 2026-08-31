@@ -88,6 +88,13 @@ const AssistantToolCallSchema = Type.Object(
   { additionalProperties: false },
 );
 
+const StreamOptionsSchema = Type.Object(
+  {
+    include_usage: Type.Optional(Type.Unsafe<boolean>({ enum: [true, false] })),
+  },
+  { additionalProperties: false },
+);
+
 const SystemMessageSchema = Type.Object(
   {
     role: Type.Literal('system'),
@@ -149,6 +156,7 @@ export const ChatCompletionsRequestSchema = Type.Object(
     tool_choice: Type.Optional(ToolChoiceSchema),
     response_format: Type.Optional(ChatResponseFormatSchema),
     stream: Type.Optional(Type.Boolean()),
+    stream_options: Type.Optional(StreamOptionsSchema),
     temperature: Type.Optional(Type.Number()),
     top_p: Type.Optional(Type.Number()),
     presence_penalty: Type.Optional(Type.Number()),

@@ -12,7 +12,7 @@ Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh determi
 - Vitest、ESLint、Prettier 和确定性 `verify`。
 - `GET /health`。
 - authenticated `GET /v1/diagnostics`，只报告本地 Browser/Page/Persistence 状态并固定 `auth_state=not_probed`。
-- `GET /v1/models`，默认只暴露 `chatgpt-web`。
+- `GET /v1/models`，默认只暴露 `chatgpt-web`，并返回已实现能力、Streaming 支持和可配置 context-window compatibility hint。
 - `/v1/*` Bearer API Key 认证；`/health` 无需认证。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 的 Schema 校验和统一 `NormalizedRequest` Normalizer。
 - `X-Conversation-Key` 兼容扩展。
@@ -31,7 +31,7 @@ Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh determi
 - bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
 - Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
 - full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle。未提供 key 时每个请求仍建立并持久化独立 `conversation_key = NULL` Fresh Conversation，但不会跨请求猜测身份。
-- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage。Phase 6 图片/文件附件、Phase 7 function Tools/Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage。Chat Completions 兼容接收 Cherry Studio 常见的 `stream_options.include_usage?: boolean`，但该字段仅作为兼容 metadata 忽略，`include_usage=true` 不生成 fake usage chunk。Phase 6 图片/文件附件、Phase 7 function Tools/Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
 - `POST /v1/images/generations` 已实现 `n=1`、`url|b64_json`、request-scoped conversation-turn 图片基线采集、`${DATA_DIR}/generated` 原子持久化、SQLite `generated_images` 记录与 SHA-256 完整性检查；图片采集不依赖文本 Assistant role/copy completion marker，并按 `currentSrc || src` 去重同一 generated asset 的重复 DOM copy，`GET /v1/images/:id/content` 继续要求 Bearer authentication。
 - `corepack pnpm inspect:chatgpt`、Phase 3–8 standalone E2E 与 combined `corepack pnpm test:e2e:chatgpt` 提供显式真实网页诊断/验收，要求独立测试 Browser Profile；combined 额外要求 `E2E_CHATGPT_COMBINED=1`。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
@@ -115,6 +115,8 @@ curl \
   http://127.0.0.1:3000/v1/models
 ```
 
+`chatgpt-web` 的模型元数据包含 `image-recognition`、`file-input`、`function-call`、`structured-output`、`input_modalities=["text","image"]`、`supports_streaming=true` 与 `context_window`。默认 `context_window=128000`，可通过 `MODEL_CONTEXT_WINDOW` 调整；该值只是 Gateway 给 OpenAI-compatible 客户端的兼容提示，不是 ChatGPT 官方保证的 Web 后端固定上下文上限。图片生成通过独立 `/v1/images/generations` 暴露，因此对话模型不声明 `image-generation`。部分 Cherry Studio 版本的通用 `/models` 映射可能忽略扩展字段，因此 UI 是否自动填充取决于客户端版本。
+
 ### 3. 持久化目录
 
 Compose 默认：
@@ -185,6 +187,7 @@ docker compose up -d
 | `PGID` | `1000` | 长期业务进程 GID |
 | `MAX_ACTIVE_PAGES` | `4` | Page Pool 最大打开 Page 数；不同 Conversation 可并行直到容量上限 |
 | `PAGE_IDLE_TIMEOUT_MINUTES` | `30` | Conversation Page affinity 空闲回收时间；容量压力下可提前回收 LRU idle Page |
+| `MODEL_CONTEXT_WINDOW` | `128000` | `/v1/models` 暴露的 context-window compatibility hint；必须为正整数，不代表 ChatGPT 官方 Web context limit |
 | `CHATGPT_PROXY_SERVER` | 空 | 可选 ChatGPT 浏览器代理；支持 `http` / `https` / `socks5`，URL 内禁止账号密码 |
 | `PUBLIC_BASE_URL` | 空 | 可选生成图片公开 URL base；仅允许无 credentials/query/hash 的 `http(s)` base，content route 仍要求 Bearer auth |
 | `NOVNC_BIND` | `127.0.0.1` | noVNC 宿主机绑定地址 |
