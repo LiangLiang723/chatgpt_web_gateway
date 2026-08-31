@@ -12,18 +12,18 @@ PHASE=phase-10-complete
 STATUS=v1-acceptance-complete
 RELEASE_VERSION=V0.1.2
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
-ACTIVE_PLAN=docs/superpowers/plans/2026-08-31-v0.1.2-openai-agent-compat.md
-NEXT_TASK=finish-v0.1.2-verify-main-integration
+ACTIVE_PLAN=none
+NEXT_TASK=handle-next-explicit-maintenance-or-release-request
 UPDATED_AT=2026-08-31
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 1–10 的 V1 实现、验收与 feature-branch Git 收口已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；主 acceptance checkpoint `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
-- **当前状态：** `v1-acceptance-complete`。V1 authenticated Browser acceptance 证据保持有效；当前正在 `fix/cherry-message-model-compat` 收口 `V0.1.2` OpenAI-compatible Agent maintenance candidate。该候选修复 Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes 常见 request metadata、Codex Responses namespace/custom tool bridge，以及 Cherry camelCase 模型能力/token hints。Claude Code 原生 Anthropic Messages 按用户决定不在范围。`V0.1.0` Git Tag / GitHub Release 仍保留；V0.1.2 不创建 Tag/Release 或 Docker registry image。
+- **当前状态：** `v1-acceptance-complete`。`V0.1.2` OpenAI-compatible Agent maintenance 已完成、fast-forward 集成到 `main` 并推送。该版本修复 Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes 常见 request metadata、Codex Responses namespace/custom tool bridge，并补充模型能力/token compatibility metadata；Claude Code 原生 Anthropic Messages 按用户决定不在范围。`V0.1.0` Git Tag / GitHub Release 仍保留；本次没有创建 `V0.1.2` Tag / GitHub Release，也未发布 Docker registry image。
 - **Governing Spec：** V1 主设计仍是 [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)；当前 maintenance 设计见 [`docs/superpowers/specs/2026-08-31-v0.1.2-openai-agent-compat-design.md`](superpowers/specs/2026-08-31-v0.1.2-openai-agent-compat-design.md)。
-- **Active Plan：** [`docs/superpowers/plans/2026-08-31-v0.1.2-openai-agent-compat.md`](superpowers/plans/2026-08-31-v0.1.2-openai-agent-compat.md)；实现与 focused regressions 已完成，剩余 final verify / Git main integration。
-- **最新 deterministic / Docker 基线：** V0.1.2 candidate focused compatibility suite 已通过 **8 files / 56 tests**；补充 current-Codex `output_schema/tool_search/web_search` coverage 后相关 tests + `typecheck` 再次通过。full `corepack pnpm verify` 已连续两次通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿，且 `git diff --check` 通过；当前候选已达到 Git integration gate。最近一次 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS。V0.1.2 adapter-only candidate 未运行 Docker 或真实 ChatGPT E2E。
+- **Active Plan：** `none`。V0.1.2 maintenance plan 已完成并关闭，保留为设计/验收历史。
+- **最新 deterministic / Docker 基线：** V0.1.2 focused compatibility suite 通过 **8 files / 56 tests**；补充 current-Codex `output_schema/tool_search/web_search` coverage 后相关 tests + `typecheck` 再次通过。功能分支 full `corepack pnpm verify` 连续两次、以及 fast-forward 后本地 `main` 再一次，均通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿，`git diff --check` 与 staged 安全检查也通过。功能提交 `7d475fe` 已推送到 `origin/main`，post-push fetch 确认远端与本地一致。最近一次 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；V0.1.2 adapter-only maintenance 未运行 Docker 或真实 ChatGPT E2E。
 - **最新真实网页事实：** fresh inspect 为 `auth=authenticated` / Composer unique。Phase 7 standalone 返回 `singleTool/resultContinuation/policyRebuild/multipleTools/streamTool/streamText/restore/schemaRebuild=true`；紧邻 Phase 6 standalone 返回 image Data URL/file_id、XLSX/TXT/PDF/DOCX、Streaming、APPEND、RESTORE 九项全 `true`；reduced combined 随后 Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses、Phase 7 八项、Phase 8 `url/base64/persistence/restart` 全部通过，并按治理报告 Phase 5 `abort=not_run_in_combined`、Phase 6 `attachmentMatrix=not_run_in_combined`。
 
 ## Implemented Now（当前已实现）
@@ -96,7 +96,7 @@ UPDATED_AT=2026-08-31
 
 ## Recent Milestones（最近里程碑）
 
-- 2026-08-31：V0.1.2 OpenAI-compatible Agent maintenance candidate 已完成实现与 focused HTTP/unit regressions：Cherry reasoning history、Pi/OpenClaw/Hermes metadata、Codex Responses namespace/custom bridge、server-tool filtering、Cherry camelCase model metadata/token hints；等待 final verify / main integration。Claude Code 不在范围。
+- 2026-08-31：V0.1.2 OpenAI-compatible Agent maintenance 已完成：Cherry reasoning history、Pi/OpenClaw/Hermes metadata、Codex Responses namespace/custom bridge、server-tool filtering 与模型 compatibility metadata 均已收口；功能分支和 merged `main` fresh deterministic 均为 **86/610**，功能提交 `7d475fe` 已推送 `origin/main`。Claude Code 不在范围；本次未创建 Tag/Release、未发布 Docker 镜像。
 - 2026-08-31：Cherry Studio compatibility maintenance 已 fast-forward 合并到 `main`，仓库版本由 `V0.1.0` 升级为 `V0.1.1`。Chat Completions strict 接收并忽略 `stream_options.include_usage?: boolean`、不伪造 usage；`/v1/models` 增加能力/输入模态/Streaming/context metadata，`MODEL_CONTEXT_WINDOW` 默认 `128000`。版本更新后 fresh deterministic 为 **86 test files / 600 tests**；本地 schema/metadata 变更未运行 Docker 或真实 ChatGPT E2E，且本次未创建 `V0.1.1` Tag / GitHub Release。
 - 2026-08-30：`phase-7-tool-calling` 以 fast-forward 合并到 `main`；公开版本从 `V0.0.1` 提升到 `V0.1.0`，同步 CHANGELOG / README / Project State，并按显式发布指令创建同名 Git Tag / GitHub Release；Docker registry image 未发布。
 - 2026-08-29：最终 V1 acceptance 收口。function-policy fingerprint、cross-URL RESTORE history hydration 与多登录入口 Auth Probe 均修复；fresh deterministic **86/595**、fresh Docker/full smoke、Phase 7 standalone、紧邻 Phase 6 standalone 与 reduced combined Phase 3→8 全部通过。staged diff/secret 检查完成后，主 acceptance commit `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。

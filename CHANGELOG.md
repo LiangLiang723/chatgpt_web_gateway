@@ -16,7 +16,7 @@
 
 ### Validation（验证）
 
-- 第一轮 maintenance-candidate fresh `corepack pnpm verify` 通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；merged-main verification 与推送结果在最终 Git closure 后写回 Project State。本 PATCH 不改变 Browser selectors、SQLite schema 或 Docker runtime，因此不重复真实 ChatGPT E2E / Docker build。
+- 功能分支 fresh `corepack pnpm verify` 连续两次、fast-forward 后本地 `main` 再一次，均通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；`git diff --check` 与 staged 安全检查通过。功能提交 `7d475fe` 已推送 `origin/main` 并经 post-push fetch 确认一致。本 PATCH 不改变 Browser selectors、SQLite schema 或 Docker runtime，因此未重复真实 ChatGPT E2E / Docker build。
 
 ## V0.1.1 - 2026-08-31
 
