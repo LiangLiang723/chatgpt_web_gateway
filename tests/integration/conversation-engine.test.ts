@@ -17,7 +17,10 @@ import type {
   ConversationPageRegistry,
   ConversationPageSession,
 } from '../../src/conversations/page-registry.js';
-import type { ConversationQueue } from '../../src/conversations/conversation-queue.js';
+import {
+  createConversationQueue,
+  type ConversationQueue,
+} from '../../src/conversations/conversation-queue.js';
 import { createPersistenceContext, type PersistenceContext } from '../../src/persistence/index.js';
 import type { ConversationAggregate } from '../../src/persistence/types.js';
 import { createTempPersistencePaths, type TempPersistencePaths } from '../helpers/persistence.js';
@@ -299,6 +302,152 @@ describe('Conversation Engine FRESH + APPEND', () => {
       { role: 'assistant', text: 'a2' },
     ]);
     expect(saved.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 4 });
+  });
+
+  it('reuses one matching anonymous full-history Conversation instead of creating a new Web Conversation', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const firstRegistry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'a1-markdown', conversationUrl: 'https://chatgpt.com/c/cherry-one' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/cherry-one' },
+    );
+    const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    let idIndex = 0;
+
+    const first = createConversationEngine({
+      pageRegistry: firstRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1500,
+      randomUuid: () => ids[idIndex++]!,
+    });
+
+    await first(request({ messages: [user('u1')] }));
+
+    const secondRegistry = new FakePageRegistry();
+    const second = createConversationEngine({
+      pageRegistry: secondRegistry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1600,
+      randomUuid: () => ids[idIndex++]!,
+    });
+
+    await second(request({ messages: [user('u1'), assistant('a1-markdown'), user('u2')] }));
+
+    const sends = sendCalls(driver);
+    expect(sends).toHaveLength(2);
+    expect(sends[1]!.request.prompt).toBe('u2');
+    expect(driver.calls.map((call) => call.type)).toEqual([
+      'openFresh',
+      'sendText',
+      'openConversation',
+      'sendText',
+    ]);
+    expect(driver.calls[2]).toMatchObject({
+      type: 'openConversation',
+      url: 'https://chatgpt.com/c/cherry-one',
+    });
+    expect(queue.keys).toEqual(['anonymous:11111111-1111-4111-8111-111111111111']);
+
+    const anonymousRows = db.database
+      .prepare('SELECT id FROM conversations WHERE conversation_key IS NULL ORDER BY id')
+      .all() as Array<{ id: string }>;
+    expect(anonymousRows).toEqual([{ id: '11111111-1111-4111-8111-111111111111' }]);
+    const saved = db.conversationStore.loadById(anonymousRows[0]!.id)!;
+    expect(textMessages(saved)).toEqual([
+      { role: 'user', text: 'u1' },
+      { role: 'assistant', text: 'a1-markdown' },
+      { role: 'user', text: 'u2' },
+      { role: 'assistant', text: 'a2' },
+    ]);
+  });
+
+  it('revalidates an anonymous match after queue wait instead of rebuilding a Conversation another request already advanced', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = createConversationQueue();
+    driver.results.push(
+      { text: 'a1', conversationUrl: 'https://chatgpt.com/c/concurrent-original' },
+      { text: 'a2-first', conversationUrl: 'https://chatgpt.com/c/concurrent-original' },
+      { text: 'a2-second', conversationUrl: 'https://chatgpt.com/c/concurrent-fresh' },
+    );
+    const ids = ['41111111-1111-4111-8111-111111111111', '42222222-2222-4222-8222-222222222222'];
+    let idIndex = 0;
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1800,
+      randomUuid: () => ids[idIndex++]!,
+    });
+
+    await execute(request({ messages: [user('concurrent-u1')] }));
+
+    const fullHistory = request({
+      messages: [user('concurrent-u1'), assistant('a1'), user('concurrent-u2')],
+    });
+    const firstAppend = execute(fullHistory);
+    const secondAppend = execute(fullHistory);
+    await Promise.all([firstAppend, secondAppend]);
+    queue.close();
+
+    const rows = db.database
+      .prepare('SELECT id FROM conversations WHERE conversation_key IS NULL ORDER BY id')
+      .all() as Array<{ id: string }>;
+    expect(rows).toHaveLength(2);
+    const original = db.conversationStore.loadById('41111111-1111-4111-8111-111111111111')!;
+    const duplicate = db.conversationStore.loadById('42222222-2222-4222-8222-222222222222')!;
+    expect(original.conversation.chatgptConversationUrl).toBe(
+      'https://chatgpt.com/c/concurrent-original',
+    );
+    expect(duplicate.conversation.chatgptConversationUrl).toBe(
+      'https://chatgpt.com/c/concurrent-fresh',
+    );
+  });
+
+  it('keeps anonymous continuation FRESH when more than one stored history is an exact match', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'same-a1', conversationUrl: 'https://chatgpt.com/c/anonymous-a' },
+      { text: 'same-a1', conversationUrl: 'https://chatgpt.com/c/anonymous-b' },
+      { text: 'a2', conversationUrl: 'https://chatgpt.com/c/anonymous-c' },
+    );
+    const ids = [
+      '31111111-1111-4111-8111-111111111111',
+      '32222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+    ];
+    let idIndex = 0;
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1700,
+      randomUuid: () => ids[idIndex++]!,
+    });
+
+    await execute(request({ messages: [user('same-u1')] }));
+    await execute(request({ messages: [user('same-u1')] }));
+    await execute(request({ messages: [user('same-u1'), assistant('same-a1'), user('same-u2')] }));
+
+    expect(driver.calls.filter((call) => call.type === 'openFresh')).toHaveLength(3);
+    expect(driver.calls.filter((call) => call.type === 'openConversation')).toHaveLength(0);
+    expect(queue.keys).toEqual([]);
+    const count = db.database
+      .prepare('SELECT COUNT(*) AS count FROM conversations WHERE conversation_key IS NULL')
+      .get() as { count: number };
+    expect(count.count).toBe(3);
   });
 
   it('persists an unkeyed full-history FRESH Conversation without queue or retained affinity', async () => {

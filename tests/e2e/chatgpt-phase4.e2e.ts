@@ -19,6 +19,7 @@ export interface Phase4ChatGptE2EResult {
   append: true;
   restore: true;
   rebuild: true;
+  anonymousContinuation: true;
 }
 
 function token(): string {
@@ -65,6 +66,8 @@ export async function runPhase4ChatGptE2E(
   const memoryToken = token();
   const appendMarker = token();
   const rebuiltToken = token();
+  const anonymousMemoryToken = token();
+  const anonymousAppendMarker = token();
   const profile = cloneRealE2EProfile(options.profileDir);
   const headers = {
     authorization: 'Bearer phase4-e2e-gateway-key',
@@ -214,10 +217,88 @@ export async function runPhase4ChatGptE2E(
       'REBUILD must persist a new ChatGPT Conversation URL',
     );
 
+    const anonymousHeaders = {
+      authorization: 'Bearer phase4-e2e-gateway-key',
+    };
+    const anonymousTurnOneUser = `Memorize this anonymous continuity token: ${anonymousMemoryToken}. Reply exactly with: STORED ${anonymousMemoryToken}`;
+    const anonymousFirst = await runtime.app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: anonymousHeaders,
+      payload: {
+        model: 'chatgpt-web',
+        stream: false,
+        messages: [{ role: 'user', content: anonymousTurnOneUser }],
+      },
+    });
+    assert.equal(anonymousFirst.statusCode, 200, anonymousFirst.body);
+    const anonymousTurnOneAssistant = assistantText(anonymousFirst.json());
+    assert.match(anonymousTurnOneAssistant, new RegExp(anonymousMemoryToken));
+
+    const anonymousAfterFirst =
+      runtime.persistence.conversationStore.loadAnonymousBySyncedMessageCount(2);
+    assert.equal(
+      anonymousAfterFirst.length,
+      1,
+      'Expected exactly one anonymous Conversation candidate',
+    );
+    const anonymousFirstUrl = anonymousAfterFirst[0]!.conversation.chatgptConversationUrl;
+    assert.ok(
+      anonymousFirstUrl,
+      'Expected anonymous first turn to persist a ChatGPT Conversation URL',
+    );
+
+    const anonymousTurnTwoUser = `What anonymous continuity token did I ask you to memorize? This marker is ${anonymousAppendMarker}. Reply exactly as: <token>|${anonymousAppendMarker}`;
+    const anonymousSecond = await runtime.app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: anonymousHeaders,
+      payload: {
+        model: 'chatgpt-web',
+        stream: false,
+        messages: [
+          { role: 'user', content: anonymousTurnOneUser },
+          { role: 'assistant', content: anonymousTurnOneAssistant },
+          { role: 'user', content: anonymousTurnTwoUser },
+        ],
+      },
+    });
+    assert.equal(anonymousSecond.statusCode, 200, anonymousSecond.body);
+    const anonymousTurnTwoAssistant = assistantText(anonymousSecond.json());
+    assert.match(anonymousTurnTwoAssistant, new RegExp(anonymousMemoryToken));
+    assert.match(anonymousTurnTwoAssistant, new RegExp(anonymousAppendMarker));
+
+    const anonymousAfterSecond =
+      runtime.persistence.conversationStore.loadAnonymousBySyncedMessageCount(4);
+    assert.equal(anonymousAfterSecond.length, 1, 'Expected one continued anonymous Conversation');
+    assert.equal(
+      anonymousAfterSecond[0]!.conversation.chatgptConversationUrl,
+      anonymousFirstUrl,
+      'Anonymous full-history continuation must keep the same ChatGPT Conversation URL',
+    );
+
+    const anonymousLivePage = runtime.browser?.context.pages().at(-1);
+    assert.ok(anonymousLivePage, 'Expected one live anonymous ChatGPT Conversation Page');
+    const anonymousUserTurns = await inspectCollection(
+      anonymousLivePage,
+      chatGptSelectors.userTurns,
+    );
+    assert.ok(anonymousUserTurns.count >= 2, 'Expected two anonymous ChatGPT Web user turns');
+    const anonymousSecondWebUserTurn = await anonymousUserTurns.locator
+      .nth(anonymousUserTurns.count - 1)
+      .innerText();
+    assert.match(anonymousSecondWebUserTurn, new RegExp(anonymousAppendMarker));
+    assert.doesNotMatch(
+      anonymousSecondWebUserTurn,
+      new RegExp(anonymousMemoryToken),
+      'Anonymous APPEND must not replay the first user token into the second Web turn',
+    );
+
     return {
       append: true,
       restore: true,
       rebuild: true,
+      anonymousContinuation: true,
     };
   } finally {
     await runtime?.close();

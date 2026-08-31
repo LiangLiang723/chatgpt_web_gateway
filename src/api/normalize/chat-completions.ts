@@ -97,6 +97,10 @@ export function normalizeChatCompletions(
         messages.push({ role: 'user', content: [{ type: 'text', text: message.content }] });
         continue;
       }
+      if (!Array.isArray(message.content)) {
+        messages.push({ role: 'user', content: [{ type: 'text', text: message.content.text }] });
+        continue;
+      }
 
       const content: NormalizedContentPart[] = [];
       for (const part of message.content) {

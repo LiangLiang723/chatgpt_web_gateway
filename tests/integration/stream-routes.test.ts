@@ -130,6 +130,42 @@ describe('Streaming HTTP routes', () => {
     },
   );
 
+  it('accepts Pi single-text-object user content over HTTP', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = appWith({
+      execute: async () => result,
+      stream: async (request, { sink }) => {
+        received.push(request);
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'text.delta', delta: '你好' });
+        await sink({ type: 'completed', result: { ...result, text: '你好' } });
+        return { ...result, text: '你好' };
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        messages: [
+          { role: 'system', content: 'Be concise.' },
+          { role: 'user', content: { type: 'text', text: '你好' } },
+        ],
+        stream: true,
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: '你好' }] },
+    ]);
+    expect(body).toContain('data: [DONE]\n\n');
+  });
+
   it('accepts Cherry Studio history reasoning metadata and agent compatibility parameters over HTTP', async () => {
     const received: NormalizedRequest[] = [];
     const app = appWith({
@@ -151,7 +187,13 @@ describe('Streaming HTTP routes', () => {
         model: 'chatgpt-web',
         messages: [
           { role: 'user', content: '你是谁' },
-          { role: 'assistant', content: '我是 ChatGPT。', reasoning_content: '' },
+          {
+            role: 'assistant',
+            content: '我是 ChatGPT。',
+            reasoning_content: '',
+            reasoning: 'cross-model reasoning replay',
+            reasoning_text: 'cross-model reasoning text replay',
+          },
           { role: 'user', content: '继续' },
         ],
         stream: true,

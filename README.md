@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：V1 验收完成，当前仓库版本 V0.1.2
+## 当前状态：V1 验收完成，当前仓库版本 V0.1.3
 
-Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前仓库版本为 `V0.1.2`；V0.1.1 首先补充 Cherry Studio `stream_options.include_usage` 与基础模型 metadata，本次 PATCH maintenance 继续修复 Cherry Assistant `reasoning_content` 历史消息、Pi/OpenClaw/Hermes 常见 OpenAI-compatible request metadata、Codex Responses namespace/custom tools，以及 Cherry 可消费的 camelCase 模型能力/token-limit hints。`V0.1.0` 的 Git Tag / GitHub Release 仍保留；V0.1.2 仅升级仓库版本并合并/推送 `main`，不创建新的 Tag / GitHub Release，也不发布 Docker Registry 镜像：
+Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前仓库版本为 `V0.1.3`；V0.1.1 首先补充 Cherry Studio `stream_options.include_usage` 与基础模型 metadata，V0.1.2 扩展 Cherry/Pi/OpenClaw/Hermes/Codex request 兼容与模型 metadata，本次 PATCH maintenance 继续修复 Pi singleton user text object / Assistant reasoning replay 形状，并让 Cherry 这类不发送 `X-Conversation-Key`、但每轮重发完整历史的客户端在**唯一可证明匹配**时继续原 ChatGPT Web Conversation。`V0.1.0` 的 Git Tag / GitHub Release 仍保留；V0.1.3 只升级仓库版本并合并/推送 `main`，不创建新的 Tag / GitHub Release，也不发布 Docker Registry 镜像：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -30,8 +30,8 @@ Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh determi
 - 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
 - bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
 - Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
-- full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle。未提供 key 时每个请求仍建立并持久化独立 `conversation_key = NULL` Fresh Conversation，但不会跨请求猜测身份。
-- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage/reasoning。Chat Completions strict 兼容 Cherry Studio `stream_options.include_usage`、Assistant `reasoning_content` 历史，以及 Pi/OpenClaw/Hermes 常见 OpenAI-compatible metadata；Responses 兼容当前 Codex function/namespace/custom tool 请求形状，namespace/custom 会桥接到现有 external-function protocol，OpenAI-hosted `web_search`/`tool_search` 声明只接受并过滤、不伪装执行。Phase 6 图片/文件附件、Phase 7 Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
+- full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle 且始终优先。未提供 key 时，V0.1.3 会对完整历史做保守匿名匹配：只有唯一一个 clean persisted anonymous Conversation 能被既有 Context Sync planner 严格证明为 APPEND/RESTORE 才复用原 Web Conversation；0 个或多个匹配仍建立新的 `conversation_key = NULL` FRESH，避免把独立主题串在一起。
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage/reasoning。Chat Completions strict 兼容 Cherry Studio `stream_options.include_usage`、Assistant reasoning replay metadata，以及 Pi singleton `content:{type:"text",text:string}` / Pi/OpenClaw/Hermes 常见 OpenAI-compatible metadata；Responses 兼容当前 Codex function/namespace/custom tool 请求形状，namespace/custom 会桥接到现有 external-function protocol，OpenAI-hosted `web_search`/`tool_search` 声明只接受并过滤、不伪装执行。Phase 6 图片/文件附件、Phase 7 Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
 - `POST /v1/images/generations` 已实现 `n=1`、`url|b64_json`、request-scoped conversation-turn 图片基线采集、`${DATA_DIR}/generated` 原子持久化、SQLite `generated_images` 记录与 SHA-256 完整性检查；图片采集不依赖文本 Assistant role/copy completion marker，并按 `currentSrc || src` 去重同一 generated asset 的重复 DOM copy，`GET /v1/images/:id/content` 继续要求 Bearer authentication。
 - `corepack pnpm inspect:chatgpt`、Phase 3–8 standalone E2E 与 combined `corepack pnpm test:e2e:chatgpt` 提供显式真实网页诊断/验收，要求独立测试 Browser Profile；combined 额外要求 `E2E_CHATGPT_COMBINED=1`。
 - `UI_MODE=novnc` 明确禁用产品 BrowserManager，只保留 headed maintenance browser；此时 ChatGPT POST 返回 `503 browser_maintenance_mode`，避免两个 Chromium 同时占用一个 Profile。
@@ -296,11 +296,11 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 
 ## 版本与变更
 
-- 当前仓库版本：`V0.1.2`。
+- 当前仓库版本：`V0.1.3`。
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容。本次只升级仓库版本并推送 `main`；新的 Git Tag / GitHub Release 与 Docker Registry 镜像仍需单独发布指令。
+`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容；`V0.1.3` 修复 Pi singleton text-object schema，并为无 header 的完整历史客户端增加唯一匹配匿名 Conversation 续接。本次只升级仓库版本并推送 `main`；新的 Git Tag / GitHub Release 与 Docker Registry 镜像仍需单独发布指令。
 
 ## 开源协议
 

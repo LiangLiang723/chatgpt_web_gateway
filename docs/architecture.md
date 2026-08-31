@@ -85,7 +85,7 @@ interface NormalizedRequest {
 
 图片生成可以有独立 `ImageRequestAdapter`，但浏览器生命周期、错误、持久化和生成资源管理仍复用公共基础设施。
 
-HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRequest`。Chat Completions 的 `stream_options.include_usage?: boolean`、Cherry Assistant `reasoning_content`/reasoning history metadata，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 都由 strict request schema 显式接收后在 API adapter 边界消费/忽略；Responses 同样在 adapter 层消费 Codex `reasoning/include/client_metadata` 等兼容字段。未知顶层字段与未知 strict nested members 仍由 Ajv 拒绝，且 Gateway 不因为这些 metadata 伪造 token usage/reasoning 或 server-side behavior。`GET /v1/models` 的 context/max-input/max-output hints 分别从 `AppConfig.modelContextWindow/modelMaxInputTokens/modelMaxOutputTokens` 读取，同时暴露 snake_case 与 Cherry-compatible camelCase aliases；这些字段不进入 Conversation/Browser 执行链，也不代表 ChatGPT Web 官方固定 token limit。
+HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRequest`。Chat Completions 的 `stream_options.include_usage?: boolean`、Cherry/Pi Assistant `reasoning_content` / `reasoning` / `reasoning_text` history metadata，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 都由 strict request schema 显式接收后在 API adapter 边界消费/忽略；Pi/OpenAI-compatible 的 singleton user text object `content:{type:"text",text:string}` 则严格规范化为普通单个 text part，不开放任意 singleton content object。Responses 同样在 adapter 层消费 Codex `reasoning/include/client_metadata` 等兼容字段。未知顶层字段与未知 strict nested members 仍由 Ajv 拒绝，且 Gateway 不因为这些 metadata 伪造 token usage/reasoning 或 server-side behavior。`GET /v1/models` 的 context/max-input/max-output hints 分别从 `AppConfig.modelContextWindow/modelMaxInputTokens/modelMaxOutputTokens` 读取，同时暴露 snake_case 与 Cherry-compatible camelCase aliases；这些字段不进入 Conversation/Browser 执行链，也不代表 ChatGPT Web 官方固定 token limit。
 
 ## Conversation（对话）和 Context Sync（上下文同步）
 
@@ -98,9 +98,9 @@ HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRe
 - `RESTORE`：进程/Page 已丢失，但 ChatGPT conversation URL 和本地状态可恢复。
 - `REBUILD`：历史被压缩、修改、回滚，或原网页会话不可恢复，根据当前有效历史建立新会话。
 
-同一 Conversation 请求串行，不同 Conversation 可以并行。禁止全局锁串行所有用户。
+同一 Conversation 请求串行，不同 Conversation 可以并行。显式 key 继续按公开 conversation key 排队；被唯一识别出的匿名续接按 persisted Conversation id 派生内部 queue key 排队，并在真正获得该 queue slot 后再次执行唯一候选证明。若等待期间另一个匿名请求已经推进了原 Conversation，当前请求必须回退 FRESH，不能拿更新后的 aggregate 做 REBUILD/覆盖。禁止全局锁串行所有用户。
 
-Phase 4 已批准设计以 SQLite `ConversationStore` + `clean | in_flight` sync checkpoint 作为恢复事实源，并把请求确定性分为 `incremental | full`：单条 user message 是 incremental；多条消息或 assistant/tool history 是 full。只有能够证明已确认历史与当前请求一致时才 APPEND/RESTORE；历史分叉、instructions 变化、checkpoint 不确定/不匹配、URL 缺失或确认不可恢复时统一 REBUILD。无 `X-Conversation-Key` 时仍为独立 Fresh Conversation 并完整持久化 `conversation_key = NULL`，但绝不跨请求做隐式身份绑定。
+Phase 4 已批准设计以 SQLite `ConversationStore` + `clean | in_flight` sync checkpoint 作为恢复事实源，并把请求确定性分为 `incremental | full`：单条 user message 是 incremental；多条消息或 assistant/tool history 是 full。只有能够证明已确认历史与当前请求一致时才 APPEND/RESTORE；历史分叉、instructions 变化、checkpoint 不确定/不匹配、URL 缺失或确认不可恢复时统一 REBUILD。V0.1.3 对没有 `X-Conversation-Key`、但会每轮重发完整历史的 Cherry/OpenAI-compatible 客户端增加保守匿名续接：只查询 `conversation_key = NULL`、`clean`、有持久化 ChatGPT URL 且 `synced_message_count` 与当前确认历史长度精确一致的候选，再复用同一个 `planContextSync()` 校验 instructions、tool fingerprint 与完整历史前缀；**恰好一个**候选能得到 APPEND/RESTORE 时才复用，否则继续 FRESH。Gateway 仍不生成或暴露伪造的客户端会话 key，也不会在存在歧义时猜测身份。
 
 有稳定 key 的请求通过 keyed FIFO Queue 串行化；排队期间不占 Page，轮到时重新读取 SQLite 最新状态。第一次可能写入 ChatGPT turn 之前先把 checkpoint 置 `in_flight`；成功后一次性保存 reconciled aggregate 并恢复 `clean`。任何发生在 checkpoint 之后且无法证明网页副作用的失败都不得猜测回滚为 clean，下一请求通过 REBUILD 收敛。普通认证、Selector、Browser runtime 错误不得被伪装成“可安全重建”的 restore failure。
 
@@ -289,7 +289,7 @@ Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前�
 
 `GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
 
-兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`。Phase 4 中有 key 的请求使用 SQLite Conversation lifecycle、同 key FIFO 与 Page affinity；未提供时仍保持 `undefined`，每个请求创建独立持久化 Fresh Conversation（`conversation_key = NULL`），Gateway 不自动创建客户端可见 key，也不推断或跨请求绑定匿名 Conversation identity。
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`，并且始终优先于匿名匹配。带 key 的请求使用 SQLite Conversation lifecycle、同 key FIFO 与 Page affinity；未提供时 `NormalizedRequest.conversationKey` 仍保持 `undefined`。V0.1.3 仅对完整历史请求做保守匿名续接：若 SQLite 中恰好一个 `conversation_key = NULL` 的 clean Conversation 能被现有 Context Sync planner 严格证明为 APPEND/RESTORE，则复用其 persisted Conversation id / URL，并使用内部匿名 queue key；0 个或多个匹配都创建新的匿名 FRESH Conversation。Gateway 从不把该内部匹配伪装成客户端可见 key。
 
 ## 错误边界
 

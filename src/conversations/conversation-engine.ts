@@ -616,7 +616,7 @@ async function executeConversation(options: {
 
   try {
     session = await options.engine.pageRegistry.acquire(
-      options.conversationKey === undefined ? undefined : conversationId,
+      options.conversationKey !== undefined || existing !== undefined ? conversationId : undefined,
     );
     const promptMode = await preparePage({
       driver: options.engine.driver,
@@ -721,7 +721,7 @@ async function streamConversation(options: {
 
   try {
     session = await options.engine.pageRegistry.acquire(
-      options.conversationKey === undefined ? undefined : conversationId,
+      options.conversationKey !== undefined || existing !== undefined ? conversationId : undefined,
     );
     const promptMode = await preparePage({
       driver,
@@ -826,6 +826,62 @@ async function streamConversation(options: {
   }
 }
 
+function requestHistoryLength(request: CanonicalConversationRequest): number {
+  const last = request.messages.at(-1);
+  if (!last) return 0;
+  if (last.role === 'user') return request.messages.length - 1;
+  if (last.role !== 'tool') return 0;
+  let start = request.messages.length - 1;
+  while (start > 0 && request.messages[start - 1]?.role === 'tool') start -= 1;
+  return start;
+}
+
+function anonymousContinuation(options: {
+  engine: CreateConversationEngineOptions;
+  request: NormalizedRequest;
+}): ConversationAggregate | undefined {
+  if (options.request.attachments.length > 0) return undefined;
+
+  let canonicalRequest: CanonicalConversationRequest;
+  try {
+    canonicalRequest = options.request.output.stream
+      ? toCanonicalPhase7StreamingConversationRequest(options.request)
+      : toCanonicalPhase7ConversationRequest(options.request);
+  } catch {
+    return undefined;
+  }
+  if (canonicalRequest.mode !== 'full') return undefined;
+
+  const historyLength = requestHistoryLength(canonicalRequest);
+  if (historyLength <= 0) return undefined;
+
+  let match: ConversationAggregate | undefined;
+  for (const candidate of options.engine.conversationStore.loadAnonymousBySyncedMessageCount(
+    historyLength,
+  )) {
+    if (candidate.attachments.length > 0) continue;
+    let stored: CanonicalStoredConversation;
+    try {
+      stored = canonicalStoredConversation(candidate);
+    } catch {
+      continue;
+    }
+    const plan = planContextSync({
+      stored,
+      request: canonicalRequest,
+      hasAffinityPage: options.engine.pageRegistry.hasAffinity(candidate.conversation.id),
+    });
+    if (plan.mode !== 'APPEND' && plan.mode !== 'RESTORE') continue;
+    if (match !== undefined) return undefined;
+    match = candidate;
+  }
+  return match;
+}
+
+function anonymousQueueKey(conversationId: string): string {
+  return `anonymous:${conversationId}`;
+}
+
 function executeHandler(
   options: CreateConversationEngineOptions,
   now: () => number,
@@ -834,11 +890,32 @@ function executeHandler(
   return async (request) => {
     const conversationKey = request.conversationKey;
     if (conversationKey === undefined) {
-      return executeConversation({
-        engine: options,
-        request,
-        now,
-        randomUuid,
+      const existing = anonymousContinuation({ engine: options, request });
+      if (existing === undefined) {
+        return executeConversation({
+          engine: options,
+          request,
+          now,
+          randomUuid,
+        });
+      }
+      return options.queue.run(anonymousQueueKey(existing.conversation.id), async () => {
+        const current = anonymousContinuation({ engine: options, request });
+        if (current?.conversation.id !== existing.conversation.id) {
+          return executeConversation({
+            engine: options,
+            request,
+            now,
+            randomUuid,
+          });
+        }
+        return executeConversation({
+          engine: options,
+          request,
+          existing: current,
+          now,
+          randomUuid,
+        });
       });
     }
 
@@ -868,12 +945,35 @@ export function createConversationExecutionEngine(
     stream: async (request, streamOptions) => {
       const conversationKey = request.conversationKey;
       if (conversationKey === undefined) {
-        return streamConversation({
-          engine: options,
-          request,
-          streamOptions,
-          now,
-          randomUuid,
+        const existing = anonymousContinuation({ engine: options, request });
+        if (existing === undefined) {
+          return streamConversation({
+            engine: options,
+            request,
+            streamOptions,
+            now,
+            randomUuid,
+          });
+        }
+        return options.queue.run(anonymousQueueKey(existing.conversation.id), async () => {
+          const current = anonymousContinuation({ engine: options, request });
+          if (current?.conversation.id !== existing.conversation.id) {
+            return streamConversation({
+              engine: options,
+              request,
+              streamOptions,
+              now,
+              randomUuid,
+            });
+          }
+          return streamConversation({
+            engine: options,
+            request,
+            streamOptions,
+            existing: current,
+            now,
+            randomUuid,
+          });
         });
       }
 

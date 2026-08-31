@@ -40,13 +40,31 @@ describe('OpenAI request schemas', () => {
     ).toBe(true);
   });
 
+  it('accepts Pi single-text-object user content without weakening message roles', () => {
+    expect(
+      validateChat({
+        model: 'chatgpt-web',
+        messages: [
+          { role: 'system', content: 'Be concise.' },
+          { role: 'user', content: { type: 'text', text: '你好' } },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it('accepts Cherry Studio and OpenAI-compatible agent metadata without weakening message roles', () => {
     expect(
       validateChat({
         model: 'chatgpt-web',
         messages: [
           { role: 'user', content: '你是谁' },
-          { role: 'assistant', content: '我是 ChatGPT。', reasoning_content: '' },
+          {
+            role: 'assistant',
+            content: '我是 ChatGPT。',
+            reasoning_content: '',
+            reasoning: 'cross-model reasoning replay',
+            reasoning_text: 'cross-model reasoning text replay',
+          },
           { role: 'user', content: '继续' },
         ],
         stream: true,

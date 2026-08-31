@@ -12,7 +12,10 @@ import type {
   ConversationPageRegistry,
   ConversationPageSession,
 } from '../../src/conversations/page-registry.js';
-import type { ConversationQueue } from '../../src/conversations/conversation-queue.js';
+import {
+  createConversationQueue,
+  type ConversationQueue,
+} from '../../src/conversations/conversation-queue.js';
 import { createPersistenceContext, type PersistenceContext } from '../../src/persistence/index.js';
 import type { ConversationAggregate } from '../../src/persistence/types.js';
 import { TextStreamAbortedError } from '../../src/stream/errors.js';
@@ -60,11 +63,14 @@ function streamRequest(
   };
 }
 
-function seedStoredConversation(db: PersistenceContext, conversationKey = 'stream-thread'): void {
+function seedStoredConversation(
+  db: PersistenceContext,
+  conversationKey: string | null = 'stream-thread',
+): void {
   const aggregate: ConversationAggregate = {
     conversation: {
       id: conversationId,
-      conversationKey,
+      ...(conversationKey === null ? {} : { conversationKey }),
       instructions: [{ role: 'system', content: 'system-v1' }],
       tools: [],
       toolChoice: { mode: 'auto' },
@@ -285,6 +291,83 @@ describe('Conversation true Streaming', () => {
     const saved = db.conversationStore.loadByKey('stream-thread')!;
     expect(saved.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 2 });
     expect(saved.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Hello!' }]);
+  });
+
+  it('RESTOREs a uniquely matching anonymous full-history stream instead of creating a new Web Conversation', async () => {
+    const db = persistence();
+    seedStoredConversation(db, null);
+    expect(db.conversationStore.loadAnonymousBySyncedMessageCount(2)).toHaveLength(1);
+    const driver = new FakeStreamingDriver();
+    setCompleteSnapshots(driver, 'anonymous assistant');
+    const registry = new FakePageRegistry();
+    registry.affinity = false;
+    const queue = new DirectQueue();
+    const engine = createEngine({ db, driver, registry, queue });
+    const request = streamRequest('unused', [
+      { role: 'user', content: [{ type: 'text', text: 'old user' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'old assistant' }] },
+      { role: 'user', content: [{ type: 'text', text: 'anonymous user' }] },
+    ]);
+    delete request.conversationKey;
+
+    await engine.stream(request, {
+      signal: new AbortController().signal,
+      sink: discardEvents,
+    });
+
+    expect(driver.openFreshCalls).toBe(0);
+    expect(driver.restoredUrls).toEqual(['https://chatgpt.com/c/stored-thread']);
+    expect(driver.prompts).toEqual(['anonymous user']);
+    expect(queue.keys).toEqual([`anonymous:${conversationId}`]);
+    expect(registry.completed).toEqual([conversationId]);
+    const saved = db.conversationStore.loadById(conversationId)!;
+    expect(saved.conversation.conversationKey).toBeUndefined();
+    expect(saved.messages).toHaveLength(4);
+  });
+
+  it('revalidates a queued anonymous stream match after another request advances the Conversation', async () => {
+    const db = persistence();
+    seedStoredConversation(db, null);
+    const driver = new FakeStreamingDriver();
+    setCompleteSnapshots(driver, 'concurrent stream assistant');
+    const registry = new FakePageRegistry();
+    const queue = createConversationQueue();
+    const freshConversationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const engine = createConversationExecutionEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1000,
+      randomUuid: () => freshConversationId,
+      streamClock: clock(),
+      streamPollIntervalMs: 10,
+      streamTimeoutMs: 200,
+    });
+    const request = streamRequest('unused', [
+      { role: 'user', content: [{ type: 'text', text: 'old user' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'old assistant' }] },
+      { role: 'user', content: [{ type: 'text', text: 'concurrent stream user' }] },
+    ]);
+    delete request.conversationKey;
+
+    const first = engine.stream(request, {
+      signal: new AbortController().signal,
+      sink: discardEvents,
+    });
+    const second = engine.stream(request, {
+      signal: new AbortController().signal,
+      sink: discardEvents,
+    });
+    await Promise.all([first, second]);
+    queue.close();
+
+    const rows = db.database
+      .prepare('SELECT id FROM conversations WHERE conversation_key IS NULL ORDER BY id')
+      .all() as Array<{ id: string }>;
+    expect(rows).toHaveLength(2);
+    expect(db.conversationStore.loadById(conversationId)).toBeDefined();
+    expect(db.conversationStore.loadById(freshConversationId)).toBeDefined();
   });
 
   it('streams a warm full-history APPEND without replaying the stored history in the prompt', async () => {

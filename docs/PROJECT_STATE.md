@@ -9,22 +9,22 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-10-complete
-STATUS=v1-acceptance-complete
-RELEASE_VERSION=V0.1.2
+STATUS=v0.1.3-maintenance-ready-for-git-closure
+RELEASE_VERSION=V0.1.3
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=handle-next-explicit-maintenance-or-release-request
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-31-v0.1.3-client-continuity.md
+NEXT_TASK=commit-integrate-main-reverify-push-and-close-v0.1.3
 UPDATED_AT=2026-08-31
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 1–10 的 V1 实现、验收与 feature-branch Git 收口已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；主 acceptance checkpoint `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
-- **当前状态：** `v1-acceptance-complete`。`V0.1.2` OpenAI-compatible Agent maintenance 已完成、fast-forward 集成到 `main` 并推送。该版本修复 Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes 常见 request metadata、Codex Responses namespace/custom tool bridge，并补充模型能力/token compatibility metadata；Claude Code 原生 Anthropic Messages 按用户决定不在范围。`V0.1.0` Git Tag / GitHub Release 仍保留；本次没有创建 `V0.1.2` Tag / GitHub Release，也未发布 Docker registry image。
-- **Governing Spec：** V1 主设计仍是 [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)；当前 maintenance 设计见 [`docs/superpowers/specs/2026-08-31-v0.1.2-openai-agent-compat-design.md`](superpowers/specs/2026-08-31-v0.1.2-openai-agent-compat-design.md)。
-- **Active Plan：** `none`。V0.1.2 maintenance plan 已完成并关闭，保留为设计/验收历史。
-- **最新 deterministic / Docker 基线：** V0.1.2 focused compatibility suite 通过 **8 files / 56 tests**；补充 current-Codex `output_schema/tool_search/web_search` coverage 后相关 tests + `typecheck` 再次通过。功能分支 full `corepack pnpm verify` 连续两次、以及 fast-forward 后本地 `main` 再一次，均通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿，`git diff --check` 与 staged 安全检查也通过。功能提交 `7d475fe` 已推送到 `origin/main`，post-push fetch 确认远端与本地一致。最近一次 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；V0.1.2 adapter-only maintenance 未运行 Docker 或真实 ChatGPT E2E。
-- **最新真实网页事实：** fresh inspect 为 `auth=authenticated` / Composer unique。Phase 7 standalone 返回 `singleTool/resultContinuation/policyRebuild/multipleTools/streamTool/streamText/restore/schemaRebuild=true`；紧邻 Phase 6 standalone 返回 image Data URL/file_id、XLSX/TXT/PDF/DOCX、Streaming、APPEND、RESTORE 九项全 `true`；reduced combined 随后 Phase 3 `gatewayChallenge=true`、Phase 4 APPEND/RESTORE/REBUILD、Phase 5 Chat Completions/Markdown/Responses、Phase 7 八项、Phase 8 `url/base64/persistence/restart` 全部通过，并按治理报告 Phase 5 `abort=not_run_in_combined`、Phase 6 `attachmentMatrix=not_run_in_combined`。
+- **当前状态：** `v0.1.3-maintenance-ready-for-git-closure`。V0.1.3 已完成 Pi singleton user text-object / Assistant reasoning replay schema 兼容，以及 Cherry-style 无 `X-Conversation-Key` full-history 匿名 Conversation 唯一匹配续接；合并前并发审查又补上匿名 FIFO 锁后重验证，防止两个同时选中同一候选的请求让后到者覆盖已推进 Conversation。focused **5 files / 52 tests**、fresh full **86 files / 618 tests** 均通过；使用批准 LAN proxy 的 fresh inspect 为 `auth=authenticated` / Composer unique，standalone Phase 4 返回 `append/restore/rebuild/anonymousContinuation=true`。当前只剩 commit → fast-forward `main` → merged-main re-verify → push → plan closure。`V0.1.0` Git Tag / GitHub Release 仍保留；本次不创建 V0.1.3 Tag / GitHub Release，也不发布 Docker registry image。
+- **Governing Spec：** V1 主设计仍是 [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)；当前 maintenance 设计见 [`docs/superpowers/specs/2026-08-31-v0.1.3-client-continuity-design.md`](superpowers/specs/2026-08-31-v0.1.3-client-continuity-design.md)。
+- **Active Plan：** [`docs/superpowers/plans/2026-08-31-v0.1.3-client-continuity.md`](superpowers/plans/2026-08-31-v0.1.3-client-continuity.md)。实现、文档、full deterministic 与 authenticated Browser continuity 均已完成，当前只剩 Git 收口。
+- **最新 deterministic / Docker 基线：** V0.1.3 focused compatibility/continuity suite 通过 **5 files / 52 tests**；fresh full `corepack pnpm verify` 通过 **86 test files / 618 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。新增两个并发回归分别证明 non-stream / Streaming 在匿名 queue wait 后必须重新验证候选。最近一次 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；V0.1.3 不改 Docker runtime、依赖或 migration，因此本 PATCH 不重复 Docker build/smoke。
+- **最新真实网页事实：** V0.1.3 使用 `http://192.168.3.83:7890` 与隔离登录 Profile fresh inspect 为 `auth=authenticated` / Composer unique；随后 focused standalone Phase 4 返回 `append=true`、`restore=true`、`rebuild=true`、`anonymousContinuation=true`，其中匿名第二轮保持同一 ChatGPT Conversation URL 且 Web user turn 不重放首轮 token。此前 V1 final Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 的验收事实继续有效。
 
 ## Implemented Now（当前已实现）
 
@@ -33,12 +33,12 @@ UPDATED_AT=2026-08-31
 - ✅ TypeScript / Fastify / TypeBox/Ajv / Vitest / pnpm 11 工具链；正式 deterministic 入口为 `corepack pnpm verify`。
 - ✅ 正式 `linux/amd64` Docker 边界、Playwright bundled Chromium + Xvfb normal 模式、maintenance-only Google Chrome Stable/noVNC、非 root `PUID/PGID` 与 `/data` Bind Mount。
 - ✅ Node 24 `node:sqlite` 单连接、checksum migrations `001/002/003`、Conversation / Message / Tool Call / Attachment / File / Blob / Generated Image persistence。
-- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`、Phase 6 Files 五接口。V0.1.2 Chat Completions strict 兼容 Cherry Assistant reasoning history 与 Pi/OpenClaw/Hermes 常见 OpenAI-compatible metadata；Responses 兼容当前 Codex message/function/namespace/custom request shapes。compatibility-only metadata 在 API adapter 层消费/忽略，不产生 fake usage/reasoning/server-tool behavior；`/v1/models` 同时暴露 snake_case + Cherry camelCase capabilities/modalities/Streaming/context/max-input/max-output hints。
+- ✅ `GET /health`、`GET /v1/models`、`POST /v1/chat/completions`、`POST /v1/responses`、Phase 6 Files 五接口。V0.1.3 Chat Completions strict 兼容 Pi singleton user text object、Cherry/Pi Assistant reasoning replay history 与 Pi/OpenClaw/Hermes 常见 OpenAI-compatible metadata；Responses 继续兼容当前 Codex message/function/namespace/custom request shapes。compatibility-only metadata 在 API adapter 层消费/忽略，不产生 fake usage/reasoning/server-tool behavior；`/v1/models` 同时暴露 snake_case + Cherry camelCase capabilities/modalities/Streaming/context/max-input/max-output hints。
 - ✅ `/v1/*` Bearer authentication；Fastify Ajv 显式 `removeAdditional:false`，避免 union 分支验证删除合法 branch-specific 字段（真实 Phase 7 暴露的 `tool_call_id` 回归）。
 
 ### Conversation / Streaming / Attachments
 
-- ✅ `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、different-key parallel、Conversation Page affinity、idle/LRU 回收、SQLite `clean | in_flight` checkpoint 与 restart RESTORE/REBUILD。
+- ✅ `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、different-key parallel、Conversation Page affinity、idle/LRU 回收、SQLite `clean | in_flight` checkpoint 与 restart RESTORE/REBUILD；V0.1.3 对无 `X-Conversation-Key` full-history 客户端增加唯一 anonymous candidate APPEND/RESTORE 与 persisted-id internal FIFO，歧义时保持 FRESH；内部 FIFO 获锁后再次验证候选，若并发请求已推进原 Conversation 则当前请求 FRESH。
 - ✅ Chat Completions / Responses True DOM Streaming、backpressure、abort/Stop、final-clean-before-success-terminal，以及默认 **64 Unicode code points** Stable Prefix commit-tail holdback。Assistant authoritative text 使用 owned turn 内唯一 `.markdown.prose`；非 prose `.markdown` 网页状态块不计入正文 cardinality，多个 prose 正文仍严格拒绝。
 - ✅ Phase 6 图片/文件输入、`/v1/files` lifecycle、Data URL / URL / Base64 / `file_id`、SSRF/DNS/redirect/pinned-address 安全边界、ChatGPT upload readiness 与 restart recovery；Phase 6 authenticated real E2E 已关闭。
 

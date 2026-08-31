@@ -4,6 +4,23 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## V0.1.3 - 2026-08-31
+
+### Fixed（修复）
+
+- 修复 Pi/OpenAI-compatible 客户端把单个 user text part 序列化为 `content:{type:"text",text:string}` 时被 strict Chat Completions message union 拒绝并返回 400；仅新增这一种 singleton text-object 兼容形状，并规范化为普通 text part。
+- 补齐 Assistant history 的 `reasoning` / `reasoning_text` replay metadata allowlist；与既有 `reasoning_content` 一样只在 adapter 边界兼容接收，不进入 Browser Prompt。
+- 修复 Cherry Studio 等不发送 `X-Conversation-Key` 的 full-history 客户端每轮都创建新 ChatGPT Web Conversation：Gateway 现在只在唯一一个 clean anonymous persisted Conversation 被现有 Context Sync planner 严格证明为 APPEND/RESTORE 时复用；0 个或多个匹配仍 FRESH，显式 `X-Conversation-Key` 始终优先。
+- 匿名续接使用 persisted Conversation id 派生内部 FIFO queue key，并同时覆盖 non-stream、Streaming 与 restart RESTORE；获得 queue slot 后会重新证明原候选仍是唯一 APPEND/RESTORE 匹配，避免两个同时选中同一候选的请求让后到者 REBUILD/覆盖已推进 Conversation；不创建伪造的客户端可见 conversation key。
+- Phase 4 authenticated E2E 增加无 header 两轮 full-history continuation gate，要求第二轮保持同一 ChatGPT Conversation URL 且 Web user turn 只包含当前 user 内容。
+
+### Validation（验证）
+
+- focused compatibility/continuity suite：**5 files / 52 tests** 全通过，包含 non-stream / Streaming 两个匿名并发锁后重验证回归。
+- fresh `corepack pnpm verify`：**86 test files / 618 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。
+- 使用 `http://192.168.3.83:7890` 与隔离登录 Profile fresh `inspect:chatgpt` 得到 `auth=authenticated` / Composer unique；随后 standalone Phase 4 返回 `append=true / restore=true / rebuild=true / anonymousContinuation=true`。
+- 本 PATCH 不改变 Docker runtime、依赖或 SQLite migration，因此不重复 Docker build/smoke；不创建 V0.1.3 Tag / GitHub Release，也不发布 Docker Registry 镜像。
+
 ## V0.1.2 - 2026-08-31
 
 ### Fixed（修复）

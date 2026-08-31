@@ -53,10 +53,10 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 当前代码已经支持 Chat Completions / Responses 的**纯文本非流式与 `stream=true` Streaming 执行链**：
 
 - 两套 POST 都经过 TypeBox/Ajv → 统一 Normalizer → Conversation Engine；route 不直接实现浏览器逻辑。
-- 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint；无 key 时仍为独立 FRESH `conversation_key = NULL`。
+- 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint。V0.1.3 对无 key、但每轮重发完整历史的客户端增加保守匿名续接：只在唯一一个 clean anonymous Conversation 能被现有 Context Sync planner 严格判定为 APPEND/RESTORE 时复用；0 个或多个匹配仍 FRESH，显式 key 始终优先。
 - Phase 5 `stream=true` 与 non-stream 使用相同的 target Assistant turn ownership 和 completion 语义，不改变 Context Sync 规则。
 - Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 **64 个 Unicode code points** 作为 bounded commit tail；2026-08-26 real E2E 观测到一次 38-code-point Markdown 尾部回排后从 16 提升为 64。completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
-- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage/reasoning。V0.1.x maintenance 严格兼容 `stream_options.include_usage?: boolean`；V0.1.2 继续显式接收 Cherry Assistant `reasoning_content`/reasoning metadata，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 等字段。这些 compatibility-only 字段在 adapter 层消费/忽略并记录 diagnostics，不进入 `NormalizedRequest` 语义；未知顶层字段和未知 `stream_options` 成员仍返回 400。
+- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage/reasoning。V0.1.x maintenance 严格兼容 `stream_options.include_usage?: boolean`；V0.1.3 继续显式接收 Cherry/Pi Assistant `reasoning_content` / `reasoning` / `reasoning_text` replay metadata、Pi singleton user text object `content:{type:"text",text:string}`，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 等字段。这些 compatibility-only 字段在 adapter 层消费/忽略并记录 diagnostics，不进入 `NormalizedRequest` 语义；未知顶层字段和未知 `stream_options` 成员仍返回 400。
 - Responses 使用 typed SSE：`response.created`、`response.in_progress`、item/content added、`response.output_text.delta`、done events、`response.completed`；IDs 稳定，`sequence_number` 单调，`usage=null`。
 - 首个 internal `started` 之前的错误仍返回普通 OpenAI-style 非 200 JSON；SSE 已开始后的错误使用协议流内 error，并且不发送成功 terminal。
 - 成功 terminal 晚于最终 SQLite clean aggregate commit。final clean save 失败时不发送 `[DONE]` / `response.completed`，checkpoint 保持 `in_flight`。
@@ -69,7 +69,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 ## Authentication and Conversation Extension（认证与会话扩展）
 
 - `GET /health` 无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。
-- 客户端可通过 `X-Conversation-Key` 提供稳定会话标识；Gateway 不自动猜测或生成匿名跨请求身份。
+- 客户端可通过 `X-Conversation-Key` 提供稳定会话标识，并始终优先使用该标识。没有 key 时 Gateway 不生成客户端可见身份；仅当完整历史与唯一一个 persisted anonymous Conversation 被 Context Sync planner 严格证明为 APPEND/RESTORE 时保守复用，存在歧义就 FRESH。
 - 同 key 整个 Streaming 生命周期（包含 abort cleanup）保持 FIFO；不同 key 在 Page capacity 允许时并行。
 
 ## Chat Completions（聊天补全）
@@ -77,7 +77,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 | 能力 | V1 | 当前行为 |
 |---|---:|---|
 | `developer` / `system` | ✅ | ✅ 参与 Context Sync；通过 prompt envelope 近似映射，不声称网页有原生 privilege channel |
-| `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发；V0.1.2 Assistant `reasoning_content/reasoning_details` 等兼容 metadata 可接收但不进入 Browser Prompt |
+| `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发；V0.1.3 严格兼容 singleton user text object，以及 Assistant `reasoning_content/reasoning/reasoning_text/reasoning_details` 等已知 replay metadata；兼容 metadata 不进入 Browser Prompt |
 | 字符串 / text part `content` | ✅ | ✅ |
 | `stream=false` | ✅ | ✅ 文本与 Phase 6 附件请求 |
 | `stream=true` | ✅ | ✅ 文本与 Phase 6 附件请求均复用真实 DOM Streaming |
@@ -89,7 +89,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 | `response_format=json_object/json_schema` | 🟡 | ✅ prompt-constrained + 本地最终 JSON/Ajv 校验；不是原生 constrained decoding |
 | `temperature/top_p/penalties/seed` | 🟡 | 接收并按既有诊断策略忽略 |
 | `max_tokens/max_completion_tokens` | 🟡 | 接收但不承诺精确限制 |
-| Agent compatibility metadata | 🟡 | ✅ V0.1.2 显式接收 `store/reasoning_effort/reasoning/parallel_tool_calls/service_tier/prompt_cache_*`、provider/options 等已知 OpenAI-compatible 字段并忽略；仍保持顶层 strict unknown-field rejection |
+| Agent compatibility metadata | 🟡 | ✅ V0.1.3 延续并扩展 V0.1.2 allowlist：显式接收 `store/reasoning_effort/reasoning/parallel_tool_calls/service_tier/prompt_cache_*`、provider/options 等已知 OpenAI-compatible 字段并忽略；仍保持顶层 strict unknown-field rejection |
 | `logprobs` / `logit_bias` | ❌ | 稳定 unsupported error |
 | 真实 Token Usage | ❌ | 不伪造 |
 

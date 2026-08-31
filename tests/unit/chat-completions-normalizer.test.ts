@@ -153,6 +153,15 @@ describe('normalizeChatCompletions', () => {
     expect(result.diagnostics.ignoredParameters).toEqual(['image_detail']);
   });
 
+  it('normalizes Pi single-text-object user content as ordinary user text', () => {
+    const result = normalize({
+      model: 'chatgpt-web',
+      messages: [{ role: 'user', content: { type: 'text', text: '你好' } }],
+    } as unknown as ChatCompletionsRequest);
+
+    expect(result.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: '你好' }] }]);
+  });
+
   it('drops Cherry reasoning history metadata and agent compatibility parameters at the adapter boundary', () => {
     const result = normalize({
       model: 'chatgpt-web',
@@ -162,6 +171,8 @@ describe('normalizeChatCompletions', () => {
           role: 'assistant',
           content: '我是 ChatGPT。',
           reasoning_content: '',
+          reasoning: 'cross-model reasoning replay',
+          reasoning_text: 'cross-model reasoning text replay',
           reasoning_details: [],
         },
         { role: 'user', content: '继续' },

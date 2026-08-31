@@ -65,6 +65,7 @@ const InstructionContentSchema = Type.Union([
 
 const UserContentSchema = Type.Union([
   Type.String(),
+  TextPartSchema,
   Type.Array(
     Type.Union([TextPartSchema, ImageUrlPartSchema, FileIdPartSchema, FileDataPartSchema]),
     {
@@ -131,6 +132,8 @@ const AssistantMessageSchema = Type.Object(
     tool_calls: Type.Optional(Type.Array(AssistantToolCallSchema, { minItems: 1 })),
     name: Type.Optional(Type.String({ minLength: 1 })),
     reasoning_content: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    reasoning: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    reasoning_text: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     reasoning_details: Type.Optional(Type.Unknown()),
     refusal: Type.Optional(Type.Unknown()),
     annotations: Type.Optional(Type.Unknown()),

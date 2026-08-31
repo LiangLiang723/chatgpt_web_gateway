@@ -170,6 +170,12 @@ export class ConversationStore {
     return conversation ? this.load(conversation.id, conversation) : undefined;
   }
 
+  loadAnonymousBySyncedMessageCount(syncedMessageCount: number): ConversationAggregate[] {
+    return this.repositories.conversations
+      .listAnonymousBySyncedMessageCount(syncedMessageCount)
+      .map((conversation) => this.load(conversation.id, conversation));
+  }
+
   private load(
     conversationId: string,
     conversation: ConversationAggregate['conversation'],

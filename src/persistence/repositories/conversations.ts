@@ -155,4 +155,22 @@ export class ConversationRepository {
         .get(conversationKey) as ConversationRow | undefined,
     );
   }
+
+  listAnonymousBySyncedMessageCount(syncedMessageCount: number): ConversationRecord[] {
+    return (
+      this.database
+        .prepare(
+          `SELECT * FROM conversations
+           WHERE conversation_key IS NULL
+             AND sync_status = 'clean'
+             AND synced_message_count = ?
+             AND chatgpt_conversation_url IS NOT NULL
+           ORDER BY last_used_at DESC, id ASC`,
+        )
+        .all(syncedMessageCount) as unknown as ConversationRow[]
+    ).flatMap((row) => {
+      const mapped = mapRow(row);
+      return mapped === undefined ? [] : [mapped];
+    });
+  }
 }
