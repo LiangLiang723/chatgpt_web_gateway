@@ -4,7 +4,7 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
-## Unreleased（未发布）
+## V0.1.1 - 2026-08-31
 
 ### Fixed（修复）
 
@@ -13,7 +13,7 @@
 
 ### Validation（验证）
 
-- fresh `corepack pnpm verify`：**86 test files / 600 tests**，format / lint / typecheck / build / Project Memory / Docs / Architecture / Version 全绿；本地 schema/metadata maintenance change 未运行 Docker 或真实 ChatGPT E2E。
+- `fix/cherry-studio-compat` 已 fast-forward 合并到 `main`；V0.1.1 版本元数据更新后 fresh `corepack pnpm verify`：**86 test files / 600 tests**，format / lint / typecheck / build / Project Memory / Docs / Architecture / Version 全绿。本地 schema/metadata maintenance change 未运行 Docker 或真实 ChatGPT E2E。
 
 ## V0.1.0 - 2026-08-30
 
