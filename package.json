@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-web-gateway",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "OpenAI-compatible gateway backed by ChatGPT Web through Playwright Chromium.",
   "type": "module",
@@ -30,6 +30,7 @@
     "test:e2e:chatgpt:phase6": "xvfb-run -a tsx scripts/test-chatgpt-phase6-e2e.ts",
     "test:e2e:chatgpt:phase7": "xvfb-run -a tsx scripts/test-chatgpt-phase7-e2e.ts",
     "test:e2e:chatgpt:phase8": "xvfb-run -a tsx scripts/test-chatgpt-phase8-e2e.ts",
+    "test:e2e:chatgpt:pi-runtime": "xvfb-run -a tsx scripts/test-chatgpt-pi-runtime-e2e.ts",
     "check:docs": "node scripts/check-docs.mjs",
     "check:project-memory": "node scripts/check-project-memory.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",

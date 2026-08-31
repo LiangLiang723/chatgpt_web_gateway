@@ -12,12 +12,28 @@ export type ChatGptDriverErrorCode =
   | 'chatgpt_image_fetch_failed'
   | 'conversation_restore_failed';
 
+export interface ChatGptDriverDiagnostics {
+  operation: string;
+  page?: {
+    url?: string;
+    title?: string;
+    documentReadyState?: string;
+    closed: boolean;
+  };
+  prompt?: {
+    characters: number;
+    utf8Bytes: number;
+    lines: number;
+  };
+}
+
 export interface ChatGptDriverErrorOptions {
   code: ChatGptDriverErrorCode;
   message: string;
   selectorName?: string;
   candidateName?: string;
   cause?: unknown;
+  diagnostics?: ChatGptDriverDiagnostics;
 }
 
 export class ChatGptDriverError extends Error {
@@ -25,6 +41,7 @@ export class ChatGptDriverError extends Error {
   readonly selectorName?: string;
   readonly candidateName?: string;
   readonly cause?: unknown;
+  readonly diagnostics?: ChatGptDriverDiagnostics;
 
   constructor(options: ChatGptDriverErrorOptions) {
     super(options.message, { cause: options.cause });
@@ -33,6 +50,7 @@ export class ChatGptDriverError extends Error {
     this.selectorName = options.selectorName;
     this.candidateName = options.candidateName;
     this.cause = options.cause;
+    this.diagnostics = options.diagnostics;
   }
 }
 

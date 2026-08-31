@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import type { FastifyError } from 'fastify';
+import type { FastifyError, FastifyServerOptions } from 'fastify';
 import multipart from '@fastify/multipart';
 
 import type { FileService } from '../attachments/file-service.js';
@@ -11,6 +11,7 @@ import { authenticateBearer } from './auth.js';
 import {
   GatewayError,
   ValidationError,
+  executionFailureLogFields,
   gatewayErrorFromExecution,
   toOpenAIErrorBody,
 } from './errors.js';
@@ -35,7 +36,7 @@ export interface BuildServerOptions {
   fileService?: FileService;
   imageService?: ImageGenerationServiceLike;
   diagnostics?: RuntimeDiagnosticsProvider;
-  logger?: boolean;
+  logger?: FastifyServerOptions['logger'];
 }
 
 function validationErrorFromFastify(error: FastifyError): ValidationError | undefined {
@@ -74,6 +75,12 @@ export function buildServer(options: BuildServerOptions) {
         : (validationErrorFromFastify(error as FastifyError) ?? gatewayErrorFromExecution(error));
 
     if (gatewayError) {
+      if (gatewayError.statusCode >= 500) {
+        request.log.error(
+          executionFailureLogFields(error, gatewayError),
+          'Gateway execution failed',
+        );
+      }
       return reply.status(gatewayError.statusCode).send(toOpenAIErrorBody(gatewayError));
     }
 

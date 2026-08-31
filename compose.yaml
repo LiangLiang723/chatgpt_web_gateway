@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     platform: linux/amd64
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     init: true
     restart: unless-stopped
     environment:
@@ -21,6 +23,10 @@ services:
       MODEL_MAX_INPUT_TOKENS: ${MODEL_MAX_INPUT_TOKENS:-128000}
       MODEL_MAX_OUTPUT_TOKENS: ${MODEL_MAX_OUTPUT_TOKENS:-32768}
       CHATGPT_PROXY_SERVER: ${CHATGPT_PROXY_SERVER:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      ALL_PROXY: ${ALL_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       NOVNC_PORT: ${NOVNC_PORT:-6080}
       MAINTENANCE_URL: ${MAINTENANCE_URL:-https://chatgpt.com/}

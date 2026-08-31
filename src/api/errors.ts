@@ -335,6 +335,39 @@ export function gatewayErrorFromExecution(error: unknown): GatewayError | undefi
   });
 }
 
+function errorCauseChain(error: unknown): Array<{ name: string; message: string; stack?: string }> {
+  const chain: Array<{ name: string; message: string; stack?: string }> = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current instanceof Error && chain.length < 4 && !seen.has(current)) {
+    seen.add(current);
+    chain.push({
+      name: current.name,
+      message: current.message,
+      ...(current.stack === undefined ? {} : { stack: current.stack }),
+    });
+    current = current.cause;
+  }
+  return chain;
+}
+
+export function executionFailureLogFields(error: unknown, gatewayError: GatewayError) {
+  const driverDiagnostics =
+    typeof error === 'object' &&
+    error !== null &&
+    'diagnostics' in error &&
+    typeof (error as { diagnostics?: unknown }).diagnostics === 'object'
+      ? (error as { diagnostics?: unknown }).diagnostics
+      : undefined;
+  return {
+    err: error,
+    executionCode: gatewayError.code,
+    ...(driverDiagnostics === undefined ? {} : { driverDiagnostics }),
+    errorChain: errorCauseChain(error),
+  };
+}
+
 export function toOpenAIErrorBody(error: GatewayError): OpenAIErrorBody {
   return {
     error: {

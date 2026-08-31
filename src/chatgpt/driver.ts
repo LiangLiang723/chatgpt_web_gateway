@@ -1,8 +1,11 @@
+import { Buffer } from 'node:buffer';
+
 import type { Locator, Page } from 'playwright';
 
 import { TextStreamAbortedError } from '../stream/errors.js';
 import type { AssistantSnapshot } from '../stream/types.js';
 import { probeAuth } from './auth.js';
+import { enterComposerPrompt } from './composer-input.js';
 import {
   waitForAssistantFinalSnapshot,
   type WaitForAssistantCompletionOptions,
@@ -11,7 +14,7 @@ import {
   parseSafeChatGptConversationUrl,
   type SafeChatGptConversationUrl,
 } from './conversation-url.js';
-import { asChatGptDriverError, ChatGptDriverError } from './errors.js';
+import { ChatGptDriverError, type ChatGptDriverDiagnostics } from './errors.js';
 import {
   inspectCollection,
   inspectUnique,
@@ -86,6 +89,79 @@ export interface CreateChatGptDriverOptions {
   completionVerificationStableMs?: number;
   completionVerificationRetryMs?: number;
   completionVerificationPageTimeoutMs?: number;
+}
+
+function promptDiagnostics(prompt: string): NonNullable<ChatGptDriverDiagnostics['prompt']> {
+  return {
+    characters: prompt.length,
+    utf8Bytes: Buffer.byteLength(prompt),
+    lines: prompt.split(/\r\n|\n|\r/).length,
+  };
+}
+
+async function capturePageDiagnostics(
+  page: Page,
+): Promise<NonNullable<ChatGptDriverDiagnostics['page']>> {
+  const runtimePage = page as Page & {
+    isClosed?: () => boolean;
+    title?: () => Promise<string>;
+    evaluate?: <T>(callback: () => T) => Promise<T>;
+  };
+  let closed = false;
+  try {
+    closed = runtimePage.isClosed?.() ?? false;
+  } catch {
+    // Keep the conservative default when Page state cannot be read.
+  }
+
+  let url: string | undefined;
+  try {
+    url = page.url();
+  } catch {
+    url = undefined;
+  }
+
+  let title: string | undefined;
+  let documentReadyState: string | undefined;
+  if (!closed) {
+    try {
+      title = await runtimePage.title?.();
+    } catch {
+      title = undefined;
+    }
+    try {
+      documentReadyState = await runtimePage.evaluate?.(() => document.readyState);
+    } catch {
+      documentReadyState = undefined;
+    }
+  }
+
+  return {
+    ...(url === undefined ? {} : { url }),
+    ...(title === undefined ? {} : { title }),
+    ...(documentReadyState === undefined ? {} : { documentReadyState }),
+    closed,
+  };
+}
+
+async function asChatGptDriverErrorWithDiagnostics(options: {
+  error: unknown;
+  page: Page;
+  operation: string;
+  prompt?: string;
+  message?: string;
+}): Promise<ChatGptDriverError> {
+  if (options.error instanceof ChatGptDriverError) return options.error;
+  return new ChatGptDriverError({
+    code: 'browser_unavailable',
+    message: options.message ?? 'ChatGPT page operation failed',
+    cause: options.error,
+    diagnostics: {
+      operation: options.operation,
+      page: await capturePageDiagnostics(options.page),
+      ...(options.prompt === undefined ? {} : { prompt: promptDiagnostics(options.prompt) }),
+    },
+  });
 }
 
 export function createChatGptDriver(
@@ -548,22 +624,7 @@ export function createChatGptDriver(
       throwIfAborted();
       await composer.focus();
       throwIfAborted();
-      if (request.prompt.includes('\n')) {
-        await composer.evaluate((element, prompt) => {
-          const clipboardData = new DataTransfer();
-          clipboardData.setData('text/plain', prompt);
-          element.dispatchEvent(
-            new ClipboardEvent('paste', {
-              bubbles: true,
-              cancelable: true,
-              clipboardData,
-              composed: true,
-            }),
-          );
-        }, request.prompt);
-      } else {
-        await page.keyboard.insertText(request.prompt);
-      }
+      await enterComposerPrompt(page, composer, request.prompt);
       throwIfAborted();
       await dismissConversationHistoryRateLimitModal(page);
       throwIfAborted();
@@ -767,7 +828,12 @@ export function createChatGptDriver(
       };
     } catch (error) {
       if (error instanceof TextStreamAbortedError) throw error;
-      throw asChatGptDriverError(error);
+      throw await asChatGptDriverErrorWithDiagnostics({
+        error,
+        page,
+        operation: 'startText',
+        prompt: request.prompt,
+      });
     }
   };
 
@@ -780,7 +846,11 @@ export function createChatGptDriver(
         });
         await ensureReady(page);
       } catch (error) {
-        throw asChatGptDriverError(error);
+        throw await asChatGptDriverErrorWithDiagnostics({
+          error,
+          page,
+          operation: 'openFresh',
+        });
       }
     },
 
@@ -809,7 +879,11 @@ export function createChatGptDriver(
         }
         return 'restored';
       } catch (error) {
-        throw asChatGptDriverError(error);
+        throw await asChatGptDriverErrorWithDiagnostics({
+          error,
+          page,
+          operation: 'openConversation',
+        });
       }
     },
 
@@ -831,7 +905,12 @@ export function createChatGptDriver(
         return { text, conversationUrl: await turn.conversationUrl() };
       } catch (error) {
         if (error instanceof TextStreamAbortedError) throw error;
-        throw asChatGptDriverError(error);
+        throw await asChatGptDriverErrorWithDiagnostics({
+          error,
+          page,
+          operation: 'sendText',
+          prompt: request.prompt,
+        });
       }
     },
   };

@@ -4,17 +4,22 @@ import { buildServer } from '../../src/api/server.js';
 import { loadConfig } from '../../src/config/index.js';
 
 describe('runtime diagnostics route', () => {
-  it('is authenticated and exposes only bounded local runtime facts', async () => {
+  it('is authenticated and exposes only bounded active runtime facts', async () => {
     const app = buildServer({
       config: loadConfig({ GATEWAY_API_KEY: 'test-key' }),
       diagnostics: {
-        snapshot: () => ({
+        snapshot: async () => ({
           status: 'ready',
           ui_mode: 'headless',
           browser: {
             available: true,
-            auth_state: 'not_probed',
+            auth_state: 'authenticated',
             pages: { open: 3, leased: 1, idle: 2 },
+            probe: {
+              status: 'ok',
+              page_url: 'https://chatgpt.com/',
+              document_state: 'complete',
+            },
           },
           persistence: {
             sqlite: 'ready',
@@ -39,8 +44,13 @@ describe('runtime diagnostics route', () => {
       ui_mode: 'headless',
       browser: {
         available: true,
-        auth_state: 'not_probed',
+        auth_state: 'authenticated',
         pages: { open: 3, leased: 1, idle: 2 },
+        probe: {
+          status: 'ok',
+          page_url: 'https://chatgpt.com/',
+          document_state: 'complete',
+        },
       },
       persistence: {
         sqlite: 'ready',

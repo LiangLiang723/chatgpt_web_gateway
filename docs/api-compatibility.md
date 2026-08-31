@@ -8,7 +8,7 @@
 |---|---:|---:|
 | `GET /health` | ✅ | ✅ |
 | `GET /v1/models` | ✅ | ✅ |
-| `GET /v1/diagnostics` | Extension | ✅ authenticated local diagnostics；不自动探测 ChatGPT 登录态 |
+| `GET /v1/diagnostics` | Extension | ✅ authenticated active diagnostics；显式调用时有界探测 ChatGPT 登录态 |
 | `POST /v1/chat/completions` | ✅ | ✅ 文本 + 图片/文件输入 + function Tools + Structured Output |
 | `POST /v1/responses` | ✅ | ✅ 文本 + 图片/文件输入 + function Tools + Structured Output |
 | `POST /v1/files` | ✅ | ✅ Phase 6 local Files lifecycle |
@@ -19,6 +19,13 @@
 | `POST /v1/images/generations` | ✅ | ✅ Phase 8；`n=1` + `url|b64_json`，standalone authenticated acceptance 已通过 |
 | `GET /v1/images/:id/content` | Extension | ✅ authenticated persisted generated-image content |
 | Audio / Embeddings / Realtime / Batches / Fine-tuning / Vector Stores | ❌ | ❌ |
+
+### V0.1.4 Browser Runtime / Diagnostics compatibility
+
+- OpenAI-compatible request schema 不因为 Pi 大 Prompt 特判或降级：system/developer instructions、history 与 function tool declarations 仍按既有 strict schema/Normalizer 全量处理。最终 Browser Prompt 若为单行继续 `keyboard.insertText()`；普通多行继续一次 ProseMirror `text/plain` paste；超过 16 KiB UTF-8 的多行 Prompt 改为 ≤4 KiB UTF-8 安全分块 + `Shift+Enter`。该运输变化不改变公共 request/response shape，也不静默删减 tools/context。
+- 服务器实际安装的 Pi `0.84.4` 已用精确 16 tools 通过 `Pi → Gateway → ChatGPT Web` focused real E2E；最终 Browser Prompt 为 **21,019 UTF-8 bytes**，单次 Gateway/ChatGPT 请求完成。
+- unknown Browser/Page failure 对客户端继续稳定映射为 `browser_unavailable` 等现有 OpenAI-compatible error；Playwright cause 与 bounded Driver diagnostics 只写服务端日志。SSE 已开始时仍保持 HTTP 200 + 流内 error frame，不把内部错误改成新的公共字段。
+- authenticated `GET /v1/diagnostics` 是 operator 主动调用的扩展：有 Browser runtime 时获取一个 PagePool lease，访问 ChatGPT 首页并返回 `auth_state=authenticated|auth_required|unknown` 和 `probe.status=ok|capacity_exceeded|failed`、safe `page_url/document_state`；maintenance mode 保持 `not_probed`。该接口不返回 API key、Cookie、Prompt/tool/content、proxy/Profile path。
 
 ## Current Phase 7 Tool Calling（当前 Phase 7 工具调用）
 

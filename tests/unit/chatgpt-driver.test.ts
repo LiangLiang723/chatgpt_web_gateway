@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import type { Locator, Page } from 'playwright';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -415,6 +417,67 @@ describe('ChatGptDriver sendText', () => {
     expect(events.filter((event) => event.startsWith('inspect:send:'))).toEqual([
       'inspect:send:unique',
     ]);
+  });
+
+  it('keeps safe page and prompt metrics with the raw cause for an unknown Composer failure', async () => {
+    const prompt = 'SECRET_SYSTEM_PROMPT\nwith tools';
+    const raw = new Error('locator.focus: Target page changed while focusing');
+    const composer = {
+      focus: vi.fn(async () => {
+        throw raw;
+      }),
+    } as unknown as Locator;
+    const page = {
+      url: vi.fn(() => 'https://chatgpt.com/c/diag-thread'),
+      title: vi.fn(async () => 'ChatGPT - diagnostic thread'),
+      isClosed: vi.fn(() => false),
+      evaluate: vi.fn(async () => 'interactive'),
+      keyboard: { insertText: vi.fn() },
+    } as unknown as Page;
+    const driver = createChatGptDriver({
+      inspectCollection: async () => ({
+        status: 'collection',
+        candidateName: 'assistant-test',
+        count: 0,
+        locator: { count: async () => 0 } as unknown as Locator,
+      }),
+      resolveUnique: async (_page, definition) => {
+        if (definition.name === 'composer') {
+          return { locator: composer, candidateName: 'composer-test' };
+        }
+        throw new Error(`Unexpected selector ${definition.name}`);
+      },
+    });
+
+    let failure: unknown;
+    try {
+      await driver.sendText(page, { prompt });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(ChatGptDriverError);
+    expect(failure).toMatchObject({
+      code: 'browser_unavailable',
+      cause: raw,
+      diagnostics: {
+        operation: 'startText',
+        page: {
+          url: 'https://chatgpt.com/c/diag-thread',
+          title: 'ChatGPT - diagnostic thread',
+          documentReadyState: 'interactive',
+          closed: false,
+        },
+        prompt: {
+          characters: prompt.length,
+          utf8Bytes: Buffer.byteLength(prompt),
+          lines: 2,
+        },
+      },
+    });
+    expect(JSON.stringify((failure as ChatGptDriverError).diagnostics)).not.toContain(
+      'SECRET_SYSTEM_PROMPT',
+    );
   });
 
   it('waits for a transiently unmounted Composer between retained-page turns', async () => {

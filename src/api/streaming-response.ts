@@ -3,6 +3,7 @@ import type { FastifyReply } from 'fastify';
 import type { NormalizedStreamingExecutionHandler, TextStreamSink } from './execution.js';
 import {
   GatewayError,
+  executionFailureLogFields,
   gatewayErrorFromExecution,
   toOpenAIErrorBody,
   type OpenAIErrorBody,
@@ -88,6 +89,10 @@ export async function runStreamingResponse(options: RunStreamingResponseOptions)
     }
 
     const gatewayError = safeStreamError(error);
+    options.reply.request.log.error(
+      executionFailureLogFields(error, gatewayError),
+      'Gateway streaming execution failed after SSE start',
+    );
     await writeFrames(writer!, options.encodeError(toOpenAIErrorBody(gatewayError).error));
     writer?.end();
   } finally {

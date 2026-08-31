@@ -9,22 +9,22 @@
 ```text
 PROJECT_STATE_SCHEMA=1
 PHASE=phase-10-complete
-STATUS=v1-acceptance-complete
-RELEASE_VERSION=V0.1.3
+STATUS=v0.1.4-maintenance-ready-for-git-closure
+RELEASE_VERSION=V0.1.4
 GOVERNING_SPEC=docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md
-ACTIVE_PLAN=none
-NEXT_TASK=handle-next-explicit-maintenance-or-release-request
+ACTIVE_PLAN=docs/superpowers/plans/2026-08-31-v0.1.4-pi-browser-runtime.md
+NEXT_TASK=commit-integrate-main-reverify-push-and-close-v0.1.4
 UPDATED_AT=2026-08-31
 ```
 
 ## Snapshot（快照）
 
 - **当前阶段：** Phase 1–10 的 V1 实现、验收与 feature-branch Git 收口已全部关闭。最终 fresh deterministic、Docker、Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 均已通过；主 acceptance checkpoint `e0d804c` 已正常推送到 `origin/phase-7-tool-calling`。
-- **当前状态：** `v1-acceptance-complete`。V0.1.3 client-continuity maintenance 已完成：Pi singleton user text-object / Assistant reasoning replay schema 兼容、Cherry-style 无 `X-Conversation-Key` full-history 唯一匿名续接，以及匿名 FIFO 锁后重验证并发保护均已收口。focused **5 files / 52 tests**、功能分支与 fast-forward 后 merged `main` fresh full **86 files / 618 tests** 均通过；使用批准 LAN proxy 的 fresh inspect 为 `auth=authenticated` / Composer unique，standalone Phase 4 返回 `append/restore/rebuild/anonymousContinuation=true`。功能提交 `45bab0e` 已 fast-forward 到 `main` 并推送 `origin/main`，post-push fetch 已确认远端一致。`V0.1.0` Git Tag / GitHub Release 仍保留；本次没有创建 V0.1.3 Tag / GitHub Release，也未发布 Docker registry image。
-- **Governing Spec：** V1 主设计仍是 [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)；当前 maintenance 设计见 [`docs/superpowers/specs/2026-08-31-v0.1.3-client-continuity-design.md`](superpowers/specs/2026-08-31-v0.1.3-client-continuity-design.md)。
-- **Active Plan：** `none`。V0.1.3 client-continuity maintenance plan 已完成并关闭，保留为设计/验收历史。
-- **最新 deterministic / Docker 基线：** V0.1.3 focused compatibility/continuity suite 通过 **5 files / 52 tests**；功能分支最终树与 fast-forward 后 merged `main` fresh `corepack pnpm verify` 都通过 **86 test files / 618 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。新增两个并发回归分别证明 non-stream / Streaming 在匿名 queue wait 后必须重新验证候选。最近一次 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；V0.1.3 不改 Docker runtime、依赖或 migration，因此本 PATCH 不重复 Docker build/smoke。
-- **最新真实网页事实：** V0.1.3 使用 `http://192.168.3.83:7890` 与隔离登录 Profile fresh inspect 为 `auth=authenticated` / Composer unique；随后 focused standalone Phase 4 返回 `append=true`、`restore=true`、`rebuild=true`、`anonymousContinuation=true`，其中匿名第二轮保持同一 ChatGPT Conversation URL 且 Web user turn 不重放首轮 token。此前 V1 final Phase 7 standalone、相邻 Phase 6 standalone 与 reduced combined Phase 3→8 的验收事实继续有效。
+- **当前状态：** `v0.1.4-maintenance-ready-for-git-closure`。V0.1.4 Browser runtime maintenance 的实现、focused regression、真实 Pi Browser runtime 验证与 feature-branch fresh full deterministic 已完成：大型多行 Composer 输入按 UTF-8 尺寸切换到分段 `insertText + Shift+Enter`，不截断 system/Skills/项目上下文/tools；Browser Driver 增加 bounded 本地诊断与 HTTP/SSE 结构化错误日志；authenticated `/v1/diagnostics` 升级为显式有界 ChatGPT auth probe；Compose 增加 Docker Host proxy alias 与 optional generic proxy passthrough。当前只剩最终治理/staged review、feature commit、fast-forward `main`、merged-main re-verify 与正常 push。`V0.1.0` Git Tag / GitHub Release 仍保留；V0.1.4 不创建新 Tag / GitHub Release，也不发布 Docker registry image。
+- **Governing Spec：** V1 主设计仍是 [`docs/superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md`](superpowers/specs/2026-08-14-chatgpt-web-gateway-v1-design.md)；当前 maintenance 设计见 [`docs/superpowers/specs/2026-08-31-v0.1.4-pi-browser-runtime-design.md`](superpowers/specs/2026-08-31-v0.1.4-pi-browser-runtime-design.md)。
+- **Active Plan：** [`docs/superpowers/plans/2026-08-31-v0.1.4-pi-browser-runtime.md`](superpowers/plans/2026-08-31-v0.1.4-pi-browser-runtime.md)。实现、focused regression、真实 Pi Browser runtime 与 feature-branch full deterministic 均已完成，当前只剩 Git closure。
+- **最新 deterministic / Docker 基线：** V0.1.4 focused Browser/runtime suite 通过 **7 files / 41 tests**；代表性 `docker compose config` 已确认 `host.docker.internal=host-gateway` 与 `CHATGPT_PROXY_SERVER` / `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` passthrough。随后 feature branch fresh `corepack pnpm verify` 通过 **91 test files / 638 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。最近一次完整 `linux/amd64` Docker 仍是 V0.1.0 release candidate image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` + full `docker:smoke` PASS；V0.1.4 不改 Dockerfile、依赖或 migration，本 PATCH 未重复 Docker image build/smoke。
+- **最新真实网页事实：** 使用 `http://192.168.3.83:7890` 与隔离登录 Profile fresh inspect 得到 `auth=authenticated` / Composer unique / Send unique；随后服务器实际安装的 Pi `0.84.4` 通过 `Pi → Gateway → ChatGPT Web` focused E2E，精确声明 16 tools、最终 Browser Prompt **21,019 UTF-8 bytes**、Pi 输出正确且 `gatewayRequests=1`。真实 Pi 本地协议捕获同时确认 tool round-trip 的 `assistant(content:null,tool_calls) → tool(tool_call_id)` 与当前 strict schema/normalizer 一致。此前 V0.1.3 anonymous continuation 与 V1 final Phase 6/7/8 验收事实继续有效。
 
 ## Implemented Now（当前已实现）
 
@@ -71,7 +71,7 @@ UPDATED_AT=2026-08-31
 
 - ✅ failed keyed/transient Conversation Page 直接关闭，不重新放回 idle pool；下一请求获取新 Page 后按 SQLite 状态 RESTORE/REBUILD 收敛。
 - ✅ failed Page 仍真正关闭；若它是 Persistent BrowserContext 的最后一个 tracked Page，PagePool 先创建 fresh idle replacement 再关闭 failed Page，避免 Page-level failure 错误触发 context death。Persistent BrowserContext 真正 unexpected close 仍触发 fatal callback；生产入口有序关闭后非零退出，复用 Compose `restart: unless-stopped` 重建 Chromium/Context，同时保留 `/data`。
-- ✅ authenticated `GET /v1/diagnostics` 只报告 bounded local Browser/Page/Persistence snapshot，固定 `auth_state=not_probed`；不暗访 ChatGPT、不返回 API Key/Cookie/proxy/Profile/Prompt/Tool data/content bytes。
+- ✅ authenticated `GET /v1/diagnostics` 在 operator 显式调用时获取普通 PagePool lease、访问 ChatGPT 首页并复用 Auth Probe，返回 bounded `auth_state=authenticated|auth_required|unknown` 与 `probe.status=ok|capacity_exceeded|failed`；retained Conversation Page 不被导航，maintenance mode 保持 `not_probed`，且不返回 API Key/Cookie/proxy/Profile/Prompt/Tool data/content bytes。
 - ✅ `backup:data` / `restore:data` 冷备份 CLI：必须显式 `--gateway-stopped`，backup destination 位于 DATA_DIR 外且不存在，manifest schema 校验，restore 目标必须为空；完整 `/data`（包括 SQLite、Profile、Files、Generated Images）为备份边界。
 - ✅ backup/restore byte-for-byte round-trip deterministic test 已编写；[`operations.md`](operations.md) 已记录 NAS 首次部署、登录、更新、冷备份/恢复、诊断与回滚流程。
 
@@ -91,11 +91,12 @@ UPDATED_AT=2026-08-31
 - SQLite 是 Conversation/File/Generated Image 恢复事实来源；Page 是可丢弃 runtime cache；same-key Queue 是单进程写序列化边界。
 - Browser upload/image generation 是网页 side effect；未知 post-checkpoint Conversation failure 保持 `in_flight` 并由下一请求 REBUILD 收敛。
 - Tool definitions/results、Structured Output schema、附件来源都按不可信客户端数据处理；Gateway 不执行 caller-defined functions、Shell、HTTP plugin 或 MCP tool。
-- Docker 是正式运行边界；Docker smoke 不等于 authenticated ChatGPT E2E。
+- Docker 是正式运行边界；Docker smoke 不等于 authenticated ChatGPT E2E。Compose 透传 optional generic proxy variables，并用 `host.docker.internal:host-gateway` 为 Docker Host proxy 提供容器安全地址；Chromium 仍只由 `CHATGPT_PROXY_SERVER` 显式控制。
 - 冷备份包含 ChatGPT Browser Profile 和用户数据，属于高敏感凭据/内容；不提供 hot backup 一致性承诺。
 
 ## Recent Milestones（最近里程碑）
 
+- 2026-08-31：V0.1.4 Pi Browser runtime maintenance candidate 已完成实现、focused/live 与 feature-branch full deterministic 验证：大型多行 Prompt 改为尺寸感知 Composer transport，真实 Pi `0.84.4` + 16 tools + **21,019-byte** Browser Prompt 单请求成功；同时增加 safe Driver diagnostics、HTTP/SSE failure logging、active `/v1/diagnostics` 与 Compose Host proxy passthrough。fresh full `corepack pnpm verify` 为 **91/638**；当前仅剩 Git closure。
 - 2026-08-31：V0.1.3 client-continuity maintenance 已完成：Pi singleton user text-object 与 Assistant reasoning replay 兼容、Cherry-style anonymous full-history 唯一 APPEND/RESTORE、non-stream/Streaming 匿名 FIFO 锁后重验证均已收口；focused **5/52**、功能分支与 merged `main` full **86/618** 全绿，authenticated Phase 4 `append/restore/rebuild/anonymousContinuation=true`。功能提交 `45bab0e` 已推送 `origin/main`；本次未创建 Tag/Release、未发布 Docker 镜像。
 - 2026-08-31：V0.1.2 OpenAI-compatible Agent maintenance 已完成：Cherry reasoning history、Pi/OpenClaw/Hermes metadata、Codex Responses namespace/custom bridge、server-tool filtering 与模型 compatibility metadata 均已收口；功能分支和 merged `main` fresh deterministic 均为 **86/610**，功能提交 `7d475fe` 已推送 `origin/main`。Claude Code 不在范围；本次未创建 Tag/Release、未发布 Docker 镜像。
 - 2026-08-31：Cherry Studio compatibility maintenance 已 fast-forward 合并到 `main`，仓库版本由 `V0.1.0` 升级为 `V0.1.1`。Chat Completions strict 接收并忽略 `stream_options.include_usage?: boolean`、不伪造 usage；`/v1/models` 增加能力/输入模态/Streaming/context metadata，`MODEL_CONTEXT_WINDOW` 默认 `128000`。版本更新后 fresh deterministic 为 **86 test files / 600 tests**；本地 schema/metadata 变更未运行 Docker 或真实 ChatGPT E2E，且本次未创建 `V0.1.1` Tag / GitHub Release。
@@ -111,6 +112,8 @@ UPDATED_AT=2026-08-31
 
 ## Known Risks / Limits（已知风险 / 限制）
 
+- V0.1.4 大 Prompt transport 已由真实 Pi 21,019-byte Browser Prompt 验证，但 16 KiB/4 KiB 是当前已验证的工程阈值，不代表 ChatGPT Web 官方输入限制；更大的 Prompt 仍受网页本身、浏览器与模型上下文能力约束。
+- `src/conversations/conversation-executor.ts`、`phase3-executor.ts`、`phase4-request.ts` 当前没有生产入口引用，只剩历史单测形成自包含 legacy island；本 PATCH 不把 dead-code 删除或 `conversation-engine.ts`/`driver.ts` 大规模拆分混入尺寸敏感 Browser 修复，后续可单独做低风险结构清理。
 - Phase 7 function-policy Context Sync 与 cross-URL RESTORE hydration 根因均已修复并通过 standalone + combined；仍需持续防范 ChatGPT DOM/历史加载时序变化，不能把 Composer ready 等同于 Conversation history ready。
 - Phase 6 final standalone、Phase 8 standalone、PagePool lifecycle、`.markdown.prose` selector、multiline abort→REBUILD 与 final combined 都已有真实通过证据。
 - ChatGPT DOM、Cloudflare、认证、图片生成 UI/CDN、上传格式与平台频率保护仍可能变化；Phase 8 request-scoped image baseline + duplicate-resource dedup 已通过 standalone，并在最新 PagePool 生命周期修复后的 reduced combined 中证明可共存。

@@ -16,7 +16,9 @@
 - Phase 7 Tool Schema canonicalization、tool-context fingerprint（definitions + private protocol version + normalized `tool_choice`/function policy）、`tool_choice` validation、V2 external-function Prompt / strict Tool Parser、Tool Detection Buffer。
 - Structured Output policy、JSON object parse、JSON Schema compile/validation 与 final-success gate。
 - Phase 8 Images request normalization、request-scoped conversation-turn image baseline ownership、zero/one/multiple candidate selection、signature sniff、atomic storage、SHA-256 integrity 与 `PUBLIC_BASE_URL` validation。
-- Phase 9 diagnostics snapshot、failed Page discard、Persistent BrowserContext last-Page replacement-before-close、unexpected BrowserContext close signaling，以及 cold backup/restore CLI guards/round-trip。
+- Phase 9/V0.1.4 diagnostics active probe（authenticated/auth_required/unknown、capacity/probe failure、lease release）、failed Page discard、Persistent BrowserContext last-Page replacement-before-close、unexpected BrowserContext close signaling，以及 cold backup/restore CLI guards/round-trip。
+- V0.1.4 Composer transport：单行保持 `keyboard.insertText()`、普通多行保持单次 ProseMirror `text/plain` paste、>16 KiB UTF-8 多行 Prompt 使用 ≤4 KiB UTF-8 安全 insert chunks + `Shift+Enter`；Driver unknown Page failure 只附加 operation/page/prompt-size bounded diagnostics 并保留 cause，不含 Prompt 正文。
+- Compose proxy boundary：`host.docker.internal:host-gateway` 与可选 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` passthrough。
 - MIME（媒体类型）、strict Base64/Data URL、PNG/JPEG/WEBP/GIF signature sniff、URL 输入解析。
 - Phase 6 SSRF/DNS/redirect/pinned-address guard、16 attachment / 32 MiB single / 64 MiB request limits、filename policy、request staging hardlink/copy/cleanup。
 - 文件 SHA-256 去重。
@@ -46,7 +48,7 @@
 - Phase 6 Task 7：真实 Fastify HTTP + 两套 Normalizer + shared Conversation Engine/Resolver/FileService + fake Driver 覆盖 Chat Completions image URL/Data URL/file data/`file_id`、Responses `input_image` URL/Data URL/`file_id` + `input_file` data/`file_id`、双协议 stream/error framing、same-key slow resolve FIFO、different-key parallel、pre-start `file_not_found`、post-start `chatgpt_upload_failed` 与 Phase 7 capability gate 回归。
 - Phase 7：canonical Tool Call / Tool Result message fingerprint，pending tool-result validation，tool definition/private protocol/function-policy fingerprint change → `REBUILD tools_changed`，SQLite ToolCall/Result round-trip、Gateway-owned external call ID、相同 policy 的 tool-result APPEND/RESTORE、policy 改变时 Tool Result continuation REBUILD、`tool_choice=none` context Prompt 且 tool-result pending 不被误写成 pending user 的回归、single/multiple call、两套 non-stream/stream encoder、post-start parser error 无成功 terminal，以及 tools + attachments 共存回归。
 - Phase 8：真实临时 SQLite + generated filesystem + fake Page Pool/Image Driver 覆盖 URL/Base64 shapes、authenticated content route、maintenance mode、storage rollback/restart recovery 与 GeneratedImage persistence。
-- Phase 9：Structured Output preflight/final validation、failed Page close、last failed Page 关闭前创建 fresh idle replacement、BrowserContext fatal callback、authenticated diagnostics sensitive-field boundary，以及 backup → restore byte-for-byte DATA_DIR round-trip。
+- Phase 9/V0.1.4：Structured Output preflight/final validation、failed Page close、last failed Page 关闭前创建 fresh idle replacement、BrowserContext fatal callback、authenticated active diagnostics sensitive-field/capacity/release boundary、普通 HTTP mapped 5xx 与 post-200 SSE execution failure 结构化日志，以及 backup → restore byte-for-byte DATA_DIR round-trip。
 - Client abort（客户端断开）→ stop generation。
 
 ## E2E（端到端）
@@ -93,6 +95,11 @@ E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt:phase8
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:pi-runtime
 ```
 
 `CHATGPT_PROFILE_DIR` 缺失会 fail fast；如果解析到生产 `${DATA_DIR}/browser-profile/` 也会拒绝运行。测试 Profile 不得使用个人日常浏览器 Profile，登录由人工完成；E2E harness 不自动填写账号密码、MFA 或 CAPTCHA。需要代理时显式设置 `CHATGPT_PROXY_SERVER`；只接受 `http` / `https` / `socks5` server origin，URL 内禁止账号密码。combined `test:e2e:chatgpt` 额外要求 `E2E_CHATGPT_COMBINED=1`，避免调试单一 Phase 时误跑整套真实网页回归。
@@ -110,6 +117,7 @@ corepack pnpm test:e2e:chatgpt:phase8
 7. Phase 6 standalone 当前预算固定为四个逻辑 ChatGPT Conversation group：images、documents-primary、documents-secondary、memory/restore。图片两个场景共用 images；XLSX + TXT 共用 documents-primary；PDF + DOCX 共用 documents-secondary；memory/restore 只允许 **1 个新附件 turn**：该首轮同时承担 attachment Streaming 验证与 memory seed，随后 APPEND/RESTORE 不再上传新文件。四组新附件 turn 固定为 **2 / 2 / 2 / 1**。每个附件 turn 仍使用唯一 token 并验证各 Conversation 内累计 AttachmentRecords。2026-08-29 focused live 证据先证明同一 documents Conversation 的第 4 个连续新文档分析 turn会稳定出现 `chatgpt_response_missing`；后续整轮又证明第 3 个新附件 turn 即使明确要求忽略历史附件，模型仍可能选择更早 PDF token；把 Streaming 放到 memory Conversation 后，第二个 memory 附件又会让 restart RESTORE 错回忆更早 Streaming token。因此最终 harness 把 Streaming 与 memory seed 合并为同一个首轮附件请求，在**不增加四个 Conversation 数量**的前提下消除历史附件歧义并减少一次真实请求。当前附件读取 prompt 仍必须明确只读取**本轮新附加**的文件/图片并忽略更早附件，避免模型选择历史资源造成假阴性。
 8. Phase 7 standalone 固定为五个逻辑 ChatGPT Conversation group：single tool + result continuation 的 **function-policy-change REBUILD** + 随后 same-policy restart RESTORE 共用一组；multiple tools、stream tool、stream auto text、schema/protocol-change REBUILD 各一组。Gateway 不执行测试函数；结果由 harness 确定性回传。policy-change REBUILD 不新增 Conversation group，只在同一逻辑组内验证 URL 改变；stable-policy restart 再验证 URL 保持。
 9. Phase 8 standalone 固定为两次真实图片生成：一次 `url`，一次 `b64_json`。URL 场景同时核对 authenticated content bytes、SQLite GeneratedImage record、磁盘 bytes/SHA-256，并在关闭后以新 Gateway runtime 重新读取同一 persisted image；不通过额外重复图片请求验证 harness 自身。
+10. V0.1.4 Pi Browser runtime standalone 必须启动服务器实际安装的 `pi` CLI，而不是手工伪造 HTTP body；使用隔离 `PI_CODING_AGENT_DIR`、临时 OpenAI-compatible provider/extension、精确 16 active tools，且只发一个最终用户请求。若安装包装器设置代理，保留该包装器，仅把本地 Gateway listener 合并进 `NO_PROXY/no_proxy`。成功门槛包括真实 Pi 输出正确、Gateway/ChatGPT request count=1、最终 Browser Prompt >16 KiB UTF-8 且 16 tool names 全部保留。
 
 2026-08-15 Phase 3 已实际运行真实命令并通过最终验收。DevSpace 直连 `chatgpt.com` 的系统 DNS/HTTPS 路径不可用，显式 `CHATGPT_PROXY_SERVER` 恢复网络；Xvfb + full Playwright Chromium 可进入 ChatGPT 网页。隔离 Profile 通过 maintenance Google Chrome Stable 人工登录后，真实 `inspect:chatgpt` 得到 `auth=authenticated`、`composer=unique`；完整 `test:e2e:chatgpt` 随后同时得到 `driverChallenge=true` 与 `gatewayChallenge=true`。
 
@@ -205,6 +213,8 @@ corepack pnpm docker:smoke
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
 2026-08-31 V0.1.1 Cherry Studio compatibility maintenance fresh `corepack pnpm verify` 通过 **86 test files / 600 tests**。随后 V0.1.2 OpenAI-compatible Agent maintenance candidate 第一轮 full `corepack pnpm verify` 通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；新增 deterministic coverage 包含 Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes-style Chat Completions metadata、当前 Codex Responses function/namespace/custom/server-tool shape，以及 snake/camel `/v1/models` metadata/token hints。V0.1.2 不改变 Browser selector、SQLite schema 或 ChatGPT Web execution semantics，因此本轮未运行 Docker build/smoke 或 authenticated ChatGPT E2E。
+
+2026-08-31 V0.1.4 Pi Browser runtime candidate 的 focused deterministic 通过 **7 test files / 41 tests**，代表性 `docker compose config` 确认 Host alias 与 generic/Chromium proxy passthrough；随后 feature branch fresh `corepack pnpm verify` 通过 **91 test files / 638 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。使用 `http://192.168.3.83:7890`、隔离已登录 Profile 与服务器实际安装 Pi `0.84.4` 完成一次 `Pi → Gateway → ChatGPT Web` focused E2E：精确 16 tools、最终 Browser Prompt **21,019 UTF-8 bytes**、`gatewayRequests=1`、Pi 输出正确。
 
 ## 不能伪造的验证
 

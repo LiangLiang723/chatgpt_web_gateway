@@ -23,8 +23,15 @@ NOVNC_PASSWORD=replace-with-a-separate-strong-secret
 可选项：
 
 ```dotenv
-# ChatGPT 浏览器需要代理时显式设置；不要提交局域网地址到仓库默认配置。
-CHATGPT_PROXY_SERVER=http://proxy-host:port
+# ChatGPT 浏览器需要代理时显式设置；代理在 Docker Host 上时使用 host.docker.internal，
+# 不要使用容器内 127.0.0.1，也不要提交局域网地址到仓库默认配置。
+CHATGPT_PROXY_SERVER=http://host.docker.internal:7890
+
+# 容器内其它工具也需要同一 Host 代理时可选透传；Chromium 仍以 CHATGPT_PROXY_SERVER 为准。
+HTTP_PROXY=http://host.docker.internal:7890
+HTTPS_PROXY=http://host.docker.internal:7890
+ALL_PROXY=http://host.docker.internal:7890
+NO_PROXY=127.0.0.1,localhost
 
 # 生成图片 URL 需要经过反向代理/域名时设置；仅允许无 credentials/query/hash 的 http(s) base。
 PUBLIC_BASE_URL=https://gateway.example
@@ -43,7 +50,7 @@ docker compose up -d
 curl http://127.0.0.1:3000/health
 ```
 
-检查 authenticated local diagnostics：
+检查 authenticated active diagnostics：
 
 ```bash
 curl \
@@ -51,7 +58,7 @@ curl \
   http://127.0.0.1:3000/v1/diagnostics
 ```
 
-`/health` 只代表 Gateway 进程可响应；`/v1/diagnostics` 只检查本地 Browser/Page/Persistence 边界，并固定报告 `auth_state=not_probed`。它们都不会偷偷访问 ChatGPT，也不能证明当前登录态有效。
+`/health` 只代表 Gateway 进程可响应。`/v1/diagnostics` 是**显式 operator probe**：正常 Browser runtime 下会获取一个可用 Page lease、访问 `https://chatgpt.com/` 并返回 `auth_state=authenticated|auth_required|unknown` 与 `probe.status`；Page 容量已被 active/retained Conversation 占满时返回 `capacity_exceeded`，不会抢占或导航 retained Conversation Page。maintenance mode 没有产品 Browser runtime 时保持 `auth_state=not_probed`。该接口不返回 Cookie、API key、Prompt/tool/content、proxy/Profile path。
 
 ## 2. 首次 ChatGPT 登录 / 重新认证
 
@@ -176,10 +183,10 @@ docker compose up -d
 
 1. `docker compose ps`：容器是否持续运行，是否被 `restart: unless-stopped` 重新拉起。
 2. `GET /health`：Gateway 进程是否响应。
-3. authenticated `GET /v1/diagnostics`：`status`、`ui_mode`、Browser/Page 计数、本地 SQLite/Files/Generated Images readiness。
-4. `docker compose logs --tail=200 gateway`：只检查必要日志；不要公开包含用户请求或环境细节的日志。
-5. 若本地边界正常但请求返回 `auth_required` / selector / ChatGPT generation 错误，进入 maintenance noVNC 手工检查登录和网页状态。
-6. 需要产品级外部证据时，用隔离测试 Profile 运行 `inspect:chatgpt` 或最窄 standalone Phase E2E。
+3. authenticated `GET /v1/diagnostics`：`status`、`ui_mode`、Browser/Page 计数、主动 `auth_state` / `probe.status` 与本地 SQLite/Files/Generated Images readiness；`capacity_exceeded` 表示当前没有安全 probe Page 容量。
+4. `docker compose logs --tail=200 gateway`：V0.1.4 的 mapped 5xx 与 post-200 SSE execution failure 会记录 stable execution code、bounded Driver page/prompt-size diagnostics 与 cause chain；只检查必要日志，不公开日志内容。
+5. 若 diagnostics 返回 `auth_required` / `unknown`，或业务请求返回 selector / ChatGPT generation 错误，进入 maintenance noVNC 手工检查登录和网页状态。
+6. 需要产品级外部证据时，用隔离测试 Profile 运行 `inspect:chatgpt` 或最窄 standalone Phase / `test:e2e:chatgpt:pi-runtime`。
 
 单个 Conversation Page 执行失败后，Gateway 会关闭该 Page 而不是放回 idle pool。Persistent BrowserContext 意外关闭属于进程级 fatal：生产进程以非零状态退出，由 Compose `restart: unless-stopped` 创建新的 BrowserContext；`/data` 持久化状态不会因此删除。
 
@@ -212,4 +219,4 @@ docker compose up -d
 - 公网暴露 Gateway 时应由反向代理提供 TLS，并限制 API/noVNC 的访问来源。
 - noVNC 默认只绑定 loopback；不建议直接暴露到公网。
 - `.env`、Browser Profile、SQLite、用户文件、生成图片、冷备份都不得提交到 Git。
-- `CHATGPT_PROXY_SERVER` 仅支持显式 server origin，代理凭据不应写在 URL 中。
+- `CHATGPT_PROXY_SERVER` 仅支持显式 server origin，代理凭据不应写在 URL 中；Docker Host 代理使用 `host.docker.internal`。`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` 只作为可选容器工具链透传，不替代 Chromium 的显式浏览器代理配置。

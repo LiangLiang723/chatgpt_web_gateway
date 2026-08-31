@@ -4,14 +4,14 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：V1 验收完成，当前仓库版本 V0.1.3
+## 当前状态：V1 验收完成，当前仓库版本 V0.1.4
 
-Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh deterministic 为 **86 test files / 595 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 与 `git diff --check` 全绿；fresh `linux/amd64` image `sha256:866e2b280a1a3ab790c1ab4ae725ec0c1fe345420b7aeec438497806fbd896fa` 与 full Docker smoke 通过。authenticated Phase 7 standalone 全部语义组通过，紧邻的 Phase 6 standalone 九项再次通过，随后 reduced combined Phase 3→8 退出码 0：Phase 3/4/5/7/8 全绿，Phase 5 abort 与 Phase 6 attachment matrix 按测试治理引用相邻 standalone 证据。最终验收期间还修复了两个真实 DOM 边界：登出首页同时出现多个 `Log in` 控件时 Auth Probe 正确报告 `auth_required`；跨 URL RESTORE 时必须等待历史 Conversation turns 水合完成，不能只看到 Composer 就开始取 Assistant baseline。当前仓库版本为 `V0.1.3`；V0.1.1 首先补充 Cherry Studio `stream_options.include_usage` 与基础模型 metadata，V0.1.2 扩展 Cherry/Pi/OpenClaw/Hermes/Codex request 兼容与模型 metadata，本次 PATCH maintenance 继续修复 Pi singleton user text object / Assistant reasoning replay 形状，并让 Cherry 这类不发送 `X-Conversation-Key`、但每轮重发完整历史的客户端在**唯一可证明匹配**时继续原 ChatGPT Web Conversation。`V0.1.0` 的 Git Tag / GitHub Release 仍保留；V0.1.3 只升级仓库版本并合并/推送 `main`，不创建新的 Tag / GitHub Release，也不发布 Docker Registry 镜像：
+Phase 1–10 的 V1 功能与验收门槛已经关闭。当前仓库版本为 `V0.1.4`：本 PATCH 在保留 V0.1.3 Pi/Cherry/OpenAI-compatible 协议兼容与匿名 Conversation 续接的基础上，修复真实 Pi coding-agent 大型多行 Browser Prompt 的尺寸敏感 Composer 输入边界。服务器实际安装的 Pi `0.84.4` 已通过 `Pi → Gateway → ChatGPT Web` 真实单请求验证：精确声明 16 个工具、最终 Browser Prompt 为 **21,019 UTF-8 bytes**，system/Skills/项目上下文/tools 均未截断。V0.1.4 同时增加 Browser Driver 安全故障诊断与 5xx/SSE 服务端日志、把 authenticated `/v1/diagnostics` 升级为显式有界 ChatGPT auth probe，并补充 Docker Host 代理的 `host.docker.internal` / generic proxy passthrough。`V0.1.0` 的 Git Tag / GitHub Release 仍保留；V0.1.4 不创建新的 Tag / GitHub Release，也不发布 Docker Registry 镜像：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
 - `GET /health`。
-- authenticated `GET /v1/diagnostics`，只报告本地 Browser/Page/Persistence 状态并固定 `auth_state=not_probed`。
+- authenticated `GET /v1/diagnostics`，显式调用时获取一个普通 PagePool lease，主动访问 ChatGPT 首页并报告 `authenticated|auth_required|unknown`；容量不足/探测失败只返回 bounded probe 状态，不抢占 retained Conversation Page，也不暴露 Cookie、Prompt、proxy/Profile 等敏感内容。
 - `GET /v1/models`，默认只暴露 `chatgpt-web`，并同时返回 snake_case/OpenAI-compatible 与 Cherry-compatible camelCase 的能力、输入/输出模态、Streaming、context/max-input/max-output compatibility hints。
 - `/v1/*` Bearer API Key 认证；`/health` 无需认证。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 的 Schema 校验和统一 `NormalizedRequest` Normalizer。
@@ -27,8 +27,8 @@ Phase 1–10 的 V1 功能与验收门槛已经关闭。2026-08-29 fresh determi
 - `ConversationStore` 在单事务内保存完整 Conversation aggregate；失败会 rollback，不留下半状态。
 - 真实文件数据库已通过 save → close → reopen → load 恢复测试。
 - Docker smoke 已验证 `/data/gateway.db`、migration history、`PUID/PGID` owner 和容器 restart 后持续可用。
-- 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。
-- bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。
+- 正常 `UI_MODE=headless` 已启动产品级 Persistent BrowserContext；为通过真实 ChatGPT Cloudflare，内部使用 **Xvfb + full Chromium (`headless:false`)**，但不启动/发布 noVNC，因此对外仍是无 UI 的 headless 运行模式。`MAX_ACTIVE_PAGES` 默认 `4`；可选 `CHATGPT_PROXY_SERVER` 会同时应用到 normal、maintenance、inspect 和 real E2E Chromium。Compose 还可透传 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`；Docker Host 代理使用 `host.docker.internal`，不使用容器内 `127.0.0.1`。
+- bounded Page Pool、Selector Registry、Auth Probe、ChatGPT text Driver 和非流式 completion observer 已实现；Driver 将 `openFresh`、`openConversation` 与纯 `sendText` 分离，并验证安全 Conversation URL identity。Composer 输入运输集中在 `src/chatgpt/composer-input.ts`：单行继续 `keyboard.insertText()`，普通多行继续一次 ProseMirror `text/plain` paste，超过 16 KiB UTF-8 的多行 Prompt 改为 ≤4 KiB UTF-8 安全分块 + `Shift+Enter`，避免大型 synthetic paste 的尺寸敏感执行边界。
 - Phase 4 Conversation Engine 已实现 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、跨 key 并行、Conversation Page affinity、idle deadline + LRU 回收、`clean | in_flight` SQLite sync checkpoint 与 crash-convergence。
 - full-history 与 single-user incremental 客户端都支持；`X-Conversation-Key` 存在时保持稳定 Conversation lifecycle 且始终优先。未提供 key 时，V0.1.3 会对完整历史做保守匿名匹配：只有唯一一个 clean persisted anonymous Conversation 能被既有 Context Sync planner 严格证明为 APPEND/RESTORE 才复用原 Web Conversation；0 个或多个匹配仍建立新的 `conversation_key = NULL` FRESH，避免把独立主题串在一起。
 - `POST /v1/chat/completions` 与 `POST /v1/responses` 已接入共享 Conversation/Browser/Driver 执行链，支持非流式与真实 DOM Streaming；不会伪造 token usage/reasoning。Chat Completions strict 兼容 Cherry Studio `stream_options.include_usage`、Assistant reasoning replay metadata，以及 Pi singleton `content:{type:"text",text:string}` / Pi/OpenClaw/Hermes 常见 OpenAI-compatible metadata；Responses 兼容当前 Codex function/namespace/custom tool 请求形状，namespace/custom 会桥接到现有 external-function protocol，OpenAI-hosted `web_search`/`tool_search` 声明只接受并过滤、不伪装执行。Phase 6 图片/文件附件、Phase 7 Tool Result continuation，以及 `json_object` / `json_schema` Structured Output prompt policy + 本地最终校验均已实现。
@@ -190,7 +190,8 @@ docker compose up -d
 | `MODEL_CONTEXT_WINDOW` | `128000` | `/v1/models` 暴露的 context-window compatibility hint；必须为正整数，不代表 ChatGPT 官方 Web context limit |
 | `MODEL_MAX_INPUT_TOKENS` | `MODEL_CONTEXT_WINDOW` | `/v1/models` 暴露的 max-input compatibility hint；必须为正整数 |
 | `MODEL_MAX_OUTPUT_TOKENS` | `32768` | `/v1/models` 暴露的 max-output compatibility hint；必须为正整数 |
-| `CHATGPT_PROXY_SERVER` | 空 | 可选 ChatGPT 浏览器代理；支持 `http` / `https` / `socks5`，URL 内禁止账号密码 |
+| `CHATGPT_PROXY_SERVER` | 空 | 可选 ChatGPT 浏览器代理；支持 `http` / `https` / `socks5`，URL 内禁止账号密码；Docker Host 代理使用 `http://host.docker.internal:<port>` |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` | 空 | Compose 可选透传给容器工具链；不替代 Chromium 的 `CHATGPT_PROXY_SERVER` |
 | `PUBLIC_BASE_URL` | 空 | 可选生成图片公开 URL base；仅允许无 credentials/query/hash 的 `http(s)` base，content route 仍要求 Bearer auth |
 | `NOVNC_BIND` | `127.0.0.1` | noVNC 宿主机绑定地址 |
 | `NOVNC_PORT` | `6080` | noVNC 端口 |
@@ -238,6 +239,11 @@ E2E_CHATGPT=1 \
 CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
 CHATGPT_PROXY_SERVER=http://proxy-host:port \
 corepack pnpm test:e2e:chatgpt:phase8
+
+E2E_CHATGPT=1 \
+CHATGPT_PROFILE_DIR=/path/to/e2e-browser-profile \
+CHATGPT_PROXY_SERVER=http://proxy-host:port \
+corepack pnpm test:e2e:chatgpt:pi-runtime
 ```
 
 测试 Profile 需要通过人工方式完成 ChatGPT 登录；工具不会自动填写账号密码、MFA 或 CAPTCHA。需要代理的环境通过 `CHATGPT_PROXY_SERVER` 显式配置；如果要用 noVNC 给隔离测试 Profile 登录，可在 maintenance overlay 中同时设置 `CHATGPT_PROFILE_DIR=/data/e2e-browser-profile`。如果一个已失效的隔离 Profile 在重新登录时反复陷入 challenge loop，不要继续重复验证或覆盖旧 Profile：保留旧目录作为证据，创建一个新的干净隔离 Profile，再用 maintenance Google Chrome Stable 登录并先运行 `inspect:chatgpt`。真实 E2E 只有人工登录完成并实际通过后才算验收。
@@ -296,11 +302,11 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 
 ## 版本与变更
 
-- 当前仓库版本：`V0.1.3`。
+- 当前仓库版本：`V0.1.4`。
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容；`V0.1.3` 修复 Pi singleton text-object schema，并为无 header 的完整历史客户端增加唯一匹配匿名 Conversation 续接。本次只升级仓库版本并推送 `main`；新的 Git Tag / GitHub Release 与 Docker Registry 镜像仍需单独发布指令。
+`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容；`V0.1.3` 修复 Pi singleton text-object schema，并为无 header 的完整历史客户端增加唯一匹配匿名 Conversation 续接；`V0.1.4` 修复真实 Pi 大型 Browser Prompt Composer 运输边界，并增加主动 diagnostics、安全 Driver 日志和容器代理透传。本次只升级仓库版本并推送 `main`；新的 Git Tag / GitHub Release 与 Docker Registry 镜像仍需单独发布指令。
 
 ## 开源协议
 

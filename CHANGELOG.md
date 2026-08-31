@@ -4,6 +4,26 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## V0.1.4 - 2026-08-31
+
+### Fixed（修复）
+
+- 修复真实 Pi coding-agent 在“大 system prompt + 正常工具集”下进入 Browser 执行阶段后出现 `browser_unavailable` 的尺寸敏感输入边界：普通多行 Prompt 继续使用既有 ProseMirror `text/plain` paste；超过 16 KiB UTF-8 的多行 Prompt 改为不超过 4 KiB UTF-8 的安全 `keyboard.insertText()` 分块并用 `Shift+Enter` 保留换行。system、Skills、项目上下文和 tools 均不截断、不删除。
+- Browser Driver 对未知 Playwright/Page 异常保留原始 `cause`，并附加不含 Prompt 正文的 operation、Page URL/title/readyState/closed 与 Prompt chars/UTF-8 bytes/lines 诊断；普通 HTTP 5xx 与 HTTP 200 后才失败的 SSE 都写结构化服务端错误日志，客户端仍只看到稳定 OpenAI-compatible 错误。
+- authenticated `GET /v1/diagnostics` 从固定 `auth_state=not_probed` 升级为有界主动探测：只获取 PagePool 可用 lease、访问 `https://chatgpt.com/` 并复用 Auth Probe；Page 容量已占满时报告 `capacity_exceeded`，不会抢占 retained Conversation Page。
+- Compose 增加 `host.docker.internal:host-gateway`，并透传可选 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`；Chromium 仍以 `CHATGPT_PROXY_SERVER` 为唯一显式浏览器代理配置。Docker Host 上的代理应使用 `host.docker.internal`，不能把容器内 `127.0.0.1` 当宿主机。
+
+### Changed（调整）
+
+- Pi Browser runtime E2E 不再手工伪造一个“Pi-sized” HTTP body，而是启动服务器实际安装的 Pi CLI、使用隔离 `PI_CODING_AGENT_DIR` 自定义 OpenAI-compatible provider，并通过临时 extension 让真实 Pi 精确声明 16 个工具。测试同时保留现有 Pi 安装包装器；若该包装器设置代理，则仅为本地 Gateway listener 合并 `127.0.0.1,localhost` 到 `NO_PROXY/no_proxy`。
+- 大 Prompt Composer transport 从 `driver.ts` 抽成独立 `src/chatgpt/composer-input.ts`，把尺寸策略、UTF-8 安全分块和 ProseMirror 输入细节集中在一个边界，避免继续膨胀 Browser Driver。
+
+### Validation（验证）
+
+- 服务器真实 Pi `0.84.4` 本地协议捕获确认：当前仓库上下文 + 精确 16 tools 的首请求使用标准 `messages/tools/stream/stream_options/max_completion_tokens`；tool round-trip 会继续发送 `assistant(content:null,tool_calls)` + `tool(tool_call_id)`，与 Gateway strict schema/normalizer 兼容。
+- focused deterministic：**7 test files / 41 tests** 全通过；代表性 `docker compose config` 确认 `host.docker.internal=host-gateway` 与 Chromium/generic proxy passthrough。随后 feature branch fresh `corepack pnpm verify` 通过 **91 test files / 638 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。
+- 使用 `http://192.168.3.83:7890` 和隔离已登录 Profile fresh `inspect:chatgpt` 得到 `auth=authenticated`、Composer/Send unique；随后真实 `pi 0.84.4 → Gateway → ChatGPT Web` 16-tool E2E 单请求成功，记录的最终 Browser Prompt 为 **21,019 UTF-8 bytes**，Pi 得到预期输出且 `gatewayRequests=1`。
+
 ## V0.1.3 - 2026-08-31
 
 ### Fixed（修复）
