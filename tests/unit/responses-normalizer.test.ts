@@ -149,6 +149,184 @@ describe('normalizeResponses', () => {
     expect(result.diagnostics.ignoredParameters).toEqual(['image_detail']);
   });
 
+  it('normalizes Codex function namespaces and filters server-only tools', () => {
+    const result = normalize({
+      model: 'chatgpt-web',
+      instructions: 'Use tools when useful.',
+      input: [
+        {
+          type: 'message',
+          id: 'msg_user',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Inspect the repo' }],
+        },
+        {
+          type: 'function_call',
+          id: 'fc_1',
+          call_id: 'call_1',
+          namespace: 'multi_agent_v1',
+          name: 'spawn_agent',
+          arguments: '{"task":"inspect"}',
+        },
+        {
+          type: 'function_call_output',
+          call_id: 'call_1',
+          output: 'done',
+        },
+        {
+          type: 'custom_tool_call',
+          call_id: 'call_patch',
+          name: 'apply_patch',
+          input: '*** Begin Patch\n*** End Patch',
+        },
+        {
+          type: 'custom_tool_call_output',
+          call_id: 'call_patch',
+          output: 'Done!',
+        },
+        {
+          type: 'message',
+          id: 'msg_assistant',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'Finished.' }],
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          name: 'exec_command',
+          strict: false,
+          parameters: { type: 'object', properties: {} },
+        },
+        {
+          type: 'custom',
+          name: 'apply_patch',
+          description: 'Apply a patch',
+        },
+        {
+          type: 'namespace',
+          name: 'multi_agent_v1',
+          description: 'Agent tools',
+          tools: [
+            {
+              type: 'function',
+              name: 'spawn_agent',
+              strict: false,
+              parameters: { type: 'object', properties: {} },
+              output_schema: { type: 'object', properties: { id: { type: 'string' } } },
+            },
+            {
+              type: 'custom',
+              name: 'delegate_note',
+              description: 'Send a note',
+            },
+          ],
+        },
+        {
+          type: 'tool_search',
+          execution: 'client',
+          description: 'Search deferred tools',
+          parameters: { type: 'object', properties: {} },
+        },
+        {
+          type: 'web_search',
+          external_web_access: false,
+          indexed_web_access: true,
+          search_content_types: ['text'],
+        },
+      ],
+      parallel_tool_calls: true,
+      reasoning: { effort: 'low', summary: 'auto' },
+      store: false,
+      include: ['reasoning.encrypted_content'],
+      prompt_cache_key: 'codex-session',
+      client_metadata: { session_id: 'codex-session' },
+      stream: true,
+    } as unknown as ResponsesRequest);
+
+    expect(result.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Inspect the repo' }] },
+      {
+        role: 'assistant',
+        content: [],
+        toolCalls: [
+          {
+            id: 'call_1',
+            name: 'multi_agent_v1::spawn_agent',
+            arguments: '{"task":"inspect"}',
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [{ type: 'text', text: 'done' }],
+        toolCallId: 'call_1',
+      },
+      {
+        role: 'assistant',
+        content: [],
+        toolCalls: [
+          {
+            id: 'call_patch',
+            name: '__responses_custom__::apply_patch',
+            arguments: '{"input":"*** Begin Patch\\n*** End Patch"}',
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [{ type: 'text', text: 'Done!' }],
+        toolCallId: 'call_patch',
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'Finished.' }] },
+    ]);
+    expect(result.tools).toEqual([
+      {
+        type: 'function',
+        name: 'exec_command',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
+        type: 'function',
+        name: '__responses_custom__::apply_patch',
+        description: 'Apply a patch',
+        parameters: {
+          type: 'object',
+          properties: { input: { type: 'string' } },
+          required: ['input'],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: 'function',
+        name: 'multi_agent_v1::spawn_agent',
+        description: 'Agent tools / spawn_agent',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
+        type: 'function',
+        name: '__responses_custom__::multi_agent_v1::delegate_note',
+        description: 'Send a note',
+        parameters: {
+          type: 'object',
+          properties: { input: { type: 'string' } },
+          required: ['input'],
+          additionalProperties: false,
+        },
+      },
+    ]);
+    expect(result.diagnostics.ignoredParameters).toEqual([
+      'parallel_tool_calls',
+      'reasoning',
+      'store',
+      'include',
+      'prompt_cache_key',
+      'client_metadata',
+      'tools.tool_search',
+      'tools.web_search',
+    ]);
+  });
+
   it('records accepted-but-ignored parameters and uses conservative defaults', () => {
     const result = normalize({
       model: 'chatgpt-web',

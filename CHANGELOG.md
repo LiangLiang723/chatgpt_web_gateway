@@ -4,6 +4,20 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## V0.1.2 - 2026-08-31
+
+### Fixed（修复）
+
+- 修复 Cherry Studio 多轮历史中 Assistant `reasoning_content` / reasoning metadata 被 strict message schema 拒绝导致 HTTP 400；这些字段现在显式兼容接收并在 adapter 边界忽略，不污染 Browser Prompt。
+- 扩展 Chat Completions 对 Pi、OpenClaw、Hermes Agent 等 OpenAI-compatible Agent 常见 `store`、`reasoning_effort`、`reasoning`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 的 strict allowlist；未知顶层字段仍拒绝。
+- 扩展 Responses 对当前 Codex CLI request shape 的兼容：message history metadata、function `output_schema`、namespace/custom/freeform tools、custom tool history，以及当前 `web_search` / `tool_search` declarations。namespace/custom 会桥接到现有 external-function protocol；OpenAI-hosted server tools 只接受并过滤，不伪造执行。
+- `/v1/models` 同时返回 snake_case 与 Cherry-compatible camelCase 的 capabilities、input/output modalities、Streaming 与 context/max-input/max-output token hints；新增 `MODEL_MAX_INPUT_TOKENS` 与 `MODEL_MAX_OUTPUT_TOKENS` 配置。
+- Claude Code 原生 Anthropic Messages 明确不在本次兼容范围。
+
+### Validation（验证）
+
+- 第一轮 maintenance-candidate fresh `corepack pnpm verify` 通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；merged-main verification 与推送结果在最终 Git closure 后写回 Project State。本 PATCH 不改变 Browser selectors、SQLite schema 或 Docker runtime，因此不重复真实 ChatGPT E2E / Docker build。
+
 ## V0.1.1 - 2026-08-31
 
 ### Fixed（修复）

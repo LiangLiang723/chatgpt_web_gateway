@@ -85,7 +85,7 @@ interface NormalizedRequest {
 
 图片生成可以有独立 `ImageRequestAdapter`，但浏览器生命周期、错误、持久化和生成资源管理仍复用公共基础设施。
 
-HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRequest`。例如 Chat Completions 的 `stream_options.include_usage?: boolean` 由 strict request schema 接收后即在 API adapter 边界消费并忽略；未知 `stream_options` 字段仍由 Ajv 拒绝，且不会因为 `include_usage=true` 伪造 token usage。`GET /v1/models` 的 `context_window` 则从 `AppConfig.modelContextWindow` 读取，作为客户端 compatibility hint 暴露，不进入 Conversation/Browser 执行链，也不代表 ChatGPT Web 官方固定 context limit。
+HTTP compatibility-only metadata 不应为了客户端兼容污染 `NormalizedRequest`。Chat Completions 的 `stream_options.include_usage?: boolean`、Cherry Assistant `reasoning_content`/reasoning history metadata，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 都由 strict request schema 显式接收后在 API adapter 边界消费/忽略；Responses 同样在 adapter 层消费 Codex `reasoning/include/client_metadata` 等兼容字段。未知顶层字段与未知 strict nested members 仍由 Ajv 拒绝，且 Gateway 不因为这些 metadata 伪造 token usage/reasoning 或 server-side behavior。`GET /v1/models` 的 context/max-input/max-output hints 分别从 `AppConfig.modelContextWindow/modelMaxInputTokens/modelMaxOutputTokens` 读取，同时暴露 snake_case 与 Cherry-compatible camelCase aliases；这些字段不进入 Conversation/Browser 执行链，也不代表 ChatGPT Web 官方固定 token limit。
 
 ## Conversation（对话）和 Context Sync（上下文同步）
 
@@ -210,7 +210,7 @@ Canonical Conversation first-class 表达 assistant Tool Call 与 tool-result me
 
 存在 tools 时，DOM Stable Prefix 先进入 `ToolDetectionBuffer`。如果前缀仍可能成为 sentinel 就继续缓冲；一旦明确普通文本，立刻 flush 并恢复 Phase 5 true text streaming；一旦确认 TOOL，private marker/payload 全程留在内部直到 generation completed，再 strict parse 并输出协议级 tool-call event。若 TEXT 已开始后又出现 private sentinel，立即 `chatgpt_tool_protocol_invalid`，不得把内部 JSON 泄漏到公共 content。
 
-两套 API 共享 internal `text | tool_calls` execution result/event union。Chat Completions 映射为 `content:null` / `delta.tool_calls` / `finish_reason='tool_calls'`；Responses 映射为 `function_call` items 与 `response.function_call_arguments.*` typed SSE。`stream/` 自己定义纯 `StreamToolCall` 结构，不反向依赖 `api/`，保持现有可执行架构约束。
+两套 API 共享 internal `text | tool_calls` execution result/event union。Chat Completions 映射为 `content:null` / `delta.tool_calls` / `finish_reason='tool_calls'`。V0.1.2 的 Responses adapter 继续复用同一个 internal function representation：`namespace` tool 先扁平为内部 `namespace::name`，输出时恢复独立 `namespace/name`；`custom`/freeform tool 映射成一个必填 string `input` 的外部函数，输出时恢复 `custom_tool_call` 与 `response.custom_tool_call_input.*` SSE。`web_search` / `tool_search` 等 OpenAI-hosted server tools 只在 adapter 层兼容接收并过滤，不进入 tool fingerprint/Prompt，也不伪装成 Gateway 可执行能力。`stream/` 自己定义纯 `StreamToolCall` 结构，不反向依赖 `api/`，保持现有可执行架构约束。
 
 ## Attachments（附件）
 

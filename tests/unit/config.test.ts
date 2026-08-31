@@ -15,6 +15,8 @@ describe('loadConfig', () => {
       maxActivePages: 4,
       pageIdleTimeoutMinutes: 30,
       modelContextWindow: 128000,
+      modelMaxInputTokens: 128000,
+      modelMaxOutputTokens: 32768,
       chatgptProxyServer: undefined,
       publicBaseUrl: undefined,
       novncPort: 6080,
@@ -40,6 +42,8 @@ describe('loadConfig', () => {
         MAX_ACTIVE_PAGES: '7',
         PAGE_IDLE_TIMEOUT_MINUTES: '12',
         MODEL_CONTEXT_WINDOW: '64000',
+        MODEL_MAX_INPUT_TOKENS: '60000',
+        MODEL_MAX_OUTPUT_TOKENS: '16000',
         CHATGPT_PROXY_SERVER: ' http://proxy.example:7890 ',
         PUBLIC_BASE_URL: ' https://gateway.example/base/ ',
         NOVNC_PORT: '7777',
@@ -56,6 +60,8 @@ describe('loadConfig', () => {
       maxActivePages: 7,
       pageIdleTimeoutMinutes: 12,
       modelContextWindow: 64000,
+      modelMaxInputTokens: 60000,
+      modelMaxOutputTokens: 16000,
       chatgptProxyServer: 'http://proxy.example:7890',
       publicBaseUrl: 'https://gateway.example/base',
       novncPort: 7777,
@@ -97,6 +103,12 @@ describe('loadConfig', () => {
     for (const value of ['0', '-1', '1.5', 'not-a-number', '9007199254740992']) {
       expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MODEL_CONTEXT_WINDOW: value })).toThrow(
         /MODEL_CONTEXT_WINDOW/,
+      );
+      expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MODEL_MAX_INPUT_TOKENS: value })).toThrow(
+        /MODEL_MAX_INPUT_TOKENS/,
+      );
+      expect(() => loadConfig({ GATEWAY_API_KEY: 'x', MODEL_MAX_OUTPUT_TOKENS: value })).toThrow(
+        /MODEL_MAX_OUTPUT_TOKENS/,
       );
     }
   });

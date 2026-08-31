@@ -56,7 +56,7 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 - 有 `X-Conversation-Key` 时继续使用 Phase 4 `FRESH | APPEND | RESTORE | REBUILD`、same-key FIFO、Page affinity 和 SQLite `clean | in_flight` checkpoint；无 key 时仍为独立 FRESH `conversation_key = NULL`。
 - Phase 5 `stream=true` 与 non-stream 使用相同的 target Assistant turn ownership 和 completion 语义，不改变 Context Sync 规则。
 - Streaming 以 ChatGPT DOM snapshot 为来源，约 200ms polling + 3-sample Stable Prefix，并默认保留最后 **64 个 Unicode code points** 作为 bounded commit tail；2026-08-26 real E2E 观测到一次 38-code-point Markdown 尾部回排后从 16 提升为 64。completion 最终确认后精确 flush。已经输出的 prefix 不撤回；若 DOM 重写穿过 committed prefix，返回/流出稳定 `chatgpt_stream_diverged`，不伪造 correction。
-- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage。V0.1.x maintenance 起严格兼容接收 `stream_options.include_usage?: boolean`，该字段只在 HTTP adapter/schema 层作为客户端兼容 metadata 消费并忽略；`include_usage=true` 不新增假的 usage chunk，`stream_options` 内未知字段仍返回 400。
+- Chat Completions SSE 使用 `chat.completion.chunk`：固定 stream id/created/model，Assistant role chunk、text delta、terminal `finish_reason="stop"`、单个 `[DONE]`；不伪造 token usage/reasoning。V0.1.x maintenance 严格兼容 `stream_options.include_usage?: boolean`；V0.1.2 继续显式接收 Cherry Assistant `reasoning_content`/reasoning metadata，以及 Pi/OpenClaw/Hermes 常见 `store`、`reasoning_effort`、`parallel_tool_calls`、`service_tier`、prompt-cache/provider metadata 等字段。这些 compatibility-only 字段在 adapter 层消费/忽略并记录 diagnostics，不进入 `NormalizedRequest` 语义；未知顶层字段和未知 `stream_options` 成员仍返回 400。
 - Responses 使用 typed SSE：`response.created`、`response.in_progress`、item/content added、`response.output_text.delta`、done events、`response.completed`；IDs 稳定，`sequence_number` 单调，`usage=null`。
 - 首个 internal `started` 之前的错误仍返回普通 OpenAI-style 非 200 JSON；SSE 已开始后的错误使用协议流内 error，并且不发送成功 terminal。
 - 成功 terminal 晚于最终 SQLite clean aggregate commit。final clean save 失败时不发送 `[DONE]` / `response.completed`，checkpoint 保持 `in_flight`。
@@ -77,18 +77,19 @@ Phase 6 已完成并通过 deterministic、Docker、standalone authenticated E2E
 | 能力 | V1 | 当前行为 |
 |---|---:|---|
 | `developer` / `system` | ✅ | ✅ 参与 Context Sync；通过 prompt envelope 近似映射，不声称网页有原生 privilege channel |
-| `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发 |
+| `user` / `assistant` | ✅ | ✅ 参与上下文同步；历史不盲目重发；V0.1.2 Assistant `reasoning_content/reasoning_details` 等兼容 metadata 可接收但不进入 Browser Prompt |
 | 字符串 / text part `content` | ✅ | ✅ |
 | `stream=false` | ✅ | ✅ 文本与 Phase 6 附件请求 |
 | `stream=true` | ✅ | ✅ 文本与 Phase 6 附件请求均复用真实 DOM Streaming |
 | `stream_options.include_usage` | 🟡 | ✅ V0.1.x maintenance 兼容接收 `boolean` 并忽略；对象保持 strict，未知字段/非 boolean 拒绝；不生成 fake usage chunk |
 | `image_url` URL/Base64 | ✅ | ✅ Phase 6；URL 安全获取 + Data URL，authenticated E2E 覆盖 Data URL |
 | file / `file_id` / Base64 file | ✅ | ✅ Phase 6 |
-| `tools` / assistant `tool_calls` / `role=tool` | ✅ | ✅ Phase 7 function Tools；final policy-fingerprint + RESTORE-hydration candidate deterministic/Docker、standalone 与 reduced combined authenticated acceptance 均通过 |
+| `tools` / assistant `tool_calls` / `role=tool` | ✅ | ✅ Phase 7 function Tools；function `strict` 可作为客户端 metadata 接收；final policy-fingerprint + RESTORE-hydration deterministic/Docker、standalone 与 reduced combined authenticated acceptance 均通过 |
 | `tool_choice` 非默认策略 | ✅ | ✅ `auto|none|required|function` |
 | `response_format=json_object/json_schema` | 🟡 | ✅ prompt-constrained + 本地最终 JSON/Ajv 校验；不是原生 constrained decoding |
 | `temperature/top_p/penalties/seed` | 🟡 | 接收并按既有诊断策略忽略 |
 | `max_tokens/max_completion_tokens` | 🟡 | 接收但不承诺精确限制 |
+| Agent compatibility metadata | 🟡 | ✅ V0.1.2 显式接收 `store/reasoning_effort/reasoning/parallel_tool_calls/service_tier/prompt_cache_*`、provider/options 等已知 OpenAI-compatible 字段并忽略；仍保持顶层 strict unknown-field rejection |
 | `logprobs` / `logit_bias` | ❌ | 稳定 unsupported error |
 | 真实 Token Usage | ❌ | 不伪造 |
 
@@ -105,8 +106,11 @@ Responses 与 Chat Completions 映射到同一个 `NormalizedRequest` 与 Conver
 - `stream=false`。
 - `stream=true` typed SSE，包括 attachment Streaming 与 function-call events。
 - function `tools` / `tool_choice`、`function_call` history 与 `function_call_output` continuation。
+- V0.1.2 接受当前 Codex Responses metadata、带 `id/status` 的 message history、namespaced function calls、`custom`/freeform tools 与 `custom_tool_call(_output)` history。
+- Responses `namespace` 内 function/custom 声明会扁平桥接到现有 external-function protocol；返回时恢复 `namespace + name`。`custom`/freeform tool 内部使用一个必填 string `input` 参数，非流式恢复为 `custom_tool_call`，流式恢复 `response.custom_tool_call_input.delta/done`。
+- OpenAI-hosted `web_search` / `tool_search` 声明可按当前 Codex 请求形状接收，但在 adapter 层过滤并记录 ignored diagnostics；Gateway 不执行或伪造这些 server-side tools。
 
-`input_file.file_url` 仍不支持；built-in/MCP/custom/freeform tools 不在当前 V1 function Tool Calling 范围。Responses `text.format=json_object/json_schema` 与 Chat Completions `response_format` 共用 Structured Output 执行/最终校验。
+`input_file.file_url` 仍不支持；任意未知 built-in tool 类型仍拒绝。Responses `text.format=json_object/json_schema` 与 Chat Completions `response_format` 共用 Structured Output 执行/最终校验。Claude Code 原生 Anthropic Messages 不在 V0.1.2 范围。
 
 ## Stable Error Boundary（稳定错误边界）
 
@@ -158,9 +162,9 @@ SSE 已开始后 HTTP status 已固定为 200；相同稳定错误改用协议�
 chatgpt-web
 ```
 
-`GET /v1/models` 同时暴露 Gateway 已实现的兼容扩展元数据：`name="ChatGPT Web"`、`capabilities=["image-recognition","file-input","function-call","structured-output"]`、`input_modalities=["text","image"]`、`supports_streaming=true` 与 `context_window`。`context_window` 来自 `MODEL_CONTEXT_WINDOW`，默认 `128000`；它只是提供给客户端的 **compatibility hint**，不是 ChatGPT 官方保证的 Web 后端固定 context limit。
+`GET /v1/models` 同时暴露 Gateway 已实现的兼容扩展元数据：`name="ChatGPT Web"`、`capabilities=["reasoning","image-recognition","file-input","function-call","structured-output"]`、文本+图片输入、文本输出、Streaming 支持与 token-limit hints。V0.1.2 同时返回 snake_case 与 Cherry-compatible camelCase 别名：`input_modalities/inputModalities`、`output_modalities/outputModalities`、`supports_streaming/supportsStreaming`、`context_window/contextWindow`、`max_input_tokens/maxInputTokens`、`max_output_tokens/maxOutputTokens`。
 
-对话模型不声明 `image-generation`：图片生成是独立 `POST /v1/images/generations` 能力，不等价于 Chat Completions/Responses 模型输出模态。当前只返回 snake_case OpenAI-compatible extension 字段，不额外伪造 `contextWindow` / `supportsStreaming` 等别名。Cherry Studio 的通用 OpenAI-compatible `/models` fetcher 在部分版本中可能只映射 `id/name/owned_by`，因此 Gateway 正确返回扩展元数据并不保证该版本 UI 会自动填充所有模型编辑字段。
+`MODEL_CONTEXT_WINDOW` 默认 `128000`；`MODEL_MAX_INPUT_TOKENS` 默认跟随 context window；`MODEL_MAX_OUTPUT_TOKENS` 默认 `32768`。三者都只是客户端 **compatibility hint**，不是 ChatGPT 官方保证的 Web 后端固定 token limit。当前 Cherry Studio `openAICompatibleFetcher` 只把远端 OpenAI-style `/models` 项的 `id/name/owned_by` 传给它的本地 `toModel()`，并初始化 `capabilities=[]`；因此这些扩展 metadata 在 Gateway HTTP 层可正确返回，但当前 Cherry 通用 OpenAI provider 不会自动把它们写入截图中的模型能力/context/token 编辑字段。这是客户端拉取映射限制，不能由 Gateway 伪造其它标准字段绕过。对话模型不声明 `image-generation`：图片生成是独立 `POST /v1/images/generations` 能力，不等价于 Chat Completions/Responses 模型输出模态。
 
 不伪装具体 OpenAI API 模型。
 

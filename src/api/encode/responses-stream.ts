@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { NormalizedToolCall } from '../normalized.js';
+import { decodeCustomToolInput, decodeResponsesToolName } from '../tool-namespace.js';
 import type { ExecutionStreamEvent } from '../../stream/events.js';
 import type { EncodedSseFrame } from './chat-completions-stream.js';
 
@@ -22,9 +23,22 @@ interface EncodedFunctionCallItem {
   type: 'function_call';
   call_id: string;
   name: string;
+  namespace?: string;
   arguments: string;
   status: 'completed';
 }
+
+interface EncodedCustomToolCallItem {
+  id: string;
+  type: 'custom_tool_call';
+  call_id: string;
+  name: string;
+  namespace?: string;
+  input: string;
+  status: 'completed';
+}
+
+type EncodedToolCallItem = EncodedFunctionCallItem | EncodedCustomToolCallItem;
 
 export function createResponsesStreamEncoder(options: ResponsesStreamEncoderOptions = {}) {
   const responseId = options.responseId ?? `resp_${randomUUID()}`;
@@ -32,7 +46,7 @@ export function createResponsesStreamEncoder(options: ResponsesStreamEncoderOpti
   const createdAt = options.createdAt ?? Math.floor(Date.now() / 1000);
   let sequenceNumber = 0;
   let textItemStarted = false;
-  let toolItems: EncodedFunctionCallItem[] = [];
+  let toolItems: EncodedToolCallItem[] = [];
 
   const frame = (event: string, body: Record<string, unknown>): EncodedSseFrame => {
     sequenceNumber += 1;
@@ -96,16 +110,54 @@ export function createResponsesStreamEncoder(options: ResponsesStreamEncoderOpti
   });
 
   const encodeToolCalls = (calls: readonly NormalizedToolCall[]): EncodedSseFrame[] => {
-    toolItems = calls.map((call, index) => ({
-      id: options.functionCallIds?.[index] ?? `fc_${randomUUID()}`,
-      type: 'function_call',
-      call_id: call.id,
-      name: call.name,
-      arguments: call.arguments,
-      status: 'completed',
-    }));
+    toolItems = calls.map((call, index) => {
+      const decodedName = decodeResponsesToolName(call.name);
+      if (decodedName.kind === 'custom') {
+        return {
+          id: options.functionCallIds?.[index] ?? `ctc_${randomUUID()}`,
+          type: 'custom_tool_call',
+          call_id: call.id,
+          ...(decodedName.namespace === undefined ? {} : { namespace: decodedName.namespace }),
+          name: decodedName.name,
+          input: decodeCustomToolInput(call.arguments),
+          status: 'completed',
+        };
+      }
+      return {
+        id: options.functionCallIds?.[index] ?? `fc_${randomUUID()}`,
+        type: 'function_call',
+        call_id: call.id,
+        ...(decodedName.namespace === undefined ? {} : { namespace: decodedName.namespace }),
+        name: decodedName.name,
+        arguments: call.arguments,
+        status: 'completed',
+      };
+    });
     const frames: EncodedSseFrame[] = [];
     toolItems.forEach((item, outputIndex) => {
+      if (item.type === 'custom_tool_call') {
+        frames.push(
+          frame('response.output_item.added', {
+            output_index: outputIndex,
+            item: { ...item, input: '', status: 'in_progress' },
+          }),
+          frame('response.custom_tool_call_input.delta', {
+            item_id: item.id,
+            output_index: outputIndex,
+            delta: item.input,
+          }),
+          frame('response.custom_tool_call_input.done', {
+            item_id: item.id,
+            output_index: outputIndex,
+            input: item.input,
+          }),
+          frame('response.output_item.done', {
+            output_index: outputIndex,
+            item,
+          }),
+        );
+        return;
+      }
       frames.push(
         frame('response.output_item.added', {
           output_index: outputIndex,

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { NormalizedExecutionResult } from '../execution.js';
+import { decodeCustomToolInput, decodeResponsesToolName } from '../tool-namespace.js';
 
 export interface ResponseEncodeMeta {
   id?: string;
@@ -28,14 +29,29 @@ export function encodeResponse(result: NormalizedExecutionResult, meta: Response
             ],
           },
         ]
-      : result.toolCalls.map((call, index) => ({
-          id: meta.functionCallIds?.[index] ?? `fc_${randomUUID()}`,
-          type: 'function_call' as const,
-          call_id: call.id,
-          name: call.name,
-          arguments: call.arguments,
-          status: 'completed' as const,
-        }));
+      : result.toolCalls.map((call, index) => {
+          const decodedName = decodeResponsesToolName(call.name);
+          if (decodedName.kind === 'custom') {
+            return {
+              id: meta.functionCallIds?.[index] ?? `ctc_${randomUUID()}`,
+              type: 'custom_tool_call' as const,
+              call_id: call.id,
+              ...(decodedName.namespace === undefined ? {} : { namespace: decodedName.namespace }),
+              name: decodedName.name,
+              input: decodeCustomToolInput(call.arguments),
+              status: 'completed' as const,
+            };
+          }
+          return {
+            id: meta.functionCallIds?.[index] ?? `fc_${randomUUID()}`,
+            type: 'function_call' as const,
+            call_id: call.id,
+            ...(decodedName.namespace === undefined ? {} : { namespace: decodedName.namespace }),
+            name: decodedName.name,
+            arguments: call.arguments,
+            status: 'completed' as const,
+          };
+        });
 
   return {
     id: meta.id ?? `resp_${randomUUID()}`,

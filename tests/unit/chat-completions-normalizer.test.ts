@@ -153,6 +153,59 @@ describe('normalizeChatCompletions', () => {
     expect(result.diagnostics.ignoredParameters).toEqual(['image_detail']);
   });
 
+  it('drops Cherry reasoning history metadata and agent compatibility parameters at the adapter boundary', () => {
+    const result = normalize({
+      model: 'chatgpt-web',
+      messages: [
+        { role: 'user', content: '你是谁' },
+        {
+          role: 'assistant',
+          content: '我是 ChatGPT。',
+          reasoning_content: '',
+          reasoning_details: [],
+        },
+        { role: 'user', content: '继续' },
+      ],
+      store: false,
+      reasoning_effort: 'high',
+      parallel_tool_calls: true,
+      service_tier: 'auto',
+      stop: ['END'],
+      metadata: { client: 'openclaw' },
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'exec_command',
+            parameters: { type: 'object', properties: {} },
+            strict: false,
+          },
+        },
+      ],
+    } as unknown as ChatCompletionsRequest);
+
+    expect(result.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: '你是谁' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '我是 ChatGPT。' }] },
+      { role: 'user', content: [{ type: 'text', text: '继续' }] },
+    ]);
+    expect(result.tools).toEqual([
+      {
+        type: 'function',
+        name: 'exec_command',
+        parameters: { type: 'object', properties: {} },
+      },
+    ]);
+    expect(result.diagnostics.ignoredParameters).toEqual([
+      'store',
+      'reasoning_effort',
+      'parallel_tool_calls',
+      'service_tier',
+      'stop',
+      'metadata',
+    ]);
+  });
+
   it('uses conservative defaults and records accepted-but-ignored parameters', () => {
     const result = normalize({
       model: 'chatgpt-web',

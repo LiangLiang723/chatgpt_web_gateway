@@ -99,6 +99,7 @@ const SystemMessageSchema = Type.Object(
   {
     role: Type.Literal('system'),
     content: InstructionContentSchema,
+    name: Type.Optional(Type.String({ minLength: 1 })),
   },
   { additionalProperties: false },
 );
@@ -107,6 +108,7 @@ const DeveloperMessageSchema = Type.Object(
   {
     role: Type.Literal('developer'),
     content: InstructionContentSchema,
+    name: Type.Optional(Type.String({ minLength: 1 })),
   },
   { additionalProperties: false },
 );
@@ -115,6 +117,7 @@ const UserMessageSchema = Type.Object(
   {
     role: Type.Literal('user'),
     content: UserContentSchema,
+    name: Type.Optional(Type.String({ minLength: 1 })),
   },
   { additionalProperties: false },
 );
@@ -126,6 +129,12 @@ const AssistantMessageSchema = Type.Object(
       Type.Union([Type.String(), Type.Null(), Type.Array(TextPartSchema, { minItems: 1 })]),
     ),
     tool_calls: Type.Optional(Type.Array(AssistantToolCallSchema, { minItems: 1 })),
+    name: Type.Optional(Type.String({ minLength: 1 })),
+    reasoning_content: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    reasoning_details: Type.Optional(Type.Unknown()),
+    refusal: Type.Optional(Type.Unknown()),
+    annotations: Type.Optional(Type.Unknown()),
+    audio: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false },
 );
@@ -135,6 +144,7 @@ const ToolMessageSchema = Type.Object(
     role: Type.Literal('tool'),
     content: InstructionContentSchema,
     tool_call_id: Type.String({ minLength: 1 }),
+    name: Type.Optional(Type.String({ minLength: 1 })),
   },
   { additionalProperties: false },
 );
@@ -166,6 +176,28 @@ export const ChatCompletionsRequestSchema = Type.Object(
     max_completion_tokens: Type.Optional(Type.Integer({ minimum: 1 })),
     logprobs: Type.Optional(Type.Unknown()),
     logit_bias: Type.Optional(Type.Unknown()),
+    store: Type.Optional(Type.Unknown()),
+    reasoning_effort: Type.Optional(Type.Unknown()),
+    reasoning: Type.Optional(Type.Unknown()),
+    parallel_tool_calls: Type.Optional(Type.Unknown()),
+    service_tier: Type.Optional(Type.Unknown()),
+    stop: Type.Optional(Type.Unknown()),
+    user: Type.Optional(Type.Unknown()),
+    metadata: Type.Optional(Type.Unknown()),
+    prompt_cache_key: Type.Optional(Type.Unknown()),
+    prompt_cache_retention: Type.Optional(Type.Unknown()),
+    modalities: Type.Optional(Type.Unknown()),
+    prediction: Type.Optional(Type.Unknown()),
+    audio: Type.Optional(Type.Unknown()),
+    n: Type.Optional(Type.Unknown()),
+    verbosity: Type.Optional(Type.Unknown()),
+    safety_identifier: Type.Optional(Type.Unknown()),
+    web_search_options: Type.Optional(Type.Unknown()),
+    provider: Type.Optional(Type.Unknown()),
+    providerOptions: Type.Optional(Type.Unknown()),
+    chat_template_kwargs: Type.Optional(Type.Unknown()),
+    think: Type.Optional(Type.Unknown()),
+    extra_body: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false },
 );

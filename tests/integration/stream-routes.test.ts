@@ -130,6 +130,58 @@ describe('Streaming HTTP routes', () => {
     },
   );
 
+  it('accepts Cherry Studio history reasoning metadata and agent compatibility parameters over HTTP', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = appWith({
+      execute: async () => result,
+      stream: async (request, { sink }) => {
+        received.push(request);
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'text.delta', delta: 'Hello world' });
+        await sink({ type: 'completed', result });
+        return result;
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        messages: [
+          { role: 'user', content: '你是谁' },
+          { role: 'assistant', content: '我是 ChatGPT。', reasoning_content: '' },
+          { role: 'user', content: '继续' },
+        ],
+        stream: true,
+        stream_options: { include_usage: true },
+        store: false,
+        reasoning_effort: 'high',
+        parallel_tool_calls: true,
+        service_tier: 'auto',
+        metadata: { client: 'openclaw-hermes-pi' },
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: '你是谁' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '我是 ChatGPT。' }] },
+      { role: 'user', content: [{ type: 'text', text: '继续' }] },
+    ]);
+    expect(received[0]?.diagnostics.ignoredParameters).toEqual([
+      'store',
+      'reasoning_effort',
+      'parallel_tool_calls',
+      'service_tier',
+      'metadata',
+    ]);
+    expect(body).toContain('data: [DONE]\n\n');
+  });
+
   it('rejects non-boolean Cherry Studio stream_options.include_usage', async () => {
     const app = appWith({ execute: async () => result, stream: async () => result });
     const base = await listen(app);
@@ -190,6 +242,95 @@ describe('Streaming HTTP routes', () => {
     expect(body).toContain('event: response.output_text.delta');
     expect(body).toContain('event: response.completed');
     expect(body).not.toContain('data: [DONE]');
+  });
+
+  it('accepts the current Codex Responses agent shape over HTTP', async () => {
+    const received: NormalizedRequest[] = [];
+    const app = appWith({
+      execute: async () => result,
+      stream: async (request, { sink }) => {
+        received.push(request);
+        await sink({ type: 'started', startedAt: 1_786_720_001_000 });
+        await sink({ type: 'text.delta', delta: 'OK' });
+        await sink({ type: 'completed', result: { ...result, text: 'OK' } });
+        return { ...result, text: 'OK' };
+      },
+    });
+    const base = await listen(app);
+
+    const response = await fetch(`${base}/v1/responses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'chatgpt-web',
+        instructions: 'Use tools when useful.',
+        input: [
+          {
+            type: 'message',
+            id: 'msg_user',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Reply only OK' }],
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            name: 'exec_command',
+            description: 'Run a command',
+            strict: false,
+            parameters: { type: 'object', properties: {} },
+          },
+          {
+            type: 'custom',
+            name: 'apply_patch',
+            description: 'Apply a patch',
+            format: { type: 'grammar', syntax: 'lark', definition: 'start: /.+/' },
+          },
+          {
+            type: 'namespace',
+            name: 'multi_agent_v1',
+            description: 'Agent tools',
+            tools: [
+              {
+                type: 'function',
+                name: 'spawn_agent',
+                description: 'Spawn an agent',
+                strict: false,
+                parameters: { type: 'object', properties: {} },
+              },
+            ],
+          },
+          { type: 'web_search', external_web_access: false },
+        ],
+        tool_choice: 'auto',
+        parallel_tool_calls: true,
+        reasoning: { effort: 'low', summary: 'auto' },
+        store: false,
+        stream: true,
+        include: ['reasoning.encrypted_content'],
+        prompt_cache_key: 'codex-session',
+        client_metadata: { session_id: 'codex-session' },
+      }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.tools.map((tool) => tool.name)).toEqual([
+      'exec_command',
+      '__responses_custom__::apply_patch',
+      'multi_agent_v1::spawn_agent',
+    ]);
+    expect(received[0]?.diagnostics.ignoredParameters).toEqual([
+      'parallel_tool_calls',
+      'reasoning',
+      'store',
+      'include',
+      'prompt_cache_key',
+      'client_metadata',
+      'tools.web_search',
+    ]);
+    expect(body).toContain('event: response.completed');
   });
 
   it('encodes Chat Completions tool calls in-stream with tool_calls terminal and no private protocol leak', async () => {

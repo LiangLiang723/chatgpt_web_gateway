@@ -68,17 +68,36 @@ describe('health and models routes', () => {
           created: 0,
           owned_by: 'chatgpt-web-gateway',
           name: 'ChatGPT Web',
-          capabilities: ['image-recognition', 'file-input', 'function-call', 'structured-output'],
+          capabilities: [
+            'reasoning',
+            'image-recognition',
+            'file-input',
+            'function-call',
+            'structured-output',
+          ],
           input_modalities: ['text', 'image'],
+          output_modalities: ['text'],
           supports_streaming: true,
           context_window: 128000,
+          max_input_tokens: 128000,
+          max_output_tokens: 32768,
+          inputModalities: ['text', 'image'],
+          outputModalities: ['text'],
+          supportsStreaming: true,
+          contextWindow: 128000,
+          maxInputTokens: 128000,
+          maxOutputTokens: 32768,
         },
       ],
     });
   });
 
-  it('reads the compatibility context window hint from configuration', async () => {
-    const response = await createApp({ MODEL_CONTEXT_WINDOW: '64000' }).inject({
+  it('reads compatibility token-limit hints from configuration', async () => {
+    const response = await createApp({
+      MODEL_CONTEXT_WINDOW: '64000',
+      MODEL_MAX_INPUT_TOKENS: '60000',
+      MODEL_MAX_OUTPUT_TOKENS: '16000',
+    }).inject({
       method: 'GET',
       url: '/v1/models',
       headers: { authorization: 'Bearer test-key' },
@@ -88,6 +107,11 @@ describe('health and models routes', () => {
     expect(response.json().data[0]).toMatchObject({
       id: 'chatgpt-web',
       context_window: 64000,
+      max_input_tokens: 60000,
+      max_output_tokens: 16000,
+      contextWindow: 64000,
+      maxInputTokens: 60000,
+      maxOutputTokens: 16000,
     });
   });
 });

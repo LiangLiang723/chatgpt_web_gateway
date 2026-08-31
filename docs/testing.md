@@ -8,8 +8,8 @@
 
 不得访问网络或真实浏览器。重点覆盖：
 
-- OpenAI Schema（结构）→ `NormalizedRequest`；Chat Completions `stream_options.include_usage?: boolean` 保持 strict compatibility metadata，未知字段/非 boolean 拒绝且不进入 NormalizedRequest。
-- Runtime config 默认值/覆盖/非法值，包括 `MODEL_CONTEXT_WINDOW` 正整数 compatibility hint。
+- OpenAI Schema（结构）→ `NormalizedRequest`；Chat Completions `stream_options.include_usage?: boolean`、Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes 常见兼容 metadata 保持 strict allowlist 并在 adapter 边界丢弃；Responses 覆盖当前 Codex message/function/namespace/custom/server-tool 请求形状，未知字段仍拒绝。
+- Runtime config 默认值/覆盖/非法值，包括 `MODEL_CONTEXT_WINDOW`、`MODEL_MAX_INPUT_TOKENS`、`MODEL_MAX_OUTPUT_TOKENS` 正整数 compatibility hints。
 - `FRESH | APPEND | RESTORE | REBUILD`。
 - Message canonicalization（消息规范化）与 fingerprint（指纹）。
 - Stable Prefix（稳定前缀）。
@@ -34,8 +34,8 @@
 
 使用 local fixture（本地固定样本）和 fake driver（假驱动），不连接 ChatGPT：
 
-- Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary；Cherry Studio 实际 `stream=true + stream_options.include_usage` 请求形状使用 fake streaming boundary 做 deterministic regression，证明可接受且不产生 fake usage chunk。
-- `GET /v1/models` authenticated integration 覆盖能力元数据与默认/自定义 `MODEL_CONTEXT_WINDOW`，不连接 ChatGPT。
+- Phase 1：Fastify HTTP → Schema → Normalizer → injected fake execution boundary；Cherry Studio `stream_options.include_usage + reasoning_content history`、Pi/OpenClaw/Hermes-style Chat Completions metadata，以及当前 Codex Responses function/namespace/custom/server-tool + request metadata 都有 deterministic HTTP regression，证明不会在 schema 层误报 400；compatibility-only metadata 不产生 fake usage/reasoning/server-tool behavior。
+- `GET /v1/models` authenticated integration 覆盖 snake_case + Cherry-compatible camelCase 能力/模态/Streaming/token metadata，以及默认/自定义 context/max-input/max-output hints，不连接 ChatGPT。
 - Phase 2：真实临时 SQLite 文件 → migration → aggregate save → close → reopen → aggregate/File recovery。
 - Phase 2：Gateway runtime 在 Fastify readiness 前创建/迁移 `${DATA_DIR}/gateway.db`，shutdown 幂等关闭 SQLite。
 - Phase 3：POST route → Normalizer → injected/fake execution result → Chat Completions / Responses Encoder，全程不访问真实 ChatGPT。
@@ -204,7 +204,7 @@ corepack pnpm docker:smoke
 
 `corepack pnpm verify` 必须是本地确定性检查，不自动访问真实 ChatGPT。
 
-2026-08-31 Cherry Studio compatibility maintenance candidate fresh `corepack pnpm verify` 通过 **86 test files / 600 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。该改动只涉及 HTTP schema/adapter、models metadata/config 与 deterministic tests，因此本轮未运行 Docker build/smoke 或 authenticated ChatGPT E2E。
+2026-08-31 V0.1.1 Cherry Studio compatibility maintenance fresh `corepack pnpm verify` 通过 **86 test files / 600 tests**。随后 V0.1.2 OpenAI-compatible Agent maintenance candidate 第一轮 full `corepack pnpm verify` 通过 **86 test files / 610 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿；新增 deterministic coverage 包含 Cherry Assistant `reasoning_content` history、Pi/OpenClaw/Hermes-style Chat Completions metadata、当前 Codex Responses function/namespace/custom/server-tool shape，以及 snake/camel `/v1/models` metadata/token hints。V0.1.2 不改变 Browser selector、SQLite schema 或 ChatGPT Web execution semantics，因此本轮未运行 Docker build/smoke 或 authenticated ChatGPT E2E。
 
 ## 不能伪造的验证
 

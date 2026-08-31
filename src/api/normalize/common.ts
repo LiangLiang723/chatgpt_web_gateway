@@ -1,4 +1,5 @@
 import { InvalidRequestError } from '../errors.js';
+import { encodeNamespacedToolName, encodeResponsesCustomToolName } from '../tool-namespace.js';
 import type {
   NormalizedAttachment,
   NormalizedContentPart,
@@ -24,6 +25,7 @@ interface FunctionToolInput {
     name: string;
     description?: string;
     parameters?: Record<string, unknown>;
+    strict?: boolean;
   };
 }
 
@@ -32,7 +34,34 @@ interface ResponsesFunctionToolInput {
   name: string;
   description?: string;
   parameters?: Record<string, unknown>;
+  strict?: boolean;
+  defer_loading?: boolean;
 }
+
+interface ResponsesCustomToolInput {
+  type: 'custom';
+  name: string;
+  description?: string;
+  format?: unknown;
+  defer_loading?: boolean;
+}
+
+interface ResponsesNamespaceToolInput {
+  type: 'namespace';
+  name: string;
+  description?: string;
+  tools: Array<ResponsesFunctionToolInput | ResponsesCustomToolInput>;
+}
+
+interface ResponsesServerToolInput {
+  type: 'web_search' | 'web_search_preview' | 'tool_search';
+}
+
+type ResponsesToolInput =
+  | ResponsesFunctionToolInput
+  | ResponsesCustomToolInput
+  | ResponsesNamespaceToolInput
+  | ResponsesServerToolInput;
 
 interface FunctionToolChoiceInput {
   type: 'function';
@@ -77,16 +106,74 @@ export function normalizeTools(input: FunctionToolInput[] | undefined): Normaliz
   }));
 }
 
+function customToolParameters(): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: { input: { type: 'string' } },
+    required: ['input'],
+    additionalProperties: false,
+  };
+}
+
 export function normalizeResponsesTools(
-  input: ResponsesFunctionToolInput[] | undefined,
+  input: ResponsesToolInput[] | undefined,
+  state?: NormalizationState,
 ): NormalizedTool[] {
   if (!input) return [];
-  return input.map((tool) => ({
-    type: 'function',
-    name: tool.name,
-    ...(tool.description === undefined ? {} : { description: tool.description }),
-    parameters: tool.parameters ?? {},
-  }));
+
+  const normalized: NormalizedTool[] = [];
+  for (const tool of input) {
+    if (tool.type === 'function') {
+      normalized.push({
+        type: 'function',
+        name: tool.name,
+        ...(tool.description === undefined ? {} : { description: tool.description }),
+        parameters: tool.parameters ?? {},
+      });
+      continue;
+    }
+
+    if (tool.type === 'custom') {
+      normalized.push({
+        type: 'function',
+        name: encodeResponsesCustomToolName(tool.name),
+        ...(tool.description === undefined ? {} : { description: tool.description }),
+        parameters: customToolParameters(),
+      });
+      continue;
+    }
+
+    if (tool.type === 'namespace') {
+      for (const child of tool.tools) {
+        if (child.type === 'custom') {
+          normalized.push({
+            type: 'function',
+            name: encodeResponsesCustomToolName(child.name, tool.name),
+            description:
+              child.description ??
+              (tool.description === undefined ? child.name : `${tool.description} / ${child.name}`),
+            parameters: customToolParameters(),
+          });
+          continue;
+        }
+        normalized.push({
+          type: 'function',
+          name: encodeNamespacedToolName(tool.name, child.name),
+          description:
+            child.description ??
+            (tool.description === undefined ? child.name : `${tool.description} / ${child.name}`),
+          parameters: child.parameters ?? {},
+        });
+      }
+      continue;
+    }
+
+    const ignored = `tools.${tool.type}`;
+    if (state !== undefined && !state.ignoredParameters.includes(ignored)) {
+      state.ignoredParameters.push(ignored);
+    }
+  }
+  return normalized;
 }
 
 export function normalizeToolChoice(

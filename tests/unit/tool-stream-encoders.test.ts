@@ -47,6 +47,62 @@ describe('tool-call streaming encoders', () => {
     expect(JSON.stringify(frames)).not.toContain('EXTERNAL_FUNCTION_REQUESTS');
   });
 
+  it('streams Codex custom tool input from the internal function bridge', () => {
+    const customCalls = [
+      {
+        id: 'call_patch',
+        name: '__responses_custom__::apply_patch',
+        arguments: '{"input":"*** Begin Patch\\n*** End Patch"}',
+      },
+    ];
+    const encoder = createResponsesStreamEncoder({
+      responseId: 'resp_custom',
+      createdAt: 123,
+      functionCallIds: ['ctc_patch'],
+    });
+    const frames = [
+      ...encoder.encode({ type: 'started', startedAt: 123_000 }),
+      ...encoder.encode({ type: 'tool_calls', toolCalls: customCalls }),
+    ];
+    expect(frames.map((frame) => frame.event)).toContain('response.custom_tool_call_input.delta');
+    expect(frames.map((frame) => frame.event)).toContain('response.custom_tool_call_input.done');
+    const done = frames.find((frame) => frame.event === 'response.output_item.done');
+    expect(JSON.parse(done!.data).item).toMatchObject({
+      id: 'ctc_patch',
+      type: 'custom_tool_call',
+      call_id: 'call_patch',
+      name: 'apply_patch',
+      input: '*** Begin Patch\n*** End Patch',
+    });
+  });
+
+  it('restores Codex namespace metadata in Responses streaming function calls', () => {
+    const namespacedCalls = [
+      {
+        id: 'call_namespace',
+        name: 'multi_agent_v1::spawn_agent',
+        arguments: '{"task":"inspect"}',
+      },
+    ];
+    const encoder = createResponsesStreamEncoder({
+      responseId: 'resp_namespace',
+      createdAt: 123,
+      functionCallIds: ['fc_namespace'],
+    });
+    const frames = [
+      ...encoder.encode({ type: 'started', startedAt: 123_000 }),
+      ...encoder.encode({ type: 'tool_calls', toolCalls: namespacedCalls }),
+    ];
+    const added = frames.find((frame) => frame.event === 'response.output_item.added');
+    expect(JSON.parse(added!.data).item).toMatchObject({
+      id: 'fc_namespace',
+      type: 'function_call',
+      call_id: 'call_namespace',
+      namespace: 'multi_agent_v1',
+      name: 'spawn_agent',
+    });
+  });
+
   it('encodes Responses function_call lifecycles and one response.completed', () => {
     const ids = ['fc_one', 'fc_two'];
     const encoder = createResponsesStreamEncoder({

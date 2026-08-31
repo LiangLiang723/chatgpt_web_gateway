@@ -46,6 +46,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('UI_MODE must be either headless or novnc');
   }
 
+  const modelContextWindow = parseInteger(
+    'MODEL_CONTEXT_WINDOW',
+    env.MODEL_CONTEXT_WINDOW,
+    128000,
+    1,
+  );
+
   const candidate: AppConfig = {
     host: requireNonEmpty('HOST', env.HOST ?? '0.0.0.0'),
     port: parseInteger('PORT', env.PORT, 3000, 1, 65535),
@@ -62,7 +69,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       1,
       1440,
     ),
-    modelContextWindow: parseInteger('MODEL_CONTEXT_WINDOW', env.MODEL_CONTEXT_WINDOW, 128000, 1),
+    modelContextWindow,
+    modelMaxInputTokens: parseInteger(
+      'MODEL_MAX_INPUT_TOKENS',
+      env.MODEL_MAX_INPUT_TOKENS,
+      modelContextWindow,
+      1,
+    ),
+    modelMaxOutputTokens: parseInteger(
+      'MODEL_MAX_OUTPUT_TOKENS',
+      env.MODEL_MAX_OUTPUT_TOKENS,
+      32768,
+      1,
+    ),
     chatgptProxyServer: parseChatGptProxyServer(env.CHATGPT_PROXY_SERVER),
     publicBaseUrl: parsePublicBaseUrl(env.PUBLIC_BASE_URL),
     novncPort: parseInteger('NOVNC_PORT', env.NOVNC_PORT, 6080, 1, 65535),

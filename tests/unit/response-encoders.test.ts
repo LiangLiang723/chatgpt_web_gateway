@@ -21,6 +21,32 @@ const toolResult: NormalizedExecutionResult = {
   completedAt: 1_786_720_001_234,
 };
 
+const customToolResult: NormalizedExecutionResult = {
+  type: 'tool_calls',
+  toolCalls: [
+    {
+      id: 'call_patch',
+      name: '__responses_custom__::apply_patch',
+      arguments: '{"input":"*** Begin Patch\\n*** End Patch"}',
+    },
+  ],
+  conversationUrl: 'https://chatgpt.com/c/test',
+  completedAt: 1_786_720_001_234,
+};
+
+const namespacedToolResult: NormalizedExecutionResult = {
+  type: 'tool_calls',
+  toolCalls: [
+    {
+      id: 'call_namespace',
+      name: 'multi_agent_v1::spawn_agent',
+      arguments: '{"task":"inspect"}',
+    },
+  ],
+  conversationUrl: 'https://chatgpt.com/c/test',
+  completedAt: 1_786_720_001_234,
+};
+
 describe('response encoders', () => {
   it('encodes a non-streaming Chat Completion without fabricated token usage', () => {
     expect(
@@ -102,6 +128,47 @@ describe('response encoders', () => {
       ],
       usage: null,
     });
+  });
+
+  it('restores Codex custom tool calls from the internal function bridge', () => {
+    expect(
+      encodeResponse(customToolResult, {
+        id: 'resp_custom',
+        functionCallIds: ['ctc_patch'],
+        createdAt: 100,
+        completedAt: 101,
+      }).output,
+    ).toEqual([
+      {
+        id: 'ctc_patch',
+        type: 'custom_tool_call',
+        call_id: 'call_patch',
+        name: 'apply_patch',
+        input: '*** Begin Patch\n*** End Patch',
+        status: 'completed',
+      },
+    ]);
+  });
+
+  it('restores Codex namespace metadata in Responses function calls', () => {
+    expect(
+      encodeResponse(namespacedToolResult, {
+        id: 'resp_namespace',
+        functionCallIds: ['fc_namespace'],
+        createdAt: 100,
+        completedAt: 101,
+      }).output,
+    ).toEqual([
+      {
+        id: 'fc_namespace',
+        type: 'function_call',
+        call_id: 'call_namespace',
+        namespace: 'multi_agent_v1',
+        name: 'spawn_agent',
+        arguments: '{"task":"inspect"}',
+        status: 'completed',
+      },
+    ]);
   });
 
   it('encodes Responses function_call output items with stable call ids', () => {
