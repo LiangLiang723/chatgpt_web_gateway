@@ -4,9 +4,9 @@
 
 项目目标是在一个完整 Docker 容器中，通过 Playwright bundled Chromium（Playwright 自带 Chromium）操作已登录的 `chatgpt.com`，向上游提供通用 OpenAI 风格接口。当前真实实现状态始终以 [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) 为准。
 
-## 当前状态：V1 验收完成，当前仓库版本 V0.1.4
+## 当前状态：V1 验收完成，当前仓库版本 V0.1.5
 
-Phase 1–10 的 V1 功能与验收门槛已经关闭。当前仓库版本为 `V0.1.4`：本 PATCH 在保留 V0.1.3 Pi/Cherry/OpenAI-compatible 协议兼容与匿名 Conversation 续接的基础上，修复真实 Pi coding-agent 大型多行 Browser Prompt 的尺寸敏感 Composer 输入边界。服务器实际安装的 Pi `0.84.4` 已通过 `Pi → Gateway → ChatGPT Web` 真实单请求验证：精确声明 16 个工具、最终 Browser Prompt 为 **21,019 UTF-8 bytes**，system/Skills/项目上下文/tools 均未截断。V0.1.4 同时增加 Browser Driver 安全故障诊断与 5xx/SSE 服务端日志、把 authenticated `/v1/diagnostics` 升级为显式有界 ChatGPT auth probe，并补充 Docker Host 代理的 `host.docker.internal` / generic proxy passthrough。`V0.1.0` 的 Git Tag / GitHub Release 仍保留；V0.1.4 不创建新的 Tag / GitHub Release，也不发布 Docker Registry 镜像：
+Phase 1–10 的 V1 功能与验收门槛已经关闭。当前仓库版本为 `V0.1.5`：在 V0.1.4 已解决真实 Pi 大型多行 Browser Prompt Composer 输入边界、主动 diagnostics、安全 Driver 日志和 Docker Host proxy passthrough 的基础上，本 PATCH 进一步修复**同一个 Pi session 每轮在 ChatGPT Web 新开 Conversation**的问题。成功的 anonymous FRESH 现在从首轮开始以 generated persisted Conversation id 保留 bounded Page affinity；真实 Pi `0.84.4` 已通过同 session 两轮 + distractor Page gate：首轮 Browser Prompt **21,019 UTF-8 bytes**、精确 16 tools，两轮 `gatewayRequests=2`，第二轮 `samePageContinuation=true`。客户端可见 `conversationKey` 仍保持未设置，匿名唯一匹配、歧义 FRESH、queue 锁后重验证与 restart RESTORE 语义不变。`V0.1.5` 发布 Git Tag / GitHub Release；不发布 Docker Registry 镜像：
 
 - TypeScript + pnpm/Corepack + Fastify + TypeBox/Ajv。
 - Vitest、ESLint、Prettier 和确定性 `verify`。
@@ -302,11 +302,11 @@ Agent / 开发者开始任务前应依次阅读 `AGENTS.md`、`PROJECT_STATE.md`
 
 ## 版本与变更
 
-- 当前仓库版本：`V0.1.4`。
+- 当前仓库版本：`V0.1.5`。
 - 版本规范见 [`docs/versioning.md`](docs/versioning.md)。
 - 公开版本记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容；`V0.1.3` 修复 Pi singleton text-object schema，并为无 header 的完整历史客户端增加唯一匹配匿名 Conversation 续接；`V0.1.4` 修复真实 Pi 大型 Browser Prompt Composer 运输边界，并增加主动 diagnostics、安全 Driver 日志和容器代理透传。本次只升级仓库版本并推送 `main`；新的 Git Tag / GitHub Release 与 Docker Registry 镜像仍需单独发布指令。
+`V0.1.0` 是 V1 验收后的公开 MINOR 版本，并创建同名 Git Tag / GitHub Release。`V0.1.1` 是第一轮 Cherry Studio compatibility PATCH；`V0.1.2` 继续修复 Cherry 历史消息/模型 metadata 与 Pi/OpenClaw/Hermes/Codex OpenAI-compatible Agent 兼容；`V0.1.3` 修复 Pi singleton text-object schema，并为无 header 的完整历史客户端增加唯一匹配匿名 Conversation 续接；`V0.1.4` 修复真实 Pi 大型 Browser Prompt Composer 运输边界，并增加主动 diagnostics、安全 Driver 日志和容器代理透传；`V0.1.5` 进一步让真实 Pi 同 session 的 anonymous Conversation 从首轮开始保留 Page affinity，避免后续 turn 在网页端新开 Conversation。V0.1.5 创建同名 Git Tag / GitHub Release；Docker Registry 镜像仍未发布。
 
 ## 开源协议
 

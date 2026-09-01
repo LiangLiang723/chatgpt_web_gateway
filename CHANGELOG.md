@@ -4,6 +4,19 @@
 
 版本命名与升级规则见 [`docs/versioning.md`](docs/versioning.md)。
 
+## V0.1.5 - 2026-09-01
+
+### Fixed（修复）
+
+- 修复真实 Pi coding-agent 在**同一个 Pi session** 连续多轮请求时，Gateway 虽然能从完整 history 识别唯一 anonymous Conversation，却因为首轮 anonymous FRESH 成功后没有保留 Page affinity，导致第二轮可能重新分配 Page 并在 ChatGPT Web 新建 Conversation 的问题。
+- anonymous FRESH 成功后现在以 Gateway 生成的 persisted Conversation id 保留 bounded Page affinity；同 runtime 的唯一 full-history APPEND candidate 可直接复用首轮同一个 Page。客户端可见 `conversationKey` 仍保持 `undefined`，不伪造 Pi 不发送的 session header；匿名候选唯一性、歧义 FRESH、queue 锁后重验证与 restart/eviction RESTORE 语义保持不变。
+
+### Validation（验证）
+
+- continuity/fixture focused deterministic：**3 test files / 26 tests** 全通过；fast-forward 后 merged `main` fresh `corepack pnpm verify` 通过 **91 test files / 640 tests**，format/lint/typecheck/build/Project Memory/Docs/Architecture/Version 全绿。
+- 使用 `http://192.168.3.83:7890`、新隔离已登录 Profile 与服务器实际安装的 Pi `0.84.4` 完成真实同 session 两轮 `Pi → Gateway → ChatGPT Web` gate：首轮 Browser Prompt **21,019 UTF-8 bytes**、精确 16 tools；首轮后主动占用 distractor Page，第二轮仍复用首轮 anonymous Conversation Page；最终 `gatewayRequests=2`、`samePageContinuation=true`，导航序列为 `fresh → conversation`，第二轮只 APPEND 当前 turn。
+- 本 PATCH 不改变 Dockerfile、依赖或 SQLite migration，因此不重复 Docker build/smoke；发布 `V0.1.5` Git Tag / GitHub Release，但不发布 Docker Registry 镜像。
+
 ## V0.1.4 - 2026-08-31
 
 ### Fixed（修复）
