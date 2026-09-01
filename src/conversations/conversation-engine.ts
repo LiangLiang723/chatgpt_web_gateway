@@ -615,9 +615,7 @@ async function executeConversation(options: {
   let completed = false;
 
   try {
-    session = await options.engine.pageRegistry.acquire(
-      options.conversationKey !== undefined || existing !== undefined ? conversationId : undefined,
-    );
+    session = await options.engine.pageRegistry.acquire(conversationId);
     const promptMode = await preparePage({
       driver: options.engine.driver,
       session,
@@ -720,9 +718,7 @@ async function streamConversation(options: {
   let turn: ChatGptTextTurn | undefined;
 
   try {
-    session = await options.engine.pageRegistry.acquire(
-      options.conversationKey !== undefined || existing !== undefined ? conversationId : undefined,
-    );
+    session = await options.engine.pageRegistry.acquire(conversationId);
     const promptMode = await preparePage({
       driver,
       session,

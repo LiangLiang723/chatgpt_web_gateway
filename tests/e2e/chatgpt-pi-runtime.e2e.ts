@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,11 +41,18 @@ export interface PiBrowserRuntimeE2EResult {
   piOutput: true;
   promptUtf8Bytes: number;
   declaredTools: 16;
-  gatewayRequests: 1;
+  gatewayRequests: 2;
+  samePageContinuation: true;
 }
 
 interface DriverCall {
   prompt?: string;
+}
+
+interface DriverNavigation {
+  type: 'fresh' | 'conversation';
+  page: Page;
+  conversationUrl?: string;
 }
 
 interface ProcessResult {
@@ -87,12 +94,20 @@ export interface RealPiRuntimeFixture {
   args: string[];
 }
 
-function createRecordingDriver(calls: DriverCall[]): ChatGptStreamingTextDriver {
+function createRecordingDriver(
+  calls: DriverCall[],
+  navigations: DriverNavigation[],
+): ChatGptStreamingTextDriver {
   const driver = createChatGptDriver();
   return {
-    openFresh: (page: Page) => driver.openFresh(page),
-    openConversation: (page: Page, conversationUrl: string) =>
-      driver.openConversation(page, conversationUrl),
+    openFresh: (page: Page) => {
+      navigations.push({ type: 'fresh', page });
+      return driver.openFresh(page);
+    },
+    openConversation: (page: Page, conversationUrl: string) => {
+      navigations.push({ type: 'conversation', page, conversationUrl });
+      return driver.openConversation(page, conversationUrl);
+    },
     async sendText(page: Page, request: ChatGptTextRequest): Promise<ChatGptTextResult> {
       calls.push({ prompt: request.prompt });
       return driver.sendText(page, request);
@@ -145,6 +160,8 @@ export function buildRealPiRuntimeFixture(input: {
   apiKey: string;
   token: string;
   extensionPath: string;
+  sessionId: string;
+  sessionDir: string;
 }): RealPiRuntimeFixture {
   const toolNames = [...PI_BUILTIN_TOOL_NAMES, ...PI_EXTRA_TOOL_NAMES];
   assert.equal(toolNames.length, 16);
@@ -187,7 +204,10 @@ export function buildRealPiRuntimeFixture(input: {
       PI_RUNTIME_MODEL,
       '--api-key',
       input.apiKey,
-      '--no-session',
+      '--session-id',
+      input.sessionId,
+      '--session-dir',
+      input.sessionDir,
       '--mode',
       'text',
       '--print',
@@ -244,6 +264,7 @@ export async function runPiBrowserRuntimeE2E(
   const piAgentDir = mkdtempSync(join(tmpdir(), 'cwg-real-pi-e2e-'));
   const profile = cloneRealE2EProfile(options.profileDir);
   const calls: DriverCall[] = [];
+  const navigations: DriverNavigation[] = [];
   let runtime: GatewayRuntime | undefined;
 
   try {
@@ -251,22 +272,26 @@ export async function runPiBrowserRuntimeE2E(
       config: loadConfig({
         GATEWAY_API_KEY: PI_RUNTIME_API_KEY,
         DATA_DIR: dataDir,
-        MAX_ACTIVE_PAGES: '1',
+        MAX_ACTIVE_PAGES: '2',
         PAGE_IDLE_TIMEOUT_MINUTES: '30',
         ...(options.proxyServer ? { CHATGPT_PROXY_SERVER: options.proxyServer } : {}),
       }),
       browserProfileDir: profile.profileDir,
-      driver: createRecordingDriver(calls),
+      driver: createRecordingDriver(calls, navigations),
       logger: true,
     });
     const baseUrl = await runtime.app.listen({ host: '127.0.0.1', port: 0 });
     const token = `PI_RUNTIME_${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
     const extensionPath = join(piAgentDir, 'pi-runtime-tools.mjs');
+    const sessionDir = join(piAgentDir, 'sessions');
+    mkdirSync(sessionDir, { recursive: true });
     const fixture = buildRealPiRuntimeFixture({
       gatewayBaseUrl: baseUrl,
       apiKey: PI_RUNTIME_API_KEY,
       token,
       extensionPath,
+      sessionId: `pi-runtime-${randomUUID()}`,
+      sessionDir,
     });
     writeFileSync(
       join(piAgentDir, 'models.json'),
@@ -303,7 +328,7 @@ export async function runPiBrowserRuntimeE2E(
     assert.equal(
       calls.length,
       1,
-      `Expected one Gateway/ChatGPT request from Pi, got ${calls.length}`,
+      `Expected one initial Gateway request from Pi, got ${calls.length}`,
     );
 
     const prompt = calls[0]?.prompt;
@@ -317,13 +342,67 @@ export async function runPiBrowserRuntimeE2E(
       assert.match(prompt, new RegExp(`\\b${toolName}\\b`));
     }
 
+    assert.ok(runtime.browser, 'Real Pi runtime E2E requires the headless Browser runtime');
+    const distractor = await runtime.browser.pages.acquire();
+    const secondToken = `PI_CONTINUE_${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+    try {
+      const second = await runProcess(
+        piBinary,
+        [...fixture.args.slice(0, -1), `Reply exactly with ${secondToken}. Do not use any tool.`],
+        {
+          cwd: process.cwd(),
+          env: piEnvironment,
+        },
+      );
+      assert.equal(second.timedOut, false, `Real Pi continuation timed out: ${second.stderr}`);
+      assert.equal(
+        second.code,
+        0,
+        `Real Pi continuation failed: ${second.stderr || second.stdout}`,
+      );
+      assert.equal(
+        second.stdout.trim(),
+        secondToken,
+        `Unexpected Pi continuation output: ${second.stdout}`,
+      );
+    } finally {
+      await distractor.release();
+    }
+
+    assert.equal(
+      calls.length,
+      2,
+      `Expected two Gateway/ChatGPT requests from Pi, got ${calls.length}`,
+    );
+    assert.deepEqual(
+      navigations.map((navigation) => navigation.type),
+      ['fresh', 'conversation'],
+      `Expected the Pi continuation to reuse the persisted Web Conversation, got ${navigations
+        .map((navigation) => navigation.type)
+        .join(' -> ')}`,
+    );
+    assert.equal(
+      navigations[1]?.page,
+      navigations[0]?.page,
+      'Expected the second Pi request to reuse the first anonymous Conversation Page affinity',
+    );
+    const secondPrompt = calls[1]?.prompt;
+    assert.ok(secondPrompt, 'Expected the recording Driver to capture the Pi continuation prompt');
+    assert.match(secondPrompt, new RegExp(secondToken));
+    assert.doesNotMatch(secondPrompt, new RegExp(token));
+    assert.ok(
+      Buffer.byteLength(secondPrompt) < LARGE_MULTILINE_PASTE_THRESHOLD_BYTES,
+      'Expected same-session Pi continuation to append only the current turn instead of rebuilding the large context',
+    );
+
     return {
       realPi: true,
       piVersion,
       piOutput: true,
       promptUtf8Bytes,
       declaredTools: 16,
-      gatewayRequests: 1,
+      gatewayRequests: 2,
+      samePageContinuation: true,
     };
   } finally {
     await runtime?.close();

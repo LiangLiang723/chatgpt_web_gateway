@@ -129,7 +129,7 @@ Playwright
           └── Page C → Conversation C
 ```
 
-Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增加 Conversation → Page affinity、idle timeout 与容量压力下的 LRU idle eviction。默认 `PAGE_IDLE_TIMEOUT_MINUTES=30`，只回收 idle affinity，不抢占 active Conversation。Conversation 请求失败时对应 lease 会 discard，避免把未知状态 Page 继续绑定给该 key；本地 SQLite 状态仍保留，因此后续可通过 conversation URL RESTORE。
+Page 数有上限。Phase 3 建立 bounded Page Pool；Phase 4 已在其上增加 Conversation → Page affinity、idle timeout 与容量压力下的 LRU idle eviction。默认 `PAGE_IDLE_TIMEOUT_MINUTES=30`，只回收 idle affinity，不抢占 active Conversation。成功的 Conversation 执行现在始终用其本地 persisted Conversation id 获取 Page Registry lease，包括没有 `X-Conversation-Key` 的 anonymous FRESH：这不会生成或暴露客户端会话 key，只是在首轮成功后把当前 Page 绑定到刚生成的内部 id，使同一 runtime 中后续被唯一历史证明为同一 anonymous Conversation 的 Pi/Cherry 请求优先复用当前 Page，而不是立即做跨 URL RESTORE。Gateway 重启、idle/LRU eviction 或 Page 丢失后仍回到 persisted URL RESTORE。Conversation 请求失败时对应 lease 会 discard，避免把未知状态 Page 继续绑定；本地 SQLite 状态仍保留，因此后续可通过 conversation URL RESTORE/REBUILD 收敛。
 
 恢复边界分两级：
 
@@ -289,7 +289,7 @@ Phase 2 已把 persistence lifecycle 接到生产 Gateway：Fastify listen 前�
 
 `GET /health` 保持无需认证；所有 `/v1/*` 默认要求 `Authorization: Bearer <GATEWAY_API_KEY>`。配置集中在 `src/config/`，业务模块不得分散读取环境变量。缺失 Gateway API Key 时正式服务启动失败。
 
-兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`，并且始终优先于匿名匹配。带 key 的请求使用 SQLite Conversation lifecycle、同 key FIFO 与 Page affinity；未提供时 `NormalizedRequest.conversationKey` 仍保持 `undefined`。V0.1.3 仅对完整历史请求做保守匿名续接：若 SQLite 中恰好一个 `conversation_key = NULL` 的 clean Conversation 能被现有 Context Sync planner 严格证明为 APPEND/RESTORE，则复用其 persisted Conversation id / URL，并使用内部匿名 queue key；0 个或多个匹配都创建新的匿名 FRESH Conversation。Gateway 从不把该内部匹配伪装成客户端可见 key。
+兼容扩展 `X-Conversation-Key` 可把客户端稳定会话标识传入 `NormalizedRequest.conversationKey`，并且始终优先于匿名匹配。带 key 的请求使用 SQLite Conversation lifecycle、同 key FIFO 与 Page affinity；未提供时 `NormalizedRequest.conversationKey` 仍保持 `undefined`。V0.1.3 仅对完整历史请求做保守匿名续接：若 SQLite 中恰好一个 `conversation_key = NULL` 的 clean Conversation 能被现有 Context Sync planner 严格证明为 APPEND/RESTORE，则复用其 persisted Conversation id / URL，并使用内部匿名 queue key；0 个或多个匹配都创建新的匿名 FRESH Conversation。2026-09-01 的 Pi continuity hardening 进一步让成功的 anonymous FRESH 从首轮开始按其生成的 persisted id 保留 bounded Page affinity；因此同 runtime 的第二轮可以直接在原 Page APPEND，避免大型 Pi Context Conversation 为了建立 identity 被迫先做一次跨 Page/URL history hydration。affinity 丢失时仍使用原有 RESTORE 证明链，候选歧义规则不变。Gateway 从不把该内部 id/affinity 伪装成客户端可见 key。
 
 ## 错误边界
 

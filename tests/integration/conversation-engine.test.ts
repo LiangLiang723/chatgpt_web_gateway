@@ -304,6 +304,45 @@ describe('Conversation Engine FRESH + APPEND', () => {
     expect(saved.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 4 });
   });
 
+  it('reuses the retained anonymous Page for the next full-history turn in the same runtime', async () => {
+    const db = persistence();
+    const driver = new FakeDriver();
+    const registry = new FakePageRegistry();
+    const queue = new RecordingQueue();
+    driver.results.push(
+      { text: 'a1-pi', conversationUrl: 'https://chatgpt.com/c/pi-affinity' },
+      { text: 'a2-pi', conversationUrl: 'https://chatgpt.com/c/pi-affinity' },
+    );
+    const ids = ['10111111-1111-4111-8111-111111111111', '20222222-2222-4222-8222-222222222222'];
+    let idIndex = 0;
+    const execute = createConversationEngine({
+      pageRegistry: registry,
+      queue,
+      driver,
+      conversationStore: db.conversationStore,
+      now: () => 1450,
+      randomUuid: () => ids[idIndex++]!,
+    });
+
+    await execute(request({ messages: [user('u1-pi')] }));
+    await execute(request({ messages: [user('u1-pi'), assistant('a1-pi'), user('u2-pi')] }));
+
+    expect(driver.calls.map((call) => call.type)).toEqual([
+      'openFresh',
+      'sendText',
+      'openConversation',
+      'sendText',
+    ]);
+    const firstPage = driver.calls[0]!.page;
+    expect(driver.calls[2]).toMatchObject({
+      type: 'openConversation',
+      page: firstPage,
+      url: 'https://chatgpt.com/c/pi-affinity',
+    });
+    expect(driver.calls[3]!.page).toBe(firstPage);
+    expect(queue.keys).toEqual(['anonymous:10111111-1111-4111-8111-111111111111']);
+  });
+
   it('reuses one matching anonymous full-history Conversation instead of creating a new Web Conversation', async () => {
     const db = persistence();
     const driver = new FakeDriver();
@@ -450,7 +489,7 @@ describe('Conversation Engine FRESH + APPEND', () => {
     expect(count.count).toBe(3);
   });
 
-  it('persists an unkeyed full-history FRESH Conversation without queue or retained affinity', async () => {
+  it('persists an unkeyed full-history FRESH Conversation and retains Page affinity by its generated id', async () => {
     const db = persistence();
     const driver = new FakeDriver();
     const registry = new FakePageRegistry();
@@ -473,7 +512,8 @@ describe('Conversation Engine FRESH + APPEND', () => {
     );
 
     expect(queue.keys).toEqual([]);
-    expect(registry.completed).toEqual([undefined]);
+    expect(registry.completed).toEqual(['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']);
+    expect(registry.hasAffinity('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toBe(true);
     const row = db.database
       .prepare('SELECT id FROM conversations WHERE conversation_key IS NULL')
       .get() as { id: string } | undefined;

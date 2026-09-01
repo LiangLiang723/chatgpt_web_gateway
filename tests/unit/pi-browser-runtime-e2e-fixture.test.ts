@@ -27,6 +27,8 @@ type BuildRealPiRuntimeFixture = (input: {
   apiKey: string;
   token: string;
   extensionPath: string;
+  sessionId: string;
+  sessionDir: string;
 }) => RealPiFixture;
 
 type MergeLocalNoProxy = (value: string | undefined) => string;
@@ -46,6 +48,8 @@ describe('Pi browser-runtime E2E fixture', () => {
       apiKey: 'fixture-key',
       token: 'FIXTURE_TOKEN',
       extensionPath: '/tmp/pi-runtime-tools.mjs',
+      sessionId: 'fixture-session',
+      sessionDir: '/tmp/pi-runtime-sessions',
     });
 
     expect(fixture.provider).toBe('chatgpt-web-gateway-e2e');
@@ -77,7 +81,10 @@ describe('Pi browser-runtime E2E fixture', () => {
         fixture.provider,
         '--model',
         fixture.model,
-        '--no-session',
+        '--session-id',
+        'fixture-session',
+        '--session-dir',
+        '/tmp/pi-runtime-sessions',
         '--print',
         '--extension',
         '/tmp/pi-runtime-tools.mjs',
@@ -85,6 +92,7 @@ describe('Pi browser-runtime E2E fixture', () => {
         fixture.toolNames.join(','),
       ]),
     );
+    expect(fixture.args).not.toContain('--no-session');
     expect(fixture.args.at(-1)).toContain('FIXTURE_TOKEN');
   });
 

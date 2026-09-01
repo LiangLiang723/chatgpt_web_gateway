@@ -293,6 +293,32 @@ describe('Conversation true Streaming', () => {
     expect(saved.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Hello!' }]);
   });
 
+  it('retains Page affinity for a fresh anonymous stream by its generated Conversation id', async () => {
+    const db = persistence();
+    const driver = new FakeStreamingDriver();
+    setCompleteSnapshots(driver, 'anonymous first assistant');
+    const registry = new FakePageRegistry();
+    const queue = new DirectQueue();
+    const engine = createEngine({ db, driver, registry, queue });
+    const request = streamRequest('unused', [
+      { role: 'user', content: [{ type: 'text', text: 'anonymous first user' }] },
+    ]);
+    delete request.conversationKey;
+
+    await engine.stream(request, {
+      signal: new AbortController().signal,
+      sink: discardEvents,
+    });
+
+    expect(driver.openFreshCalls).toBe(1);
+    expect(driver.restoredUrls).toEqual([]);
+    expect(queue.keys).toEqual([]);
+    expect(registry.completed).toEqual([conversationId]);
+    const saved = db.conversationStore.loadById(conversationId)!;
+    expect(saved.conversation.conversationKey).toBeUndefined();
+    expect(saved.conversation.sync).toEqual({ status: 'clean', syncedMessageCount: 2 });
+  });
+
   it('RESTOREs a uniquely matching anonymous full-history stream instead of creating a new Web Conversation', async () => {
     const db = persistence();
     seedStoredConversation(db, null);
